@@ -19,9 +19,6 @@ struct mac_copilotApp: App {
                     SidecarManager.shared.startIfNeeded()
                     await authService.restoreSessionIfNeeded()
                 }
-                .onDisappear {
-                    SidecarManager.shared.stop()
-                }
         }
     }
 }

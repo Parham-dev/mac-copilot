@@ -9,7 +9,7 @@ export async function startDeviceFlow(clientId) {
 
   const body = new URLSearchParams({
     client_id: resolvedClientId,
-    scope: "read:user",
+    scope: "read:user user:email",
   });
 
   const response = await fetch(GITHUB_DEVICE_CODE_URL, {

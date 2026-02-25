@@ -16,6 +16,8 @@ final class GitHubAuthService: ObservableObject {
 
     private var deviceCode: String?
     private var pollInterval: Int = 5
+    private var didAttemptRestore = false
+    private var isRestoring = false
 
     private let baseURL = URL(string: "http://localhost:7878")!
     private let keychain = KeychainTokenStore()
@@ -25,6 +27,11 @@ final class GitHubAuthService: ObservableObject {
     }
 
     func restoreSessionIfNeeded() async {
+        guard !didAttemptRestore, !isRestoring else { return }
+        didAttemptRestore = true
+        isRestoring = true
+        defer { isRestoring = false }
+
         guard let token = keychain.readToken() else {
             statusMessage = "Sign in required"
             return
@@ -33,10 +40,16 @@ final class GitHubAuthService: ObservableObject {
         statusMessage = "Restoring session…"
         errorMessage = nil
 
-        let maxAttempts = 6
-        for attempt in 1 ... maxAttempts {
-            _ = await waitForSidecarReady(maxAttempts: 6, delaySeconds: 0.35)
+        let sidecarReady = await waitForSidecarReady(maxAttempts: 5, delaySeconds: 0.35)
+        guard sidecarReady else {
+            isAuthenticated = false
+            statusMessage = "Local sidecar is offline. Relaunch app to retry."
+            errorMessage = "Could not connect to localhost:7878"
+            return
+        }
 
+        let maxAttempts = 2
+        for attempt in 1 ... maxAttempts {
             do {
                 _ = try await post(path: "auth", body: AuthRequest(token: token), as: AuthResponse.self)
                 isAuthenticated = true
@@ -48,6 +61,13 @@ final class GitHubAuthService: ObservableObject {
                     let retryDelay = UInt64(300_000_000 * UInt64(attempt))
                     try? await Task.sleep(nanoseconds: retryDelay)
                     continue
+                }
+
+                if isRecoverableConnectionError(error) {
+                    isAuthenticated = false
+                    statusMessage = "Local sidecar is offline. Relaunch app to retry."
+                    errorMessage = error.localizedDescription
+                    return
                 }
 
                 keychain.deleteToken()
@@ -156,7 +176,12 @@ final class GitHubAuthService: ObservableObject {
         userCode = nil
         verificationURI = nil
         deviceCode = nil
+        didAttemptRestore = false
         statusMessage = "Signed out"
+    }
+
+    func currentAccessToken() -> String? {
+        keychain.readToken()
     }
 
     private func waitForPoll(seconds: Int) async throws {
