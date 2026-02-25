@@ -13,14 +13,10 @@ struct mac_copilotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(shellViewModel: appEnvironment.shellViewModel)
+            OnboardingRootView()
                 .environmentObject(appEnvironment)
                 .environmentObject(appEnvironment.authViewModel)
                 .background(WindowFrameGuard())
-                .task {
-                    SidecarManager.shared.startIfNeeded()
-                    await appEnvironment.authViewModel.restoreSessionIfNeeded()
-                }
         }
         .defaultSize(width: 1040, height: 900)
     }

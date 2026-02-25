@@ -4,8 +4,14 @@ import FactoryKit
 
 @MainActor
 final class AppEnvironment: ObservableObject {
+    enum LaunchPhase {
+        case checking
+        case ready
+    }
+
     let authViewModel: AuthViewModel
     let shellViewModel: ShellViewModel
+    @Published private(set) var launchPhase: LaunchPhase = .checking
 
     private let promptRepository: PromptStreamingRepository
     private let modelRepository: ModelListingRepository
@@ -14,6 +20,7 @@ final class AppEnvironment: ObservableObject {
     private let previewResolver: ProjectPreviewResolver
     private let previewRuntimeManager: PreviewRuntimeManager
     private var chatViewModels: [String: ChatViewModel] = [:]
+    private var didBootstrap = false
     private lazy var profileViewModel: ProfileViewModel = {
         let useCase = FetchProfileUseCase(repository: profileRepository)
         return ProfileViewModel(fetchProfileUseCase: useCase)
@@ -31,6 +38,16 @@ final class AppEnvironment: ObservableObject {
         self.profileRepository = container.profileRepository()
         self.previewResolver = container.previewResolver()
         self.previewRuntimeManager = container.previewRuntimeManager()
+    }
+
+    func bootstrapIfNeeded() async {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+
+        launchPhase = .checking
+        SidecarManager.shared.startIfNeeded()
+        await authViewModel.restoreSessionIfNeeded()
+        launchPhase = .ready
     }
 
     func chatViewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
