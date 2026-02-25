@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D0F04FA12F4F565F00DAB6A7 /* FactoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA02F4F565F00DAB6A7 /* FactoryKit */; };
+		D0F04FA32F4F565F00DAB6A7 /* FactoryTesting in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA22F4F565F00DAB6A7 /* FactoryTesting */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		D0F043A92F4F1F1D00DAB6A7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0F04FA12F4F565F00DAB6A7 /* FactoryKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0F04FA32F4F565F00DAB6A7 /* FactoryTesting in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,7 @@
 			);
 			name = "mac-copilot";
 			packageProductDependencies = (
+				D0F04FA02F4F565F00DAB6A7 /* FactoryKit */,
 			);
 			productName = "mac-copilot";
 			productReference = D0F043992F4F1F1B00DAB6A7 /* mac-copilot.app */;
@@ -135,6 +143,7 @@
 			);
 			name = "mac-copilotTests";
 			packageProductDependencies = (
+				D0F04FA22F4F565F00DAB6A7 /* FactoryTesting */,
 			);
 			productName = "mac-copilotTests";
 			productReference = D0F043A82F4F1F1D00DAB6A7 /* mac-copilotTests.xctest */;
@@ -195,6 +204,9 @@
 			);
 			mainGroup = D0F043902F4F1F1B00DAB6A7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0F0439A2F4F1F1B00DAB6A7 /* Products */;
 			projectDirPath = "";
@@ -583,6 +595,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hmlongco/Factory";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.3;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D0F04FA02F4F565F00DAB6A7 /* FactoryKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */;
+			productName = FactoryKit;
+		};
+		D0F04FA22F4F565F00DAB6A7 /* FactoryTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */;
+			productName = FactoryTesting;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D0F043912F4F1F1B00DAB6A7 /* Project object */;
 }

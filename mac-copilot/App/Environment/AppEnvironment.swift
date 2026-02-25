@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import FactoryKit
 
 @MainActor
 final class AppEnvironment: ObservableObject {
@@ -18,30 +19,18 @@ final class AppEnvironment: ObservableObject {
         return ProfileViewModel(fetchProfileUseCase: useCase)
     }()
 
-    init() {
-        let service = GitHubAuthService()
-        let repository = GitHubAuthRepository(service: service)
-        self.authViewModel = AuthViewModel(repository: repository)
-
-        let dataStack = SwiftDataStack.shared
-        let projectRepository = SwiftDataProjectRepository(context: dataStack.context)
-        let chatRepository = SwiftDataChatRepository(context: dataStack.context)
-        self.chatRepository = chatRepository
-        self.shellViewModel = ShellViewModel(projectRepository: projectRepository, chatRepository: chatRepository)
-
-        let copilotAPIService = CopilotAPIService()
-        let copilotRepository = CopilotPromptRepository(apiService: copilotAPIService)
-        self.promptRepository = copilotRepository
-        self.modelRepository = copilotRepository
-        self.profileRepository = GitHubProfileRepository()
-        self.previewResolver = ProjectPreviewResolver(adapters: [
-            SimpleHTMLPreviewAdapter()
-        ])
-        self.previewRuntimeManager = PreviewRuntimeManager(adapters: [
-            NodeRuntimeAdapter(),
-            PythonRuntimeAdapter(),
-            SimpleHTMLRuntimeAdapter(),
-        ])
+    init(container: Container = .shared) {
+        self.authViewModel = container.authViewModel()
+        self.chatRepository = container.chatRepository()
+        self.shellViewModel = ShellViewModel(
+            projectRepository: container.projectRepository(),
+            chatRepository: self.chatRepository
+        )
+        self.promptRepository = container.promptRepository()
+        self.modelRepository = container.modelRepository()
+        self.profileRepository = container.profileRepository()
+        self.previewResolver = container.previewResolver()
+        self.previewRuntimeManager = container.previewRuntimeManager()
     }
 
     func chatViewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
