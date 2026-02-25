@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContextPaneView: View {
     @ObservedObject var shellViewModel: ShellViewModel
-    let projectName: String
+    let project: ProjectRef
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,7 +33,7 @@ struct ContextPaneView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Preview", systemImage: "play.rectangle")
                 .font(.headline)
-            Text("Live preview for \(projectName) will appear here.")
+            Text("Live preview for \(project.name) will appear here.")
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -45,7 +45,7 @@ struct ContextPaneView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Git", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                 .font(.headline)
-            Text("Git status and diffs for \(projectName) will appear here.")
+            Text("Git status and diffs for \(project.name) will appear here.")
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -56,5 +56,6 @@ struct ContextPaneView: View {
 
 #Preview {
     let environment = AppEnvironment.preview()
-    ContextPaneView(shellViewModel: environment.shellViewModel, projectName: "New Project")
+    let project = environment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
+    ContextPaneView(shellViewModel: environment.shellViewModel, project: project)
 }

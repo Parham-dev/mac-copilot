@@ -19,22 +19,24 @@ final class AppEnvironment: ObservableObject {
         let repository = GitHubAuthRepository(service: service)
         self.authViewModel = AuthViewModel(repository: repository)
 
-        let chatListStore = InMemoryChatListStore()
-        self.shellViewModel = ShellViewModel(chatListStore: chatListStore)
+        let projectStore = UserDefaultsProjectStore()
+        self.shellViewModel = ShellViewModel(projectStore: projectStore)
 
         let copilotAPIService = CopilotAPIService()
         self.promptRepository = CopilotPromptRepository(apiService: copilotAPIService)
         self.profileRepository = GitHubProfileRepository()
     }
 
-    func chatViewModel(for chatTitle: String) -> ChatViewModel {
-        if let existing = chatViewModels[chatTitle] {
+    func chatViewModel(for chatTitle: String, project: ProjectRef) -> ChatViewModel {
+        let cacheKey = "\(project.id.uuidString)|\(chatTitle)"
+
+        if let existing = chatViewModels[cacheKey] {
             return existing
         }
 
         let useCase = SendPromptUseCase(repository: promptRepository)
         let created = ChatViewModel(chatTitle: chatTitle, sendPromptUseCase: useCase)
-        chatViewModels[chatTitle] = created
+        chatViewModels[cacheKey] = created
         return created
     }
 

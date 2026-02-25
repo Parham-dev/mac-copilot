@@ -34,7 +34,7 @@ Done when:
 
 ---
 
-## Step 2 — Project Context Model
+## Step 2 — Project Context Model ✅
 **Goal:** Introduce active project context for shell.
 
 Scope:
@@ -48,7 +48,7 @@ Done when:
 
 ---
 
-## Step 3 — Local Project Bootstrap
+## Step 3 — Local Project Bootstrap ✅
 **Goal:** Create/open local project folders for users.
 
 Scope:
