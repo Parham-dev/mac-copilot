@@ -3,38 +3,123 @@ import Foundation
 final class SidecarManager {
     static let shared = SidecarManager()
 
+    private enum SidecarState: Equatable {
+        case stopped
+        case starting
+        case healthy
+        case degraded
+        case restarting
+        case failed(String)
+    }
+
+    private enum StartReason: String {
+        case appBoot = "app_boot"
+        case manualRestart = "manual_restart"
+        case retry = "retry"
+    }
+
     private let sidecarPort = 7878
+    private let queue = DispatchQueue(label: "copilotforge.sidecar.manager", qos: .userInitiated)
+    private let startupTimeout: TimeInterval = 8
+    private let maxRestartsInWindow = 4
+    private let restartWindowSeconds: TimeInterval = 60
+    private let preflight = SidecarPreflight(minimumNodeMajorVersion: 20)
+
+    private lazy var runtimeUtilities = SidecarRuntimeUtilities(port: sidecarPort)
+
     private var process: Process?
     private var outputPipe: Pipe?
+    private var state: SidecarState = .stopped
+    private var isStarting = false
+    private var restartTimestamps: [Date] = []
+    private var restartAttempt = 0
+    private var runID: String?
 
     private init() {}
 
     func startIfNeeded() {
-        if let process, process.isRunning {
+        queue.async { [weak self] in
+            self?.startIfNeededLocked(reason: .appBoot)
+        }
+    }
+
+    func restart() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.log("Restarting sidecar")
+            self.transition(to: .restarting)
+            self.stopLocked()
+            self.startIfNeededLocked(reason: .manualRestart)
+        }
+    }
+
+    func stop() {
+        queue.async { [weak self] in
+            self?.stopLocked()
+        }
+    }
+
+    private func startIfNeededLocked(reason: StartReason) {
+        if let process, process.isRunning, state == .healthy {
             return
         }
+
+        if isStarting {
+            log("Start ignored: already starting")
+            return
+        }
+
         if let process, !process.isRunning {
-            NSLog("[CopilotForge] Clearing stale process handle")
+            log("Clearing stale process handle")
             self.process = nil
         }
 
-        guard let scriptURL = resolveSidecarScriptURL() else {
-            NSLog("[CopilotForge] sidecar/index.js not found in app bundle resources or local source tree")
-            return
+        do {
+            let startup = try preflight.check()
+            log("Preflight OK nodeVersion=\(startup.nodeVersion)")
+
+            if runtimeUtilities.isHealthySidecarAlreadyRunning(requiredSuccesses: 2) {
+                transition(to: .healthy)
+                log("Existing sidecar detected on :\(sidecarPort), reusing it")
+                return
+            }
+
+            if !allowRestartNow() {
+                let message = "Restart guard tripped: too many restarts in \(Int(restartWindowSeconds))s"
+                transition(to: .failed(message))
+                log(message)
+                return
+            }
+
+            runtimeUtilities.terminateStaleSidecarProcesses(matching: startup.scriptURL.path)
+
+            isStarting = true
+            transition(to: .starting)
+            runID = UUID().uuidString
+            log("Starting sidecar runId=\(runID ?? "n/a") reason=\(reason.rawValue) node=\(startup.nodeExecutable.path) script=\(startup.scriptURL.path)")
+
+            launchProcess(nodeExecutable: startup.nodeExecutable, scriptURL: startup.scriptURL)
+
+            if runtimeUtilities.waitForHealthySidecar(timeout: startupTimeout) {
+                restartAttempt = 0
+                transition(to: .healthy)
+                log("Sidecar healthy on :\(sidecarPort)")
+            } else {
+                transition(to: .degraded)
+                log("Sidecar failed readiness check within \(Int(startupTimeout))s")
+                stopLocked()
+                scheduleRetryIfAllowed()
+            }
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            transition(to: .failed(message))
+            log(message)
         }
 
-        if isHealthySidecarAlreadyRunning(requiredSuccesses: 2) {
-            NSLog("[CopilotForge] Existing sidecar detected on :7878, reusing it")
-            return
-        }
+        isStarting = false
+    }
 
-        terminateStaleSidecarProcesses(matching: scriptURL.path)
-
-        guard let nodeExecutable = resolveNodeExecutable() else {
-            NSLog("[CopilotForge] Node executable not found (expected bundled node or /opt/homebrew/bin/node or /usr/local/bin/node)")
-            return
-        }
-
+    private func launchProcess(nodeExecutable: URL, scriptURL: URL) {
         let process = Process()
         process.executableURL = nodeExecutable
         process.arguments = [scriptURL.path]
@@ -61,205 +146,98 @@ final class SidecarManager {
         }
 
         process.terminationHandler = { [weak self] process in
-            NSLog(
-                "[CopilotForge] Sidecar terminated (reason=%ld, status=%d)",
-                process.terminationReason.rawValue,
-                process.terminationStatus
-            )
+            guard let self else { return }
 
-            self?.outputPipe?.fileHandleForReading.readabilityHandler = nil
-            self?.outputPipe = nil
-            self?.process = nil
+            self.queue.async {
+                self.log("Sidecar terminated (reason=\(process.terminationReason.rawValue), status=\(process.terminationStatus))")
+                self.outputPipe?.fileHandleForReading.readabilityHandler = nil
+                self.outputPipe = nil
+                self.process = nil
+
+                if self.state == .healthy || self.state == .starting {
+                    self.transition(to: .degraded)
+                    self.scheduleRetryIfAllowed()
+                } else if case .restarting = self.state {
+                    self.transition(to: .stopped)
+                }
+            }
         }
 
         do {
             try process.run()
             self.process = process
-            NSLog("[CopilotForge] Sidecar started at %@", scriptURL.path)
+            log("Sidecar process launched")
         } catch {
-            NSLog("[CopilotForge] Failed to start sidecar: %@", error.localizedDescription)
+            transition(to: .failed("Failed to start sidecar: \(error.localizedDescription)"))
+            log("Failed to start sidecar: \(error.localizedDescription)")
         }
     }
 
-    func restart() {
-        NSLog("[CopilotForge] Restarting sidecar")
-        stop()
-        startIfNeeded()
-    }
-
-    private func resolveSidecarScriptURL() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "index", withExtension: "js", subdirectory: "sidecar") {
-            return bundled
-        }
-
-        let sourceFileURL = URL(fileURLWithPath: #filePath)
-        var searchCursor = sourceFileURL.deletingLastPathComponent()
-
-        for _ in 0 ..< 10 {
-            let candidate = searchCursor
-                .appendingPathComponent("sidecar", isDirectory: true)
-                .appendingPathComponent("index.js", isDirectory: false)
-
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                NSLog("[CopilotForge] Using local sidecar source at %@", candidate.path)
-                return candidate
-            }
-
-            let parent = searchCursor.deletingLastPathComponent()
-            if parent.path == searchCursor.path {
-                break
-            }
-            searchCursor = parent
-        }
-
-        return nil
-    }
-
-    func stop() {
+    private func stopLocked() {
         process?.terminate()
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil
         process = nil
+        transition(to: .stopped)
     }
 
-    private func resolveNodeExecutable() -> URL? {
-        if let override = ProcessInfo.processInfo.environment["COPILOTFORGE_NODE_PATH"],
-           FileManager.default.isExecutableFile(atPath: override) {
-            return URL(fileURLWithPath: override)
+    private func scheduleRetryIfAllowed() {
+        guard allowRestartNow() else {
+            let message = "Retry skipped: restart guard tripped"
+            transition(to: .failed(message))
+            log(message)
+            return
         }
 
-        if let bundled = Bundle.main.url(forResource: "node", withExtension: nil),
-           FileManager.default.isExecutableFile(atPath: bundled.path) {
-            return bundled
+        restartAttempt += 1
+        let base = min(pow(2.0, Double(restartAttempt)), 8.0)
+        let jitter = Double.random(in: 0.0 ... 0.4)
+        let delay = base + jitter
+        log("Scheduling sidecar retry #\(restartAttempt) in \(String(format: "%.2f", delay))s")
+
+        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.startIfNeededLocked(reason: .retry)
         }
-
-        let fallbacks = [
-            "/opt/homebrew/bin/node",
-            "/opt/homebrew/opt/node@20/bin/node",
-            "/opt/homebrew/opt/node/bin/node",
-            "/usr/local/bin/node",
-            "/opt/local/bin/node",
-        ]
-
-        for path in fallbacks where FileManager.default.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
-        }
-
-        if let resolvedFromPath = resolveNodeFromEnvironmentPATH() {
-            return resolvedFromPath
-        }
-
-        return nil
     }
 
-    private func resolveNodeFromEnvironmentPATH() -> URL? {
-        guard let pathValue = ProcessInfo.processInfo.environment["PATH"], !pathValue.isEmpty else {
-            return nil
-        }
-
-        let directories = pathValue
-            .split(separator: ":")
-            .map { String($0) }
-
-        for directory in directories {
-            let candidate = URL(fileURLWithPath: directory, isDirectory: true)
-                .appendingPathComponent("node", isDirectory: false)
-            if FileManager.default.isExecutableFile(atPath: candidate.path) {
-                return candidate
-            }
-        }
-
-        return nil
-    }
-
-    private func isHealthySidecarAlreadyRunning(requiredSuccesses: Int) -> Bool {
-        guard let url = URL(string: "http://localhost:\(sidecarPort)/health") else {
+    private func allowRestartNow() -> Bool {
+        let now = Date()
+        restartTimestamps = restartTimestamps.filter { now.timeIntervalSince($0) <= restartWindowSeconds }
+        if restartTimestamps.count >= maxRestartsInWindow {
             return false
         }
-
-        let attempts = max(requiredSuccesses, 1)
-        var successes = 0
-
-        for _ in 0 ..< attempts {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.timeoutInterval = 0.8
-
-            let semaphore = DispatchSemaphore(value: 0)
-            var isHealthy = false
-
-            let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-                defer { semaphore.signal() }
-
-                guard let http = response as? HTTPURLResponse,
-                      (200 ... 299).contains(http.statusCode),
-                      let data,
-                      let body = String(data: data, encoding: .utf8),
-                      body.contains("copilotforge-sidecar")
-                else {
-                    return
-                }
-
-                isHealthy = true
-            }
-
-            task.resume()
-            _ = semaphore.wait(timeout: .now() + 1.0)
-
-            if isHealthy {
-                successes += 1
-                Thread.sleep(forTimeInterval: 0.12)
-            } else {
-                return false
-            }
-        }
-
-        return successes == attempts
+        restartTimestamps.append(now)
+        return true
     }
 
-    private func terminateStaleSidecarProcesses(matching scriptPath: String) {
-        let pidsOutput = runCommand(executable: "/usr/sbin/lsof", arguments: ["-nP", "-iTCP:\(sidecarPort)", "-sTCP:LISTEN", "-t"])
-        let pids = pidsOutput
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        guard !pids.isEmpty else { return }
-
-        for pid in pids {
-            let commandLine = runCommand(executable: "/bin/ps", arguments: ["-p", pid, "-o", "command="])
-            let normalized = commandLine.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            guard normalized.contains("node"),
-                  (normalized.contains(scriptPath) || normalized.contains("sidecar/index.js"))
-            else {
-                continue
-            }
-
-            _ = runCommand(executable: "/bin/kill", arguments: ["-TERM", pid])
-            NSLog("[CopilotForge] Terminated stale sidecar process pid=%@", pid)
-        }
-
-        Thread.sleep(forTimeInterval: 0.2)
+    private func transition(to next: SidecarState) {
+        guard next != state else { return }
+        state = next
+        log("State => \(describe(state: next))")
     }
 
-    private func runCommand(executable: String, arguments: [String]) -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return ""
+    private func describe(state: SidecarState) -> String {
+        switch state {
+        case .stopped:
+            return "stopped"
+        case .starting:
+            return "starting"
+        case .healthy:
+            return "healthy"
+        case .degraded:
+            return "degraded"
+        case .restarting:
+            return "restarting"
+        case .failed(let message):
+            return "failed(\(message))"
         }
+    }
 
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+    private func log(_ message: String) {
+        if let runID {
+            NSLog("[CopilotForge][Sidecar][run:%@] %@", runID, message)
+        } else {
+            NSLog("[CopilotForge][Sidecar] %@", message)
+        }
     }
 }
