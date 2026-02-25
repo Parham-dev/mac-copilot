@@ -11,27 +11,3 @@ struct SendPromptUseCase {
         repository.streamPrompt(prompt, chatID: chatID, model: model, projectPath: projectPath, allowedTools: allowedTools)
     }
 }
-
-struct FetchModelsUseCase {
-    private let repository: ModelListingRepository
-
-    init(repository: ModelListingRepository) {
-        self.repository = repository
-    }
-
-    func execute() async -> [String] {
-        await repository.fetchModels()
-    }
-}
-
-struct FetchModelCatalogUseCase {
-    private let repository: ModelListingRepository
-
-    init(repository: ModelListingRepository) {
-        self.repository = repository
-    }
-
-    func execute() async -> [CopilotModelCatalogItem] {
-        await repository.fetchModelCatalog()
-    }
-}

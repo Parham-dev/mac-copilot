@@ -1,6 +1,7 @@
 const protocolTagNames = ["function_calls", "system_notification", "invoke", "parameter"];
 const openingTagPattern = new RegExp(`<\\s*(${protocolTagNames.join("|")})\\b[^>]*>`, "i");
 const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
+const promptTraceEnabled = process.env.COPILOTFORGE_PROMPT_TRACE === "1";
 class ProtocolMarkupFilter {
     activeTag = null;
     tail = "";
@@ -98,6 +99,9 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
     const protocolFilter = new ProtocolMarkupFilter();
     const traceID = debugLabel?.trim().length ? debugLabel.trim() : `session-${Date.now().toString(36)}`;
     const logTrace = (message, extras) => {
+        if (!promptTraceEnabled) {
+            return;
+        }
         if (extras) {
             console.log(`[CopilotForge][PromptTrace][${traceID}] ${message}`, JSON.stringify(extras));
             return;
@@ -111,18 +115,20 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
     const unsubscribeDelta = session.on("assistant.message_delta", (event) => {
         const delta = event?.data?.deltaContent;
         if (typeof delta === "string" && delta.length > 0) {
-            const rawHasProtocolMarkup = protocolMarkerPattern.test(delta);
             const filtered = protocolFilter.process(delta);
-            const filteredHasProtocolMarkup = protocolMarkerPattern.test(filtered);
-            if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
-                logTrace("delta protocol marker observation", {
-                    rawLength: delta.length,
-                    filteredLength: filtered.length,
-                    rawHasProtocolMarkup,
-                    filteredHasProtocolMarkup,
-                    rawPreview: delta.slice(0, 160),
-                    filteredPreview: filtered.slice(0, 160),
-                });
+            if (promptTraceEnabled) {
+                const rawHasProtocolMarkup = protocolMarkerPattern.test(delta);
+                const filteredHasProtocolMarkup = protocolMarkerPattern.test(filtered);
+                if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
+                    logTrace("delta protocol marker observation", {
+                        rawLength: delta.length,
+                        filteredLength: filtered.length,
+                        rawHasProtocolMarkup,
+                        filteredHasProtocolMarkup,
+                        rawPreview: delta.slice(0, 160),
+                        filteredPreview: filtered.slice(0, 160),
+                    });
+                }
             }
             if (filtered.length > 0) {
                 sawAnyOutput = true;
@@ -135,17 +141,19 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
         const content = event?.data?.content;
         if (!sawDeltaOutput && typeof content === "string" && content.length > 0) {
             const filtered = protocolFilter.process(content) + protocolFilter.flush();
-            const rawHasProtocolMarkup = protocolMarkerPattern.test(content);
-            const filteredHasProtocolMarkup = protocolMarkerPattern.test(filtered);
-            if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
-                logTrace("final message protocol marker observation", {
-                    rawLength: content.length,
-                    filteredLength: filtered.length,
-                    rawHasProtocolMarkup,
-                    filteredHasProtocolMarkup,
-                    rawPreview: content.slice(0, 200),
-                    filteredPreview: filtered.slice(0, 200),
-                });
+            if (promptTraceEnabled) {
+                const rawHasProtocolMarkup = protocolMarkerPattern.test(content);
+                const filteredHasProtocolMarkup = protocolMarkerPattern.test(filtered);
+                if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
+                    logTrace("final message protocol marker observation", {
+                        rawLength: content.length,
+                        filteredLength: filtered.length,
+                        rawHasProtocolMarkup,
+                        filteredHasProtocolMarkup,
+                        rawPreview: content.slice(0, 200),
+                        filteredPreview: filtered.slice(0, 200),
+                    });
+                }
             }
             if (filtered.length > 0) {
                 sawAnyOutput = true;
@@ -215,12 +223,14 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
         await session.send({ prompt: trimmedPrompt, mode: "immediate" });
         await done;
         const remaining = protocolFilter.flush();
-        const remainingHasProtocolMarkup = protocolMarkerPattern.test(remaining);
-        if (remainingHasProtocolMarkup) {
-            logTrace("flush emitted protocol-like marker", {
-                remainingLength: remaining.length,
-                preview: remaining.slice(0, 200),
-            });
+        if (promptTraceEnabled) {
+            const remainingHasProtocolMarkup = protocolMarkerPattern.test(remaining);
+            if (remainingHasProtocolMarkup) {
+                logTrace("flush emitted protocol-like marker", {
+                    remainingLength: remaining.length,
+                    preview: remaining.slice(0, 200),
+                });
+            }
         }
         if (remaining.length > 0) {
             sawAnyOutput = true;

@@ -8,10 +8,6 @@ struct PromptStreamError: LocalizedError {
 
 final class CopilotPromptStreamClient {
     private let baseURL: URL
-    private static let protocolMarkerRegex = try? NSRegularExpression(
-        pattern: "<\\s*\\/?\\s*(function_calls|system_notification|invoke|parameter)\\b[^>]*>",
-        options: [.caseInsensitive]
-    )
 
     init(baseURL: URL) {
         self.baseURL = baseURL
@@ -105,7 +101,7 @@ final class CopilotPromptStreamClient {
                             receivedChunks += 1
                             receivedChars += text.count
 
-                            if Self.containsProtocolMarker(in: text) {
+                            if PromptTrace.containsProtocolMarker(in: text) {
                                 protocolMarkerChunkCount += 1
                                 NSLog(
                                     "[CopilotForge][PromptTrace] decoded text contains protocol marker (chatID=%@ chunk=%d chars=%d preview=%@)",
@@ -120,13 +116,15 @@ final class CopilotPromptStreamClient {
                         }
                     }
 
-                    NSLog(
-                        "[CopilotForge][PromptTrace] stream summary (chatID=%@ chunks=%d chars=%d protocolChunks=%d)",
-                        chatID.uuidString,
-                        receivedChunks,
-                        receivedChars,
-                        protocolMarkerChunkCount
-                    )
+                    if PromptTrace.isEnabled {
+                        NSLog(
+                            "[CopilotForge][PromptTrace] stream summary (chatID=%@ chunks=%d chars=%d protocolChunks=%d)",
+                            chatID.uuidString,
+                            receivedChunks,
+                            receivedChars,
+                            protocolMarkerChunkCount
+                        )
+                    }
 
                     continuation.finish()
                 } catch {
@@ -135,17 +133,6 @@ final class CopilotPromptStreamClient {
                 }
             }
         }
-    }
-}
-
-private extension CopilotPromptStreamClient {
-    static func containsProtocolMarker(in text: String) -> Bool {
-        guard let regex = protocolMarkerRegex else {
-            return false
-        }
-
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.firstMatch(in: text, options: [], range: range) != nil
     }
 }
 

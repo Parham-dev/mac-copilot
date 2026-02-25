@@ -8,6 +8,7 @@ import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
 const app = express();
 app.use(express.json());
 const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
+const promptTraceEnabled = process.env.COPILOTFORGE_PROMPT_TRACE === "1";
 const processStartedAtMs = Date.now();
 
 let lastOAuthScope: string | null = null;
@@ -127,7 +128,7 @@ app.post("/prompt", async (req, res) => {
         : { type: "text", text: String(event ?? "") };
 
       const maybeText = typeof (payload as any)?.text === "string" ? String((payload as any).text) : "";
-      if (maybeText.length > 0 && protocolMarkerPattern.test(maybeText)) {
+      if (promptTraceEnabled && maybeText.length > 0 && protocolMarkerPattern.test(maybeText)) {
         console.warn("[CopilotForge][PromptTrace] outbound SSE payload contains protocol marker", JSON.stringify({
           requestId,
           textLength: maybeText.length,

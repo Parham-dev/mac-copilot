@@ -22,10 +22,6 @@ final class ChatViewModel: ObservableObject {
     private let modelSelectionStore: ModelSelectionStore
     private let mcpToolsStore: MCPToolsStore
     private let sessionCoordinator: ChatSessionCoordinator
-    private static let protocolMarkerRegex = try? NSRegularExpression(
-        pattern: "<\\s*\\/?\\s*(function_calls|system_notification|invoke|parameter)\\b[^>]*>",
-        options: [.caseInsensitive]
-    )
     private var modelCatalogByID: [String: CopilotModelCatalogItem] = [:]
 
     init(
@@ -152,7 +148,7 @@ final class ChatViewModel: ObservableObject {
                 switch event {
                 case .textDelta(let chunk):
                     hasContent = true
-                    if Self.containsProtocolMarker(in: chunk) {
+                    if PromptTrace.containsProtocolMarker(in: chunk) {
                         NSLog(
                             "[CopilotForge][PromptTrace] UI received protocol marker chunk (chatID=%@ assistantMessageID=%@ chars=%d preview=%@)",
                             chatID.uuidString,
@@ -163,7 +159,7 @@ final class ChatViewModel: ObservableObject {
                     }
                     messages[assistantIndex].text += chunk
 
-                    if Self.containsProtocolMarker(in: messages[assistantIndex].text) {
+                    if PromptTrace.containsProtocolMarker(in: messages[assistantIndex].text) {
                         NSLog(
                             "[CopilotForge][PromptTrace] UI assembled text still contains protocol marker (chatID=%@ assistantMessageID=%@ totalChars=%d)",
                             chatID.uuidString,
@@ -243,16 +239,5 @@ final class ChatViewModel: ObservableObject {
 
         statusChipsByMessageID = chipsMap
         toolExecutionsByMessageID = toolsMap
-    }
-}
-
-private extension ChatViewModel {
-    static func containsProtocolMarker(in text: String) -> Bool {
-        guard let regex = protocolMarkerRegex else {
-            return false
-        }
-
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.firstMatch(in: text, options: [], range: range) != nil
     }
 }
