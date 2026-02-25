@@ -1,6 +1,13 @@
 import Foundation
 
 final class SidecarRuntimeUtilities {
+    private struct HealthPayload: Decodable {
+        let ok: Bool?
+        let service: String?
+        let nodeVersion: String?
+        let nodeExecPath: String?
+    }
+
     private let port: Int
 
     init(port: Int) {
@@ -63,6 +70,48 @@ final class SidecarRuntimeUtilities {
         return false
     }
 
+    func isCompatibleHealthySidecarRunning(minimumNodeMajorVersion: Int) -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else {
+            return false
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 0.9
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var isCompatible = false
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
+            defer { semaphore.signal() }
+
+            guard let http = response as? HTTPURLResponse,
+                  (200 ... 299).contains(http.statusCode),
+                  let data,
+                  let payload = try? JSONDecoder().decode(HealthPayload.self, from: data),
+                  payload.service == "copilotforge-sidecar"
+            else {
+                return
+            }
+
+            guard let version = payload.nodeVersion,
+                  let major = Self.parseNodeMajor(version)
+            else {
+                return
+            }
+
+            if major >= minimumNodeMajorVersion {
+                isCompatible = true
+            } else {
+                NSLog("[CopilotForge] Running sidecar node runtime is incompatible (version=%@, exec=%@)", version, payload.nodeExecPath ?? "unknown")
+            }
+        }
+
+        task.resume()
+        _ = semaphore.wait(timeout: .now() + 1.2)
+        return isCompatible
+    }
+
     func terminateStaleSidecarProcesses(matching scriptPath: String) {
         let pidsOutput = runCommand(executable: "/usr/sbin/lsof", arguments: ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"])
         let pids = pidsOutput
@@ -107,5 +156,18 @@ final class SidecarRuntimeUtilities {
 
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private static func parseNodeMajor(_ versionString: String) -> Int? {
+        let trimmed = versionString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let numeric = trimmed.hasPrefix("v") ? String(trimmed.dropFirst()) : trimmed
+        guard let token = numeric.split(separator: ".").first,
+              let major = Int(token)
+        else {
+            return nil
+        }
+        return major
     }
 }

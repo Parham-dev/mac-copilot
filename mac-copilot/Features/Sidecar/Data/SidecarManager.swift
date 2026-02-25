@@ -21,7 +21,8 @@ final class SidecarManager: SidecarLifecycleManaging {
     private let sidecarPort = 7878
     private let queue = DispatchQueue(label: "copilotforge.sidecar.manager", qos: .userInitiated)
     private let startupTimeout: TimeInterval = 8
-    private let preflight = SidecarPreflight(minimumNodeMajorVersion: 20)
+    private let minimumNodeMajorVersion = 22
+    private lazy var preflight = SidecarPreflight(minimumNodeMajorVersion: minimumNodeMajorVersion)
     private let restartPolicy = SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
     private let logger = SidecarLogger()
 
@@ -82,9 +83,14 @@ final class SidecarManager: SidecarLifecycleManaging {
             log("Preflight OK nodeVersion=\(startup.nodeVersion)")
 
             if runtimeUtilities.isHealthySidecarAlreadyRunning(requiredSuccesses: 2) {
-                transition(to: .healthy)
-                log("Existing sidecar detected on :\(sidecarPort), reusing it")
-                return
+                if runtimeUtilities.isCompatibleHealthySidecarRunning(minimumNodeMajorVersion: minimumNodeMajorVersion) {
+                    transition(to: .healthy)
+                    log("Existing sidecar detected on :\(sidecarPort), reusing it")
+                    return
+                }
+
+                log("Existing sidecar detected but runtime is incompatible; replacing it")
+                runtimeUtilities.terminateStaleSidecarProcesses(matching: startup.scriptURL.path)
             }
 
             if !restartPolicy.canAttemptRestart() {

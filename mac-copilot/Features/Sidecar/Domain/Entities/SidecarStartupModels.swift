@@ -18,11 +18,11 @@ enum SidecarPreflightError: LocalizedError {
         case .missingSidecarScript:
             return "sidecar/index.js not found in app bundle resources or local source tree"
         case .missingNode:
-            return "Node executable not found (expected bundled node or /opt/homebrew/bin/node or /usr/local/bin/node)"
+            return "Compatible Node executable not found (requires node:sqlite support; typically Node 22+)"
         case .unsupportedNodeVersion(let found):
-            return "Node version \(found) is unsupported. Node 20+ is required"
+            return "Node version \(found) is unsupported. Node 22+ is required"
         case .unsupportedNodeRuntime(let executable):
-            return "Node runtime at \(executable) is missing required built-in modules (node:sqlite). Install/use a newer Node runtime."
+            return "Node runtime at \(executable) is missing required built-in modules (node:sqlite). Install/use Node 22+ and restart CopilotForge."
         case .missingDependencies(let path):
             return "Sidecar dependencies missing at \(path). Run npm install in sidecar directory"
         }

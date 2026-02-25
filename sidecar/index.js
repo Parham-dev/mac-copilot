@@ -8,7 +8,12 @@ app.use(express.json());
 let lastOAuthScope = null;
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "copilotforge-sidecar" });
+  res.json({
+    ok: true,
+    service: "copilotforge-sidecar",
+    nodeVersion: process.version,
+    nodeExecPath: process.execPath,
+  });
 });
 
 app.get("/auth/status", (_req, res) => {

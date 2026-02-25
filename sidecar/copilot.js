@@ -11,9 +11,27 @@ let activeAvailableTools = null;
 
 function ensureCopilotShellPath() {
   const currentPath = String(process.env.PATH ?? "");
+  const currentNodeDirectory = process.execPath
+    ? process.execPath.split("/").slice(0, -1).join("/")
+    : "";
+
+  const pathSegments = currentPath.split(":").filter((entry) => entry.length > 0);
+  const normalized = [];
+
+  if (currentNodeDirectory.length > 0) {
+    normalized.push(currentNodeDirectory);
+  }
+
+  for (const segment of pathSegments) {
+    if (!normalized.includes(segment)) {
+      normalized.push(segment);
+    }
+  }
+
   const requiredSegments = [
     "/opt/homebrew/bin",
-    "/opt/homebrew/opt/node@20/bin",
+    "/opt/homebrew/opt/node@22/bin",
+    "/opt/homebrew/opt/node/bin",
     "/usr/local/bin",
     "/usr/bin",
     "/bin",
@@ -21,7 +39,7 @@ function ensureCopilotShellPath() {
     "/sbin",
   ];
 
-  const existing = new Set(currentPath.split(":").filter((entry) => entry.length > 0));
+  const existing = new Set(normalized);
   for (const segment of requiredSegments) {
     existing.add(segment);
   }
@@ -82,7 +100,7 @@ function normalizeAllowedTools(allowedTools) {
       .filter((entry) => entry.length > 0)
   )).sort((lhs, rhs) => lhs.localeCompare(rhs));
 
-  return normalized;
+  return normalized.length > 0 ? normalized : null;
 }
 
 function sameAllowedTools(lhs, rhs) {

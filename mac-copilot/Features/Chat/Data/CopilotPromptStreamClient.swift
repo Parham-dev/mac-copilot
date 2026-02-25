@@ -34,7 +34,7 @@ final class CopilotPromptStreamClient {
 
                     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    let (bytes, response) = try await connectWithRetry(request: request)
                     guard let http = response as? HTTPURLResponse else {
                         throw PromptStreamError(message: "Invalid sidecar response")
                     }
@@ -109,6 +109,33 @@ final class CopilotPromptStreamClient {
                 }
             }
         }
+    }
+}
+
+private extension CopilotPromptStreamClient {
+    func connectWithRetry(request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        do {
+            return try await URLSession.shared.bytes(for: request)
+        } catch {
+            guard shouldRetryConnection(error) else {
+                throw error
+            }
+
+            NSLog("[CopilotForge][Prompt] sidecar not ready, retrying connection once")
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            return try await URLSession.shared.bytes(for: request)
+        }
+    }
+
+    func shouldRetryConnection(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain != NSURLErrorDomain {
+            return false
+        }
+
+        return nsError.code == NSURLErrorCannotConnectToHost
+            || nsError.code == NSURLErrorNetworkConnectionLost
+            || nsError.code == NSURLErrorTimedOut
     }
 }
 
