@@ -17,6 +17,11 @@ extension Container {
             .singleton
     }
 
+    var mcpToolsPreferencesStore: Factory<MCPToolsPreferencesStoring> {
+        self { @MainActor in UserDefaultsMCPToolsPreferencesStore() }
+            .singleton
+    }
+
     var gitRepositoryManager: Factory<any GitRepositoryManaging> {
         self { @MainActor in LocalGitRepositoryManager() }
             .singleton

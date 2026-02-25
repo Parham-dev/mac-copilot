@@ -5,6 +5,7 @@ struct ShellSidebarView: View {
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
     let onManageModels: () -> Void
+    let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
 
     @State private var showsUpdatePlaceholder = false
@@ -107,6 +108,11 @@ struct ShellSidebarView: View {
 
             profileMenuButton("Models", systemImage: "slider.horizontal.3") {
                 onManageModels()
+                showsProfileMenu = false
+            }
+
+            profileMenuButton("MCP Tools", systemImage: "wrench.and.screwdriver") {
+                onManageMCPTools()
                 showsProfileMenu = false
             }
 

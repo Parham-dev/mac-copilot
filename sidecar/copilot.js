@@ -7,6 +7,7 @@ let lastAuthError = null;
 let lastAuthAt = null;
 let activeModel = "gpt-5";
 let activeWorkingDirectory = null;
+let activeAvailableTools = null;
 
 function ensureCopilotShellPath() {
   const currentPath = String(process.env.PATH ?? "");
@@ -38,12 +39,7 @@ export async function startClient(token) {
     ensureCopilotShellPath();
     client = new CopilotClient();
     await client.start();
-    session = await client.createSession({
-      model: activeModel,
-      streaming: true,
-      onPermissionRequest: approveAll,
-      ...(activeWorkingDirectory ? { workingDirectory: activeWorkingDirectory } : {}),
-    });
+    await createSessionForContext(activeModel, activeWorkingDirectory, activeAvailableTools);
     lastAuthError = null;
     lastAuthAt = new Date().toISOString();
   } catch (error) {
@@ -59,6 +55,7 @@ export function clearSession() {
   session = null;
   activeModel = "gpt-5";
   activeWorkingDirectory = null;
+  activeAvailableTools = null;
 }
 
 export function getCopilotReport() {
@@ -66,19 +63,74 @@ export function getCopilotReport() {
     sessionReady: session !== null,
     activeModel,
     activeWorkingDirectory,
+    activeAvailableTools,
     lastAuthAt,
     lastAuthError,
     usingGitHubToken: Boolean(process.env.GITHUB_TOKEN),
   };
 }
 
-async function ensureSessionForContext(model, projectPath) {
+function normalizeAllowedTools(allowedTools) {
+  if (!Array.isArray(allowedTools)) {
+    return null;
+  }
+
+  const normalized = Array.from(new Set(
+    allowedTools
+      .filter((entry) => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  )).sort((lhs, rhs) => lhs.localeCompare(rhs));
+
+  return normalized;
+}
+
+function sameAllowedTools(lhs, rhs) {
+  if (lhs === null && rhs === null) {
+    return true;
+  }
+  if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
+    return false;
+  }
+  if (lhs.length !== rhs.length) {
+    return false;
+  }
+  return lhs.every((value, index) => value === rhs[index]);
+}
+
+async function createSessionForContext(model, workingDirectory, allowedTools) {
+  if (workingDirectory) {
+    mkdirSync(workingDirectory, { recursive: true });
+  }
+
+  const normalizedTools = normalizeAllowedTools(allowedTools);
+
+  session = await client.createSession({
+    model,
+    streaming: true,
+    onPermissionRequest: approveAll,
+    ...(workingDirectory ? { workingDirectory } : {}),
+    ...(normalizedTools ? { availableTools: normalizedTools } : {}),
+  });
+
+  activeModel = model;
+  activeWorkingDirectory = workingDirectory;
+  activeAvailableTools = normalizedTools;
+}
+
+async function ensureSessionForContext(model, projectPath, allowedTools) {
   const requested = typeof model === "string" && model.trim().length > 0 ? model.trim() : "gpt-5";
   const requestedWorkingDirectory = typeof projectPath === "string" && projectPath.trim().length > 0
     ? projectPath.trim()
     : null;
+  const requestedAvailableTools = normalizeAllowedTools(allowedTools);
 
-  if (session && activeModel === requested && activeWorkingDirectory === requestedWorkingDirectory) {
+  if (
+    session
+    && activeModel === requested
+    && activeWorkingDirectory === requestedWorkingDirectory
+    && sameAllowedTools(activeAvailableTools, requestedAvailableTools)
+  ) {
     return;
   }
 
@@ -86,18 +138,7 @@ async function ensureSessionForContext(model, projectPath) {
     throw new Error("Copilot client is not initialized.");
   }
 
-  if (requestedWorkingDirectory) {
-    mkdirSync(requestedWorkingDirectory, { recursive: true });
-  }
-
-  session = await client.createSession({
-    model: requested,
-    streaming: true,
-    onPermissionRequest: approveAll,
-    ...(requestedWorkingDirectory ? { workingDirectory: requestedWorkingDirectory } : {}),
-  });
-  activeModel = requested;
-  activeWorkingDirectory = requestedWorkingDirectory;
+  await createSessionForContext(requested, requestedWorkingDirectory, requestedAvailableTools);
 }
 
 export async function listAvailableModels() {
@@ -213,7 +254,7 @@ export async function listAvailableModels() {
   }
 }
 
-export async function sendPrompt(prompt, model, projectPath, onEvent) {
+export async function sendPrompt(prompt, model, projectPath, allowedTools, onEvent) {
   if (!session) {
     onEvent({ type: "text", text: "Not authenticated yet. Please complete GitHub auth first." });
     return;
@@ -225,7 +266,7 @@ export async function sendPrompt(prompt, model, projectPath, onEvent) {
     return;
   }
 
-  await ensureSessionForContext(model, projectPath);
+  await ensureSessionForContext(model, projectPath, allowedTools);
 
   let sawAnyOutput = false;
   let sawDeltaOutput = false;

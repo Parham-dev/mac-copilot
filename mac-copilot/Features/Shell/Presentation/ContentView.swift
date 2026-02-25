@@ -13,6 +13,7 @@ struct ContentView: View {
     @ObservedObject var shellViewModel: ShellViewModel
     @State private var projectCreationError: String?
     @State private var showsModelsSheet = false
+    @State private var showsMCPToolsSheet = false
     private let projectCreationService: ProjectCreationService
 
     init(shellViewModel: ShellViewModel, projectCreationService: ProjectCreationService = ProjectCreationService()) {
@@ -27,6 +28,7 @@ struct ContentView: View {
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
                 onManageModels: { showsModelsSheet = true },
+                onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
             )
             .navigationSplitViewColumnWidth(min: 260, ideal: 300)
@@ -63,6 +65,13 @@ struct ContentView: View {
                 modelRepository: appEnvironment.sharedModelRepository()
             )
                 .frame(minWidth: 980, minHeight: 640)
+        }
+        .sheet(isPresented: $showsMCPToolsSheet) {
+            MCPToolsManagementSheet(
+                isPresented: $showsMCPToolsSheet,
+                mcpToolsStore: appEnvironment.sharedMCPToolsStore()
+            )
+            .frame(minWidth: 980, minHeight: 640)
         }
     }
 

@@ -50,6 +50,7 @@ final class AppEnvironment: ObservableObject {
     private let sidecarLifecycle: SidecarLifecycleManaging
     private let gitRepositoryManager: GitRepositoryManaging
     let modelSelectionStore: ModelSelectionStore
+    let mcpToolsStore: MCPToolsStore
     private var chatViewModels: [String: ChatViewModel] = [:]
     private var didBootstrap = false
     private lazy var profileViewModel: ProfileViewModel = {
@@ -72,6 +73,7 @@ final class AppEnvironment: ObservableObject {
         self.sidecarLifecycle = container.sidecarLifecycleManager()
         self.gitRepositoryManager = container.gitRepositoryManager()
         self.modelSelectionStore = ModelSelectionStore(preferencesStore: container.modelSelectionPreferencesStore())
+        self.mcpToolsStore = MCPToolsStore(preferencesStore: container.mcpToolsPreferencesStore())
     }
 
     func bootstrapIfNeeded() async {
@@ -102,6 +104,7 @@ final class AppEnvironment: ObservableObject {
             fetchModelsUseCase: fetchModelsUseCase,
             fetchModelCatalogUseCase: fetchModelCatalogUseCase,
             modelSelectionStore: modelSelectionStore,
+            mcpToolsStore: mcpToolsStore,
             chatRepository: chatRepository
         )
         chatViewModels[cacheKey] = created
@@ -122,6 +125,10 @@ final class AppEnvironment: ObservableObject {
 
     func sharedModelSelectionStore() -> ModelSelectionStore {
         modelSelectionStore
+    }
+
+    func sharedMCPToolsStore() -> MCPToolsStore {
+        mcpToolsStore
     }
 
     func sharedGitRepositoryManager() -> GitRepositoryManaging {

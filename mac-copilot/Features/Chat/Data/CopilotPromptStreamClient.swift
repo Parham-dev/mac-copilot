@@ -13,7 +13,7 @@ final class CopilotPromptStreamClient {
         self.baseURL = baseURL
     }
 
-    func streamPrompt(_ prompt: String, model: String?, projectPath: String?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
+    func streamPrompt(_ prompt: String, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -22,11 +22,17 @@ final class CopilotPromptStreamClient {
                     request.httpMethod = "POST"
                     request.timeoutInterval = 120
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONEncoder().encode([
+                    var payload: [String: Any] = [
                         "prompt": prompt,
                         "model": model ?? "gpt-5",
                         "projectPath": projectPath ?? "",
-                    ])
+                    ]
+
+                    if let allowedTools {
+                        payload["allowedTools"] = allowedTools
+                    }
+
+                    request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {

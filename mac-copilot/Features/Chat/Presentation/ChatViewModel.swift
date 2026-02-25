@@ -20,6 +20,7 @@ final class ChatViewModel: ObservableObject {
     private let fetchModelsUseCase: FetchModelsUseCase
     private let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     private let modelSelectionStore: ModelSelectionStore
+    private let mcpToolsStore: MCPToolsStore
     private let sessionCoordinator: ChatSessionCoordinator
     private var modelCatalogByID: [String: CopilotModelCatalogItem] = [:]
 
@@ -31,6 +32,7 @@ final class ChatViewModel: ObservableObject {
         fetchModelsUseCase: FetchModelsUseCase,
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
         modelSelectionStore: ModelSelectionStore,
+        mcpToolsStore: MCPToolsStore,
         chatRepository: ChatRepository
     ) {
         self.chatID = chatID
@@ -40,6 +42,7 @@ final class ChatViewModel: ObservableObject {
         self.fetchModelsUseCase = fetchModelsUseCase
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
         self.modelSelectionStore = modelSelectionStore
+        self.mcpToolsStore = mcpToolsStore
         self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
         let bootstrappedMessages = sessionCoordinator.bootstrapMessages(chatID: chatID)
         self.messages = bootstrappedMessages
@@ -132,10 +135,14 @@ final class ChatViewModel: ObservableObject {
 
         do {
             var hasContent = false
+            let enabledMCPTools = mcpToolsStore.enabledToolIDs()
+            let effectiveAllowedTools = enabledMCPTools.isEmpty ? MCPToolsCatalog.all.map(\.id) : enabledMCPTools
+
             for try await event in sendPromptUseCase.execute(
                 prompt: text,
                 model: selectedModel,
-                projectPath: projectPath
+                projectPath: projectPath,
+                allowedTools: effectiveAllowedTools
             ) {
                 switch event {
                 case .textDelta(let chunk):
