@@ -140,7 +140,7 @@ private struct ComposerTextView: NSViewRepresentable {
         }
 
         scrollView.documentView = textView
-        context.coordinator.updateHeight(for: textView)
+        context.coordinator.updateScrollerOnly(for: textView)
         return scrollView
     }
 
@@ -152,12 +152,17 @@ private struct ComposerTextView: NSViewRepresentable {
 
         if textView.string != text {
             textView.string = text
-            context.coordinator.updateHeight(for: textView)
+            context.coordinator.updateScrollerOnly(for: textView)
         }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         private let parent: ComposerTextView
+        private var pendingTextUpdate = false
+        private var latestPendingTextValue = ""
+        private var pendingHeightUpdate = false
+        private var latestPendingHeightValue: CGFloat = 0
+        private let composerDebugEnabled = true
 
         init(parent: ComposerTextView) {
             self.parent = parent
@@ -165,8 +170,23 @@ private struct ComposerTextView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            parent.text = textView.string
+            enqueueTextBindingUpdate(textView.string)
             updateHeight(for: textView)
+        }
+
+        private func enqueueTextBindingUpdate(_ newValue: String) {
+            latestPendingTextValue = newValue
+            guard !pendingTextUpdate else { return }
+            pendingTextUpdate = true
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.pendingTextUpdate = false
+                let value = self.latestPendingTextValue
+                if self.parent.text != value {
+                    self.parent.text = value
+                }
+            }
         }
 
         func updateHeight(for textView: NSTextView) {
@@ -179,14 +199,49 @@ private struct ComposerTextView: NSViewRepresentable {
             let clamped = min(max(contentHeight, parent.minHeight), parent.maxHeight)
             let maxHeight = self.parent.maxHeight
 
-            if self.parent.dynamicHeight != clamped {
-                DispatchQueue.main.async { [parent = self.parent] in
-                    parent.dynamicHeight = clamped
-                }
-            }
+            enqueueHeightBindingUpdate(clamped)
 
             if let scrollView = textView.enclosingScrollView {
-                scrollView.hasVerticalScroller = contentHeight > maxHeight
+                let shouldShowScroller = contentHeight > maxHeight
+                if scrollView.hasVerticalScroller != shouldShowScroller {
+                    scrollView.hasVerticalScroller = shouldShowScroller
+                }
+            }
+        }
+
+        private func enqueueHeightBindingUpdate(_ newValue: CGFloat) {
+            latestPendingHeightValue = newValue
+            guard !pendingHeightUpdate else { return }
+            pendingHeightUpdate = true
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.pendingHeightUpdate = false
+
+                let rounded = (self.latestPendingHeightValue * 2).rounded() / 2
+                if abs(self.parent.dynamicHeight - rounded) > 0.25 {
+                    if self.composerDebugEnabled {
+                        NSLog("[CopilotForge][Composer] apply dynamicHeight=%.1f", rounded)
+                    }
+                    self.parent.dynamicHeight = rounded
+                }
+            }
+        }
+
+        func updateScrollerOnly(for textView: NSTextView) {
+            guard let layoutManager = textView.layoutManager,
+                  let textContainer = textView.textContainer
+            else { return }
+
+            layoutManager.ensureLayout(for: textContainer)
+            let contentHeight = layoutManager.usedRect(for: textContainer).height + (textView.textContainerInset.height * 2)
+            let maxHeight = self.parent.maxHeight
+
+            if let scrollView = textView.enclosingScrollView {
+                let shouldShowScroller = contentHeight > maxHeight
+                if scrollView.hasVerticalScroller != shouldShowScroller {
+                    scrollView.hasVerticalScroller = shouldShowScroller
+                }
             }
         }
     }

@@ -15,7 +15,7 @@ struct CopilotModelCatalogItem: Identifiable, Hashable {
 }
 
 final class CopilotAPIService {
-    private let baseURL = URL(string: "http://localhost:7878")!
+    private let baseURL = URL(string: "http://127.0.0.1:7878")!
 
     struct PromptStreamError: LocalizedError {
         let message: String

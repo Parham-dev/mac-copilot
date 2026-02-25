@@ -4,20 +4,20 @@ import Foundation
 final class SidecarAuthClient {
     private let baseURL: URL
 
-    init(baseURL: URL = URL(string: "http://localhost:7878")!) {
+    init(baseURL: URL = URL(string: "http://127.0.0.1:7878")!) {
         self.baseURL = baseURL
     }
 
     func authorize(token: String) async throws -> AuthResponse {
-        try await post(path: "auth", body: AuthRequest(token: token), as: AuthResponse.self)
+        try await post(path: "auth", body: AuthRequest(token: token), as: AuthResponse.self, allowRestartOnRecoverableError: false)
     }
 
     func startAuth(clientId: String) async throws -> StartAuthResponse {
-        try await post(path: "auth/start", body: StartAuthRequest(clientId: clientId), as: StartAuthResponse.self)
+        try await post(path: "auth/start", body: StartAuthRequest(clientId: clientId), as: StartAuthResponse.self, allowRestartOnRecoverableError: false)
     }
 
     func pollAuth(clientId: String, deviceCode: String) async throws -> PollAuthResponse {
-        try await post(path: "auth/poll", body: PollAuthRequest(clientId: clientId, deviceCode: deviceCode), as: PollAuthResponse.self)
+        try await post(path: "auth/poll", body: PollAuthRequest(clientId: clientId, deviceCode: deviceCode), as: PollAuthResponse.self, allowRestartOnRecoverableError: false)
     }
 
     func waitForSidecarReady(maxAttempts: Int, delaySeconds: TimeInterval) async -> Bool {
@@ -56,9 +56,11 @@ final class SidecarAuthClient {
     private func post<RequestBody: Encodable, ResponseBody: Decodable>(
         path: String,
         body: RequestBody,
-        as type: ResponseBody.Type
+        as type: ResponseBody.Type,
+        allowRestartOnRecoverableError: Bool
     ) async throws -> ResponseBody {
         SidecarManager.shared.startIfNeeded()
+        _ = await waitForSidecarReady(maxAttempts: 3, delaySeconds: 0.25)
 
         var lastError: Error?
         for attempt in 0 ... 1 {
@@ -67,9 +69,18 @@ final class SidecarAuthClient {
             } catch {
                 lastError = error
                 if isRecoverableConnectionError(error), attempt == 0 {
-                    NSLog("[CopilotForge][Auth] Recoverable connection error. Restarting sidecar and retrying %@", path)
-                    SidecarManager.shared.restart()
-                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    if allowRestartOnRecoverableError {
+                        NSLog("[CopilotForge][Auth] Recoverable connection error. Restarting sidecar and retrying %@", path)
+                        SidecarManager.shared.restart()
+                    } else {
+                        NSLog("[CopilotForge][Auth] Recoverable connection error on %@. Waiting for sidecar and retrying without restart", path)
+                        SidecarManager.shared.startIfNeeded()
+                    }
+
+                    let ready = await waitForSidecarReady(maxAttempts: 8, delaySeconds: 0.30)
+                    if !ready {
+                        throw AuthError.server("Local sidecar is still starting. Please retry in a moment.")
+                    }
                     continue
                 }
                 throw error

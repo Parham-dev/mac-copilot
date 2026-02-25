@@ -43,7 +43,7 @@ final class GitHubAuthService: ObservableObject {
         guard sidecarReady else {
             isAuthenticated = false
             statusMessage = "Local sidecar is offline. Relaunch app to retry."
-            errorMessage = "Could not connect to localhost:7878"
+            errorMessage = "Could not connect to 127.0.0.1:7878"
             return
         }
 

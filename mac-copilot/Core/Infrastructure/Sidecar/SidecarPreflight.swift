@@ -10,6 +10,7 @@ enum SidecarPreflightError: LocalizedError {
     case missingSidecarScript
     case missingNode
     case unsupportedNodeVersion(found: String)
+    case unsupportedNodeRuntime(executable: String)
     case missingDependencies(path: String)
 
     var errorDescription: String? {
@@ -20,6 +21,8 @@ enum SidecarPreflightError: LocalizedError {
             return "Node executable not found (expected bundled node or /opt/homebrew/bin/node or /usr/local/bin/node)"
         case .unsupportedNodeVersion(let found):
             return "Node version \(found) is unsupported. Node 20+ is required"
+        case .unsupportedNodeRuntime(let executable):
+            return "Node runtime at \(executable) is missing required built-in modules (node:sqlite). Install/use a newer Node runtime."
         case .missingDependencies(let path):
             return "Sidecar dependencies missing at \(path). Run npm install in sidecar directory"
         }
@@ -45,6 +48,10 @@ final class SidecarPreflight {
         let nodeVersion = nodeVersionString(executable: nodeExecutable)
         guard isSupportedNodeVersion(nodeVersion) else {
             throw SidecarPreflightError.unsupportedNodeVersion(found: nodeVersion)
+        }
+
+        guard supportsRequiredBuiltins(executable: nodeExecutable) else {
+            throw SidecarPreflightError.unsupportedNodeRuntime(executable: nodeExecutable.path)
         }
 
         if !isBundledSidecar(scriptURL) {
@@ -93,7 +100,10 @@ final class SidecarPreflight {
     private func resolveNodeExecutable() -> URL? {
         if let override = ProcessInfo.processInfo.environment["COPILOTFORGE_NODE_PATH"],
            FileManager.default.isExecutableFile(atPath: override) {
-            return URL(fileURLWithPath: override)
+            let executable = URL(fileURLWithPath: override)
+            if supportsRequiredBuiltins(executable: executable) {
+                return executable
+            }
         }
 
         if let bundled = Bundle.main.url(forResource: "node", withExtension: nil),
@@ -110,7 +120,10 @@ final class SidecarPreflight {
         ]
 
         for path in fallbacks where FileManager.default.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
+            let executable = URL(fileURLWithPath: path)
+            if supportsRequiredBuiltins(executable: executable) {
+                return executable
+            }
         }
 
         return resolveNodeFromEnvironmentPATH()
@@ -128,7 +141,8 @@ final class SidecarPreflight {
         for directory in directories {
             let candidate = URL(fileURLWithPath: directory, isDirectory: true)
                 .appendingPathComponent("node", isDirectory: false)
-            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+            if FileManager.default.isExecutableFile(atPath: candidate.path),
+               supportsRequiredBuiltins(executable: candidate) {
                 return candidate
             }
         }
@@ -179,5 +193,22 @@ final class SidecarPreflight {
 
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func supportsRequiredBuiltins(executable: URL) -> Bool {
+        let script = "await import('node:sqlite');"
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["--input-type=module", "-e", script]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 }

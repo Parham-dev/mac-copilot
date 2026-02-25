@@ -34,6 +34,7 @@ final class SidecarManager {
     private var restartTimestamps: [Date] = []
     private var restartAttempt = 0
     private var runID: String?
+    private var intentionallyTerminatedPIDs: Set<Int32> = []
 
     private init() {}
 
@@ -46,6 +47,12 @@ final class SidecarManager {
     func restart() {
         queue.async { [weak self] in
             guard let self else { return }
+
+            if self.state == .restarting || self.isStarting {
+                self.log("Restart ignored: sidecar is already restarting")
+                return
+            }
+
             self.log("Restarting sidecar")
             self.transition(to: .restarting)
             self.stopLocked()
@@ -124,7 +131,9 @@ final class SidecarManager {
         process.executableURL = nodeExecutable
         process.arguments = [scriptURL.path]
         process.currentDirectoryURL = scriptURL.deletingLastPathComponent()
-        process.environment = ProcessInfo.processInfo.environment
+        var environment = ProcessInfo.processInfo.environment
+        environment["NODE_NO_WARNINGS"] = "1"
+        process.environment = environment
 
         let outputPipe = Pipe()
         self.outputPipe = outputPipe
@@ -150,6 +159,20 @@ final class SidecarManager {
 
             self.queue.async {
                 self.log("Sidecar terminated (reason=\(process.terminationReason.rawValue), status=\(process.terminationStatus))")
+
+                if self.intentionallyTerminatedPIDs.remove(process.processIdentifier) != nil {
+                    self.log("Intentional sidecar termination acknowledged")
+                    self.outputPipe?.fileHandleForReading.readabilityHandler = nil
+                    self.outputPipe = nil
+                    if self.process?.processIdentifier == process.processIdentifier {
+                        self.process = nil
+                    }
+                    if case .restarting = self.state {
+                        self.transition(to: .stopped)
+                    }
+                    return
+                }
+
                 self.outputPipe?.fileHandleForReading.readabilityHandler = nil
                 self.outputPipe = nil
                 self.process = nil
@@ -174,6 +197,9 @@ final class SidecarManager {
     }
 
     private func stopLocked() {
+        if let pid = process?.processIdentifier {
+            intentionallyTerminatedPIDs.insert(pid)
+        }
         process?.terminate()
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         outputPipe = nil

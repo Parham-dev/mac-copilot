@@ -196,9 +196,6 @@ private struct ModelsManagementSheet: View {
                         }
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        viewModel.focusedModelID = model.id
-                    }
                     .padding(.vertical, 2)
                 }
                 .listStyle(.inset)

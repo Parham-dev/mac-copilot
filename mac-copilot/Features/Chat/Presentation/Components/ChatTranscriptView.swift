@@ -6,19 +6,19 @@ struct ChatTranscriptView: View {
     let toolExecutionsByMessageID: [UUID: [ChatMessage.ToolExecution]]
     let streamingAssistantMessageID: UUID?
 
-    @State private var contentBottom: CGFloat = 0
-    @State private var viewportBottom: CGFloat = 0
-    @State private var autoScrollEnabled = true
     @State private var hasScrolledInitially = false
 
     private let bottomAnchorID = "chat-transcript-bottom-anchor"
+    private let scrollDebugEnabled = true
 
-    private var distanceFromBottom: CGFloat {
-        max(contentBottom - viewportBottom, 0)
-    }
-
-    private var isNearBottom: Bool {
-        distanceFromBottom <= 56
+    private var scrollUpdateToken: Int {
+        var hasher = Hasher()
+        hasher.combine(messages.count)
+        hasher.combine(messages.reduce(0) { $0 + $1.text.count })
+        hasher.combine(statusChipsByMessageID.values.reduce(0) { $0 + $1.count })
+        hasher.combine(toolExecutionsByMessageID.values.reduce(0) { $0 + $1.count })
+        hasher.combine(streamingAssistantMessageID)
+        return hasher.finalize()
     }
 
     var body: some View {
@@ -37,75 +37,24 @@ struct ChatTranscriptView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(bottomAnchorID)
-                        .background(
-                            GeometryReader { geometry in
-                                Color.clear
-                                    .preference(
-                                        key: ChatContentBottomPreferenceKey.self,
-                                        value: geometry.frame(in: .named("ChatTranscriptScroll")).maxY
-                                    )
-                            }
-                        )
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
                 .padding(.bottom, 6)
             }
-            .coordinateSpace(name: "ChatTranscriptScroll")
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .preference(
-                            key: ChatViewportBottomPreferenceKey.self,
-                            value: geometry.frame(in: .named("ChatTranscriptScroll")).maxY
-                        )
-                }
-            )
-            .onPreferenceChange(ChatContentBottomPreferenceKey.self) { value in
-                contentBottom = value
-                updateAutoScrollState()
-                performInitialScrollIfNeeded(using: proxy)
-            }
-            .onPreferenceChange(ChatViewportBottomPreferenceKey.self) { value in
-                viewportBottom = value
-                updateAutoScrollState()
-                performInitialScrollIfNeeded(using: proxy)
-            }
-            .onChange(of: messages) { _ in
+            .onChange(of: scrollUpdateToken) { _, _ in
                 if !hasScrolledInitially {
                     performInitialScrollIfNeeded(using: proxy)
                     return
                 }
 
-                guard autoScrollEnabled else { return }
-                scrollToBottom(using: proxy)
-            }
-            .onChange(of: statusChipsByMessageID) { _ in
-                guard autoScrollEnabled else { return }
-                scrollToBottom(using: proxy)
-            }
-            .onChange(of: toolExecutionsByMessageID) { _ in
-                guard autoScrollEnabled else { return }
-                scrollToBottom(using: proxy)
-            }
-            .onChange(of: streamingAssistantMessageID) { _ in
-                guard autoScrollEnabled else { return }
-                scrollToBottom(using: proxy)
+                logScroll("scroll token changed: schedule scroll")
+                scheduleScrollToBottom(using: proxy)
             }
             .onAppear {
+                logScroll("onAppear")
                 performInitialScrollIfNeeded(using: proxy)
             }
-        }
-    }
-
-    private func updateAutoScrollState() {
-        if isNearBottom {
-            autoScrollEnabled = true
-            return
-        }
-
-        if distanceFromBottom > 140 {
-            autoScrollEnabled = false
         }
     }
 
@@ -126,7 +75,7 @@ struct ChatTranscriptView: View {
         guard !messages.isEmpty else { return }
 
         hasScrolledInitially = true
-        autoScrollEnabled = true
+        logScroll("initial scroll sequence start")
 
         scrollToBottom(using: proxy, animated: false)
 
@@ -137,25 +86,23 @@ struct ChatTranscriptView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             scrollToBottom(using: proxy, animated: false)
         }
+    }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            scrollToBottom(using: proxy, animated: false)
+    private func scheduleScrollToBottom(using proxy: ScrollViewProxy) {
+        logScroll("schedule scroll dispatch")
+        DispatchQueue.main.async {
+            let shouldAnimate = false
+            logScroll("execute scroll (animated=\(shouldAnimate))")
+            scrollToBottom(using: proxy, animated: shouldAnimate)
         }
     }
-}
 
-private struct ChatContentBottomPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+    private func logScroll(_ message: String) {
+        guard scrollDebugEnabled else { return }
+        NSLog("[CopilotForge][Scroll] %@", message)
     }
-}
 
-private struct ChatViewportBottomPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+    private func format(_ value: CGFloat) -> String {
+        String(format: "%.1f", value)
     }
 }

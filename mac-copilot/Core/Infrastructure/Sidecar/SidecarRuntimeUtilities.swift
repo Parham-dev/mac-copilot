@@ -8,7 +8,7 @@ final class SidecarRuntimeUtilities {
     }
 
     func isHealthySidecarAlreadyRunning(requiredSuccesses: Int) -> Bool {
-        guard let url = URL(string: "http://localhost:\(port)/health") else {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else {
             return false
         }
 
