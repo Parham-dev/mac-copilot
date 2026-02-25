@@ -10,16 +10,19 @@ final class ChatViewModel: ObservableObject {
     @Published var selectedModel = "gpt-5"
 
     let chatTitle: String
+    let projectPath: String
 
     private let sendPromptUseCase: SendPromptUseCase
     private let fetchModelsUseCase: FetchModelsUseCase
 
     init(
         chatTitle: String,
+        projectPath: String,
         sendPromptUseCase: SendPromptUseCase,
         fetchModelsUseCase: FetchModelsUseCase
     ) {
         self.chatTitle = chatTitle
+        self.projectPath = projectPath
         self.sendPromptUseCase = sendPromptUseCase
         self.fetchModelsUseCase = fetchModelsUseCase
         self.messages = [
@@ -54,7 +57,11 @@ final class ChatViewModel: ObservableObject {
 
         do {
             var hasContent = false
-            for try await chunk in sendPromptUseCase.execute(prompt: text, model: selectedModel) {
+            for try await chunk in sendPromptUseCase.execute(
+                prompt: text,
+                model: selectedModel,
+                projectPath: projectPath
+            ) {
                 hasContent = true
                 messages[assistantIndex].text += chunk
             }

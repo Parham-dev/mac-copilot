@@ -105,7 +105,7 @@ app.post("/prompt", async (req, res) => {
   }));
 
   try {
-    await sendPrompt(promptText, req.body?.model, (chunk) => {
+    await sendPrompt(promptText, req.body?.model, req.body?.projectPath, (chunk) => {
       const text = typeof chunk === "string" ? chunk : JSON.stringify(chunk);
       chunkCount += 1;
       totalChars += text.length;

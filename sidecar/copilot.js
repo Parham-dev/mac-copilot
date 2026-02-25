@@ -1,10 +1,12 @@
-import { CopilotClient } from "@github/copilot-sdk";
+import { CopilotClient, approveAll } from "@github/copilot-sdk";
+import { mkdirSync } from "node:fs";
 
 let client = null;
 let session = null;
 let lastAuthError = null;
 let lastAuthAt = null;
 let activeModel = "gpt-5";
+let activeWorkingDirectory = null;
 
 export function isAuthenticated() {
   return session !== null;
@@ -15,7 +17,12 @@ export async function startClient(token) {
     process.env.GITHUB_TOKEN = token;
     client = new CopilotClient();
     await client.start();
-    session = await client.createSession({ model: activeModel, streaming: true });
+    session = await client.createSession({
+      model: activeModel,
+      streaming: true,
+      onPermissionRequest: approveAll,
+      ...(activeWorkingDirectory ? { workingDirectory: activeWorkingDirectory } : {}),
+    });
     lastAuthError = null;
     lastAuthAt = new Date().toISOString();
   } catch (error) {
@@ -30,21 +37,27 @@ export function clearSession() {
   client = null;
   session = null;
   activeModel = "gpt-5";
+  activeWorkingDirectory = null;
 }
 
 export function getCopilotReport() {
   return {
     sessionReady: session !== null,
     activeModel,
+    activeWorkingDirectory,
     lastAuthAt,
     lastAuthError,
     usingGitHubToken: Boolean(process.env.GITHUB_TOKEN),
   };
 }
 
-async function ensureSessionForModel(model) {
+async function ensureSessionForContext(model, projectPath) {
   const requested = typeof model === "string" && model.trim().length > 0 ? model.trim() : "gpt-5";
-  if (session && activeModel === requested) {
+  const requestedWorkingDirectory = typeof projectPath === "string" && projectPath.trim().length > 0
+    ? projectPath.trim()
+    : null;
+
+  if (session && activeModel === requested && activeWorkingDirectory === requestedWorkingDirectory) {
     return;
   }
 
@@ -52,8 +65,18 @@ async function ensureSessionForModel(model) {
     throw new Error("Copilot client is not initialized.");
   }
 
-  session = await client.createSession({ model: requested, streaming: true });
+  if (requestedWorkingDirectory) {
+    mkdirSync(requestedWorkingDirectory, { recursive: true });
+  }
+
+  session = await client.createSession({
+    model: requested,
+    streaming: true,
+    onPermissionRequest: approveAll,
+    ...(requestedWorkingDirectory ? { workingDirectory: requestedWorkingDirectory } : {}),
+  });
   activeModel = requested;
+  activeWorkingDirectory = requestedWorkingDirectory;
 }
 
 export async function listAvailableModels() {
@@ -91,7 +114,7 @@ export async function listAvailableModels() {
   }
 }
 
-export async function sendPrompt(prompt, model, onChunk) {
+export async function sendPrompt(prompt, model, projectPath, onChunk) {
   if (!session) {
     onChunk("Not authenticated yet. Please complete GitHub auth first.");
     return;
@@ -103,7 +126,7 @@ export async function sendPrompt(prompt, model, onChunk) {
     return;
   }
 
-  await ensureSessionForModel(model);
+  await ensureSessionForContext(model, projectPath);
 
   let sawAnyOutput = false;
   let sawDeltaOutput = false;

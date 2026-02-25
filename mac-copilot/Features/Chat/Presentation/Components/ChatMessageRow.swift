@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ChatMessageRow: View {
     let message: ChatMessage
@@ -6,7 +7,21 @@ struct ChatMessageRow: View {
     var body: some View {
         HStack {
             if message.role == .assistant {
-                bubble(color: .gray.opacity(0.18), alignment: .leading)
+                VStack(alignment: .leading, spacing: 6) {
+                    bubble(color: .gray.opacity(0.18), alignment: .leading)
+
+                    if !message.text.isEmpty {
+                        Button {
+                            copyToClipboard(message.text)
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 6)
+                    }
+                }
                 Spacer(minLength: 36)
             } else {
                 Spacer(minLength: 36)
@@ -22,5 +37,10 @@ struct ChatMessageRow: View {
             .background(color)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .frame(maxWidth: 700, alignment: alignment)
+    }
+
+    private func copyToClipboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
     }
 }

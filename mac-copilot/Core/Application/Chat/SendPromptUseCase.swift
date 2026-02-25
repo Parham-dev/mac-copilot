@@ -7,8 +7,8 @@ struct SendPromptUseCase {
         self.repository = repository
     }
 
-    func execute(prompt: String, model: String?) -> AsyncThrowingStream<String, Error> {
-        repository.streamPrompt(prompt, model: model)
+    func execute(prompt: String, model: String?, projectPath: String?) -> AsyncThrowingStream<String, Error> {
+        repository.streamPrompt(prompt, model: model, projectPath: projectPath)
     }
 }
 

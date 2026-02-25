@@ -40,7 +40,7 @@ final class CopilotAPIService {
         }
     }
 
-    func streamPrompt(_ prompt: String, model: String?) -> AsyncThrowingStream<String, Error> {
+    func streamPrompt(_ prompt: String, model: String?, projectPath: String?) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -52,6 +52,7 @@ final class CopilotAPIService {
                     request.httpBody = try JSONEncoder().encode([
                         "prompt": prompt,
                         "model": model ?? "gpt-5",
+                        "projectPath": projectPath ?? "",
                     ])
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)

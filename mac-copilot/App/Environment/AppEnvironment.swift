@@ -41,6 +41,7 @@ final class AppEnvironment: ObservableObject {
         let fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
         let created = ChatViewModel(
             chatTitle: chatTitle,
+            projectPath: project.localPath,
             sendPromptUseCase: sendUseCase,
             fetchModelsUseCase: fetchModelsUseCase
         )

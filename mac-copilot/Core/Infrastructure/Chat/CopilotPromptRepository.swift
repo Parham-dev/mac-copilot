@@ -7,8 +7,8 @@ final class CopilotPromptRepository: PromptStreamingRepository, ModelListingRepo
         self.apiService = apiService
     }
 
-    func streamPrompt(_ prompt: String, model: String?) -> AsyncThrowingStream<String, Error> {
-        apiService.streamPrompt(prompt, model: model)
+    func streamPrompt(_ prompt: String, model: String?, projectPath: String?) -> AsyncThrowingStream<String, Error> {
+        apiService.streamPrompt(prompt, model: model, projectPath: projectPath)
     }
 
     func fetchModels() async -> [String] {
