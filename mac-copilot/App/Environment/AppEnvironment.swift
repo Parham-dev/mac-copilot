@@ -2,19 +2,20 @@ import Foundation
 import Combine
 import FactoryKit
 
-enum ModelSelectionPreferences {
+@MainActor
+final class ModelSelectionStore: ObservableObject {
     private static let selectedModelIDsKey = "copilotforge.selectedModelIDs"
-    static let didChangeNotification = Notification.Name("ModelSelectionPreferencesDidChange")
+    @Published private(set) var changeToken: Int = 0
 
-    static func selectedModelIDs() -> [String] {
-        let raw = UserDefaults.standard.stringArray(forKey: selectedModelIDsKey) ?? []
-        return normalize(raw)
+    func selectedModelIDs() -> [String] {
+        let raw = UserDefaults.standard.stringArray(forKey: ModelSelectionStore.selectedModelIDsKey) ?? []
+        return Self.normalize(raw)
     }
 
-    static func setSelectedModelIDs(_ ids: [String]) {
-        let normalized = normalize(ids)
-        UserDefaults.standard.set(normalized, forKey: selectedModelIDsKey)
-        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    func setSelectedModelIDs(_ ids: [String]) {
+        let normalized = Self.normalize(ids)
+        UserDefaults.standard.set(normalized, forKey: ModelSelectionStore.selectedModelIDsKey)
+        changeToken += 1
     }
 
     private static func normalize(_ ids: [String]) -> [String] {
@@ -42,6 +43,7 @@ final class AppEnvironment: ObservableObject {
     private let chatRepository: ChatRepository
     private let previewResolver: ProjectPreviewResolver
     private let previewRuntimeManager: PreviewRuntimeManager
+    let modelSelectionStore: ModelSelectionStore
     private var chatViewModels: [String: ChatViewModel] = [:]
     private var didBootstrap = false
     private lazy var profileViewModel: ProfileViewModel = {
@@ -61,6 +63,7 @@ final class AppEnvironment: ObservableObject {
         self.profileRepository = container.profileRepository()
         self.previewResolver = container.previewResolver()
         self.previewRuntimeManager = container.previewRuntimeManager()
+        self.modelSelectionStore = ModelSelectionStore()
     }
 
     func bootstrapIfNeeded() async {
@@ -90,6 +93,7 @@ final class AppEnvironment: ObservableObject {
             sendPromptUseCase: sendUseCase,
             fetchModelsUseCase: fetchModelsUseCase,
             fetchModelCatalogUseCase: fetchModelCatalogUseCase,
+            modelSelectionStore: modelSelectionStore,
             chatRepository: chatRepository
         )
         chatViewModels[cacheKey] = created
@@ -106,6 +110,10 @@ final class AppEnvironment: ObservableObject {
 
     func sharedPreviewRuntimeManager() -> PreviewRuntimeManager {
         previewRuntimeManager
+    }
+
+    func sharedModelSelectionStore() -> ModelSelectionStore {
+        modelSelectionStore
     }
 
     static func preview() -> AppEnvironment {

@@ -27,7 +27,10 @@ struct ShellDetailPaneView: View {
             let chatViewModel = appEnvironment.chatViewModel(for: selectedChat, project: activeProject)
 
             HSplitView {
-                ChatView(viewModel: chatViewModel)
+                ChatView(
+                    viewModel: chatViewModel,
+                    modelSelectionStore: appEnvironment.sharedModelSelectionStore()
+                )
                     .frame(minWidth: 300, idealWidth: 470)
 
                 ContextPaneView(

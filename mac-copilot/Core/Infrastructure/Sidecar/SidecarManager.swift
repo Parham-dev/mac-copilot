@@ -1,6 +1,6 @@
 import Foundation
 
-final class SidecarManager {
+final class SidecarManager: SidecarLifecycleManaging {
     static let shared = SidecarManager()
 
     private enum SidecarState: Equatable {
@@ -21,9 +21,8 @@ final class SidecarManager {
     private let sidecarPort = 7878
     private let queue = DispatchQueue(label: "copilotforge.sidecar.manager", qos: .userInitiated)
     private let startupTimeout: TimeInterval = 8
-    private let maxRestartsInWindow = 4
-    private let restartWindowSeconds: TimeInterval = 60
     private let preflight = SidecarPreflight(minimumNodeMajorVersion: 20)
+    private let restartPolicy = SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
 
     private lazy var runtimeUtilities = SidecarRuntimeUtilities(port: sidecarPort)
 
@@ -31,8 +30,6 @@ final class SidecarManager {
     private var outputPipe: Pipe?
     private var state: SidecarState = .stopped
     private var isStarting = false
-    private var restartTimestamps: [Date] = []
-    private var restartAttempt = 0
     private var runID: String?
     private var intentionallyTerminatedPIDs: Set<Int32> = []
 
@@ -91,8 +88,8 @@ final class SidecarManager {
                 return
             }
 
-            if !allowRestartNow() {
-                let message = "Restart guard tripped: too many restarts in \(Int(restartWindowSeconds))s"
+            if !restartPolicy.canAttemptRestart() {
+                let message = "Restart guard tripped: too many restarts in 60s"
                 transition(to: .failed(message))
                 log(message)
                 return
@@ -108,7 +105,7 @@ final class SidecarManager {
             launchProcess(nodeExecutable: startup.nodeExecutable, scriptURL: startup.scriptURL)
 
             if runtimeUtilities.waitForHealthySidecar(timeout: startupTimeout) {
-                restartAttempt = 0
+                restartPolicy.resetRetryAttempt()
                 transition(to: .healthy)
                 log("Sidecar healthy on :\(sidecarPort)")
             } else {
@@ -208,32 +205,19 @@ final class SidecarManager {
     }
 
     private func scheduleRetryIfAllowed() {
-        guard allowRestartNow() else {
+        guard restartPolicy.canAttemptRestart() else {
             let message = "Retry skipped: restart guard tripped"
             transition(to: .failed(message))
             log(message)
             return
         }
 
-        restartAttempt += 1
-        let base = min(pow(2.0, Double(restartAttempt)), 8.0)
-        let jitter = Double.random(in: 0.0 ... 0.4)
-        let delay = base + jitter
-        log("Scheduling sidecar retry #\(restartAttempt) in \(String(format: "%.2f", delay))s")
+        let delay = restartPolicy.nextRetryDelay()
+        log("Scheduling sidecar retry #\(restartPolicy.retryAttempt) in \(String(format: "%.2f", delay))s")
 
         queue.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.startIfNeededLocked(reason: .retry)
         }
-    }
-
-    private func allowRestartNow() -> Bool {
-        let now = Date()
-        restartTimestamps = restartTimestamps.filter { now.timeIntervalSince($0) <= restartWindowSeconds }
-        if restartTimestamps.count >= maxRestartsInWindow {
-            return false
-        }
-        restartTimestamps.append(now)
-        return true
     }
 
     private func transition(to next: SidecarState) {

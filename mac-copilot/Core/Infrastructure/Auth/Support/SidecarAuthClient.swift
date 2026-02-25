@@ -3,9 +3,14 @@ import Foundation
 @MainActor
 final class SidecarAuthClient {
     private let baseURL: URL
+    private let sidecarLifecycle: SidecarLifecycleManaging
 
-    init(baseURL: URL = URL(string: "http://127.0.0.1:7878")!) {
+    init(
+        baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
+        sidecarLifecycle: SidecarLifecycleManaging = SidecarManager.shared
+    ) {
         self.baseURL = baseURL
+        self.sidecarLifecycle = sidecarLifecycle
     }
 
     func authorize(token: String) async throws -> AuthResponse {
@@ -59,7 +64,7 @@ final class SidecarAuthClient {
         as type: ResponseBody.Type,
         allowRestartOnRecoverableError: Bool
     ) async throws -> ResponseBody {
-        SidecarManager.shared.startIfNeeded()
+        sidecarLifecycle.startIfNeeded()
         _ = await waitForSidecarReady(maxAttempts: 3, delaySeconds: 0.25)
 
         var lastError: Error?
@@ -71,10 +76,10 @@ final class SidecarAuthClient {
                 if isRecoverableConnectionError(error), attempt == 0 {
                     if allowRestartOnRecoverableError {
                         NSLog("[CopilotForge][Auth] Recoverable connection error. Restarting sidecar and retrying %@", path)
-                        SidecarManager.shared.restart()
+                        sidecarLifecycle.restart()
                     } else {
                         NSLog("[CopilotForge][Auth] Recoverable connection error on %@. Waiting for sidecar and retrying without restart", path)
-                        SidecarManager.shared.startIfNeeded()
+                        sidecarLifecycle.startIfNeeded()
                     }
 
                     let ready = await waitForSidecarReady(maxAttempts: 8, delaySeconds: 0.30)

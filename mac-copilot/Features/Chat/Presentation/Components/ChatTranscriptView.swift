@@ -9,7 +9,6 @@ struct ChatTranscriptView: View {
     @State private var hasScrolledInitially = false
 
     private let bottomAnchorID = "chat-transcript-bottom-anchor"
-    private let scrollDebugEnabled = true
 
     private var scrollUpdateToken: Int {
         var hasher = Hasher()
@@ -48,11 +47,9 @@ struct ChatTranscriptView: View {
                     return
                 }
 
-                logScroll("scroll token changed: schedule scroll")
                 scheduleScrollToBottom(using: proxy)
             }
             .onAppear {
-                logScroll("onAppear")
                 performInitialScrollIfNeeded(using: proxy)
             }
         }
@@ -75,7 +72,6 @@ struct ChatTranscriptView: View {
         guard !messages.isEmpty else { return }
 
         hasScrolledInitially = true
-        logScroll("initial scroll sequence start")
 
         scrollToBottom(using: proxy, animated: false)
 
@@ -89,20 +85,9 @@ struct ChatTranscriptView: View {
     }
 
     private func scheduleScrollToBottom(using proxy: ScrollViewProxy) {
-        logScroll("schedule scroll dispatch")
         DispatchQueue.main.async {
             let shouldAnimate = false
-            logScroll("execute scroll (animated=\(shouldAnimate))")
             scrollToBottom(using: proxy, animated: shouldAnimate)
         }
-    }
-
-    private func logScroll(_ message: String) {
-        guard scrollDebugEnabled else { return }
-        NSLog("[CopilotForge][Scroll] %@", message)
-    }
-
-    private func format(_ value: CGFloat) -> String {
-        String(format: "%.1f", value)
     }
 }

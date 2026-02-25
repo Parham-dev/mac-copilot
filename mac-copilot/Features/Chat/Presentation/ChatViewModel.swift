@@ -19,6 +19,7 @@ final class ChatViewModel: ObservableObject {
     private let sendPromptUseCase: SendPromptUseCase
     private let fetchModelsUseCase: FetchModelsUseCase
     private let fetchModelCatalogUseCase: FetchModelCatalogUseCase
+    private let modelSelectionStore: ModelSelectionStore
     private let sessionCoordinator: ChatSessionCoordinator
     private var modelCatalogByID: [String: CopilotModelCatalogItem] = [:]
 
@@ -29,6 +30,7 @@ final class ChatViewModel: ObservableObject {
         sendPromptUseCase: SendPromptUseCase,
         fetchModelsUseCase: FetchModelsUseCase,
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
+        modelSelectionStore: ModelSelectionStore,
         chatRepository: ChatRepository
     ) {
         self.chatID = chatID
@@ -37,6 +39,7 @@ final class ChatViewModel: ObservableObject {
         self.sendPromptUseCase = sendPromptUseCase
         self.fetchModelsUseCase = fetchModelsUseCase
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
+        self.modelSelectionStore = modelSelectionStore
         self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
         let bootstrappedMessages = sessionCoordinator.bootstrapMessages(chatID: chatID)
         self.messages = bootstrappedMessages
@@ -78,7 +81,7 @@ final class ChatViewModel: ObservableObject {
 
         let models = await fetchModelsUseCase.execute()
         if !models.isEmpty {
-            let preferredVisible = Set(ModelSelectionPreferences.selectedModelIDs())
+            let preferredVisible = Set(modelSelectionStore.selectedModelIDs())
             let filtered: [String]
 
             if preferredVisible.isEmpty {

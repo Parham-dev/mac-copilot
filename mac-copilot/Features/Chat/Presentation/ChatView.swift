@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChatView: View {
     @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var modelSelectionStore: ModelSelectionStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,7 +28,7 @@ struct ChatView: View {
         .task {
             await viewModel.loadModelsIfNeeded()
         }
-        .onReceive(NotificationCenter.default.publisher(for: ModelSelectionPreferences.didChangeNotification)) { _ in
+        .onChange(of: modelSelectionStore.changeToken) { _, _ in
             Task {
                 await viewModel.loadModelsIfNeeded(forceReload: true)
             }
@@ -40,6 +41,9 @@ struct ChatView: View {
         let environment = AppEnvironment.preview()
         let project = environment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
         let chat = environment.shellViewModel.chats(for: project.id).first ?? ChatThreadRef(projectID: project.id, title: "General")
-        ChatView(viewModel: environment.chatViewModel(for: chat, project: project))
+        ChatView(
+            viewModel: environment.chatViewModel(for: chat, project: project),
+            modelSelectionStore: environment.sharedModelSelectionStore()
+        )
     }
 }
