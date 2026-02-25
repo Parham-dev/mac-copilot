@@ -7,6 +7,7 @@ This folder contains operational and release documentation for CopilotForge.
 - [DMG Release Guide](release-dmg.md)
 - [Sidecar Runtime and Packaging](sidecar-runtime.md)
 - [Chat Session History Architecture](chat-session-history.md)
+- [iOS Companion Architecture](ios-companion-architecture.md)
 - [Troubleshooting](troubleshooting.md)
 - End-to-end release wrapper: `./scripts/release_dmg.sh --skip-notarize` (or pass keychain profile for production)
 - One-command local DMG: `./scripts/build_dmg.sh`
