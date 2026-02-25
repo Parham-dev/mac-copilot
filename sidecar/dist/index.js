@@ -1,5 +1,6 @@
 import express from "express";
 import { existsSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot.js";
@@ -145,8 +146,13 @@ app.post("/prompt", async (req, res) => {
     res.end();
 });
 const port = 7878;
-const server = app.listen(port, () => {
-    console.log(`[CopilotForge] sidecar ready on :${port}`);
+const host = (process.env.COPILOTFORGE_SIDECAR_HOST ?? "0.0.0.0").trim() || "0.0.0.0";
+const server = app.listen(port, host, () => {
+    const urls = resolvedStartupURLs(host, port);
+    console.log(`[CopilotForge] sidecar ready on ${host}:${port}`);
+    for (const url of urls) {
+        console.log(`[CopilotForge] health URL: ${url}/health`);
+    }
 });
 server.on("error", (error) => {
     if (error?.code !== "EADDRINUSE") {
@@ -225,4 +231,28 @@ function resolveSDKPath() {
         }
     }
     return candidates[0];
+}
+function resolvedStartupURLs(hostValue, portValue) {
+    const normalizedHost = hostValue.trim().toLowerCase();
+    if (normalizedHost !== "0.0.0.0" && normalizedHost !== "::") {
+        return [`http://${hostValue}:${portValue}`];
+    }
+    const urls = new Set();
+    urls.add(`http://127.0.0.1:${portValue}`);
+    urls.add(`http://localhost:${portValue}`);
+    const interfaces = networkInterfaces();
+    for (const candidates of Object.values(interfaces)) {
+        if (!candidates) {
+            continue;
+        }
+        for (const candidate of candidates) {
+            if (!candidate || candidate.internal) {
+                continue;
+            }
+            if (candidate.family === "IPv4") {
+                urls.add(`http://${candidate.address}:${portValue}`);
+            }
+        }
+    }
+    return Array.from(urls).sort((left, right) => left.localeCompare(right));
 }
