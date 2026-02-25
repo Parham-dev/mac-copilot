@@ -10,8 +10,8 @@ final class SidecarManager {
     func startIfNeeded() {
         guard process == nil else { return }
 
-        guard let scriptURL = Bundle.main.url(forResource: "index", withExtension: "js", subdirectory: "sidecar") else {
-            NSLog("[CopilotForge] sidecar/index.js not found in app bundle resources")
+        guard let scriptURL = resolveSidecarScriptURL() else {
+            NSLog("[CopilotForge] sidecar/index.js not found in app bundle resources or local source tree")
             return
         }
 
@@ -43,12 +43,45 @@ final class SidecarManager {
         }
     }
 
+    private func resolveSidecarScriptURL() -> URL? {
+        if let bundled = Bundle.main.url(forResource: "index", withExtension: "js", subdirectory: "sidecar") {
+            return bundled
+        }
+
+        let sourceFileURL = URL(fileURLWithPath: #filePath)
+        let projectAppFolder = sourceFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let projectRootFolder = projectAppFolder.deletingLastPathComponent()
+
+        let candidatePaths = [
+            projectRootFolder
+                .appendingPathComponent("sidecar", isDirectory: true)
+                .appendingPathComponent("index.js", isDirectory: false),
+            projectAppFolder
+                .appendingPathComponent("sidecar", isDirectory: true)
+                .appendingPathComponent("index.js", isDirectory: false),
+        ]
+
+        for candidate in candidatePaths where FileManager.default.fileExists(atPath: candidate.path) {
+            NSLog("[CopilotForge] Using local sidecar source at %@", candidate.path)
+            return candidate
+        }
+
+        return nil
+    }
+
     func stop() {
         process?.terminate()
         process = nil
     }
 
     private func resolveNodeExecutable() -> URL? {
+        if let override = ProcessInfo.processInfo.environment["COPILOTFORGE_NODE_PATH"],
+           FileManager.default.isExecutableFile(atPath: override) {
+            return URL(fileURLWithPath: override)
+        }
+
         if let bundled = Bundle.main.url(forResource: "node", withExtension: nil),
            FileManager.default.isExecutableFile(atPath: bundled.path) {
             return bundled
@@ -56,11 +89,38 @@ final class SidecarManager {
 
         let fallbacks = [
             "/opt/homebrew/bin/node",
+            "/opt/homebrew/opt/node@20/bin/node",
+            "/opt/homebrew/opt/node/bin/node",
             "/usr/local/bin/node",
+            "/opt/local/bin/node",
         ]
 
         for path in fallbacks where FileManager.default.isExecutableFile(atPath: path) {
             return URL(fileURLWithPath: path)
+        }
+
+        if let resolvedFromPath = resolveNodeFromEnvironmentPATH() {
+            return resolvedFromPath
+        }
+
+        return nil
+    }
+
+    private func resolveNodeFromEnvironmentPATH() -> URL? {
+        guard let pathValue = ProcessInfo.processInfo.environment["PATH"], !pathValue.isEmpty else {
+            return nil
+        }
+
+        let directories = pathValue
+            .split(separator: ":")
+            .map { String($0) }
+
+        for directory in directories {
+            let candidate = URL(fileURLWithPath: directory, isDirectory: true)
+                .appendingPathComponent("node", isDirectory: false)
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
         }
 
         return nil

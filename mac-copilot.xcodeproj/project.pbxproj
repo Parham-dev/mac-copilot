@@ -398,7 +398,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8FS5PCAXWW;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -407,6 +407,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/sidecar/node_modules/@github/copilot/clipboard/node_modules/@teddyzhu/clipboard-darwin-arm64",
+					"$(PROJECT_DIR)/sidecar/node_modules/@github/copilot/clipboard/node_modules/@teddyzhu/clipboard-darwin-x64",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "co.uk.appwebdev.mac-copilot";
@@ -439,6 +444,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/sidecar/node_modules/@github/copilot/clipboard/node_modules/@teddyzhu/clipboard-darwin-arm64",
+					"$(PROJECT_DIR)/sidecar/node_modules/@github/copilot/clipboard/node_modules/@teddyzhu/clipboard-darwin-x64",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "co.uk.appwebdev.mac-copilot";

@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift
+DerivedData/
+build/
+*.moved-aside
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# User-specific Xcode data
+**/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Sidecar (Node.js)
+**/sidecar/node_modules/
+**/sidecar/.npm/
+**/sidecar/npm-debug.log*
+**/sidecar/yarn-error.log*
+**/sidecar/.env
+**/sidecar/.env.*
