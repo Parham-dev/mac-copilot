@@ -7,7 +7,7 @@ struct ShellSidebarView: View {
     let onSignOut: () -> Void
 
     @State private var showsUpdatePlaceholder = false
-    @State private var showsSettingsPlaceholder = false
+    @State private var showsModelsPlaceholder = false
     @State private var showsProfileMenu = false
 
     var body: some View {
@@ -32,10 +32,10 @@ struct ShellSidebarView: View {
             } message: {
                 Text("Update action placeholder. I’ll wire the real behavior next.")
             }
-            .alert("Settings", isPresented: $showsSettingsPlaceholder) {
+            .alert("Models", isPresented: $showsModelsPlaceholder) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Settings placeholder. I’ll wire this after you define the flow.")
+                Text("Models placeholder. I’ll wire this after you define the flow.")
             }
             .alert("Could not create chat", isPresented: chatCreationErrorAlertBinding) {
                 Button("OK", role: .cancel) {
@@ -65,6 +65,8 @@ struct ShellSidebarView: View {
             } label: {
                 Text("Update")
                     .fontWeight(.medium)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -76,11 +78,13 @@ struct ShellSidebarView: View {
                 showsProfileMenu.toggle()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "person.crop.circle")
+                    Image(systemName: "gearshape")
                         .font(.title3)
                         .foregroundStyle(.secondary)
-                    Text("Profile")
+                    Text("Settings")
                         .fontWeight(.medium)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -106,8 +110,8 @@ struct ShellSidebarView: View {
                 showsProfileMenu = false
             }
 
-            profileMenuButton("Settings", systemImage: "gearshape") {
-                showsSettingsPlaceholder = true
+            profileMenuButton("Models", systemImage: "slider.horizontal.3") {
+                showsModelsPlaceholder = true
                 showsProfileMenu = false
             }
 

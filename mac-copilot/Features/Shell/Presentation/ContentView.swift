@@ -27,7 +27,7 @@ struct ContentView: View {
                 onCreateProject: createProjectWithFolderBrowser,
                 onSignOut: authViewModel.signOut
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .navigationSplitViewColumnWidth(min: 260, ideal: 300)
             .navigationTitle("CopilotForge")
             .toolbar {
                 ToolbarItem {
