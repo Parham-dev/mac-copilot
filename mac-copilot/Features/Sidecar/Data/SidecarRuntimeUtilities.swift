@@ -1,11 +1,17 @@
 import Foundation
 
 final class SidecarRuntimeUtilities {
+    enum HealthySidecarReuseDecision: Equatable {
+        case reuse
+        case replace(String)
+    }
+
     private struct HealthPayload: Decodable {
         let ok: Bool?
         let service: String?
         let nodeVersion: String?
         let nodeExecPath: String?
+        let processStartedAtMs: Double?
     }
 
     private let port: Int
@@ -70,9 +76,12 @@ final class SidecarRuntimeUtilities {
         return false
     }
 
-    func isCompatibleHealthySidecarRunning(minimumNodeMajorVersion: Int) -> Bool {
+    func evaluateHealthySidecarForReuse(
+        minimumNodeMajorVersion: Int,
+        localRuntimeScriptURL: URL
+    ) -> HealthySidecarReuseDecision {
         guard let url = URL(string: "http://127.0.0.1:\(port)/health") else {
-            return false
+            return .replace("health endpoint URL is invalid")
         }
 
         var request = URLRequest(url: url)
@@ -80,7 +89,7 @@ final class SidecarRuntimeUtilities {
         request.timeoutInterval = 0.9
 
         let semaphore = DispatchSemaphore(value: 0)
-        var isCompatible = false
+        var decision: HealthySidecarReuseDecision = .replace("healthy sidecar metadata is unavailable")
 
         let task = URLSession.shared.dataTask(with: request) { data, response, _ in
             defer { semaphore.signal() }
@@ -91,25 +100,40 @@ final class SidecarRuntimeUtilities {
                   let payload = try? JSONDecoder().decode(HealthPayload.self, from: data),
                   payload.service == "copilotforge-sidecar"
             else {
+                decision = .replace("healthy sidecar did not return a valid health payload")
                 return
             }
 
             guard let version = payload.nodeVersion,
                   let major = Self.parseNodeMajor(version)
             else {
+                decision = .replace("running sidecar node version is missing")
                 return
             }
 
-            if major >= minimumNodeMajorVersion {
-                isCompatible = true
-            } else {
+            guard major >= minimumNodeMajorVersion else {
                 NSLog("[CopilotForge] Running sidecar node runtime is incompatible (version=%@, exec=%@)", version, payload.nodeExecPath ?? "unknown")
+                decision = .replace("running sidecar node runtime is incompatible")
+                return
             }
+
+            guard let processStartedAtMs = payload.processStartedAtMs, processStartedAtMs > 0 else {
+                decision = .replace("running sidecar is missing process start metadata")
+                return
+            }
+
+            let localRuntimeUpdatedAtMs = latestRuntimeUpdatedAtMs(referenceScriptURL: localRuntimeScriptURL)
+            if processStartedAtMs + 500 < localRuntimeUpdatedAtMs {
+                decision = .replace("running sidecar started before the latest runtime build")
+                return
+            }
+
+            decision = .reuse
         }
 
         task.resume()
         _ = semaphore.wait(timeout: .now() + 1.2)
-        return isCompatible
+        return decision
     }
 
     func terminateStaleSidecarProcesses(matching scriptPath: String) {
@@ -169,5 +193,31 @@ final class SidecarRuntimeUtilities {
             return nil
         }
         return major
+    }
+
+    private func latestRuntimeUpdatedAtMs(referenceScriptURL: URL) -> Double {
+        let fileManager = FileManager.default
+        let scriptPath = referenceScriptURL.path
+        var newestDate = modificationDate(forPath: scriptPath, fileManager: fileManager) ?? .distantPast
+
+        let distDirectoryURL = referenceScriptURL.deletingLastPathComponent()
+        if let enumerator = fileManager.enumerator(at: distDirectoryURL, includingPropertiesForKeys: [.contentModificationDateKey]) {
+            for case let fileURL as URL in enumerator {
+                let candidateDate = modificationDate(forPath: fileURL.path, fileManager: fileManager)
+                if let candidateDate, candidateDate > newestDate {
+                    newestDate = candidateDate
+                }
+            }
+        }
+
+        return newestDate.timeIntervalSince1970 * 1000
+    }
+
+    private func modificationDate(forPath path: String, fileManager: FileManager) -> Date? {
+        guard let attributes = try? fileManager.attributesOfItem(atPath: path) else {
+            return nil
+        }
+
+        return attributes[.modificationDate] as? Date
     }
 }

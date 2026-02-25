@@ -6,6 +6,8 @@ import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotRepor
 import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
 const app = express();
 app.use(express.json());
+const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
+const processStartedAtMs = Date.now();
 let lastOAuthScope = null;
 app.get("/health", (_req, res) => {
     res.json({
@@ -13,6 +15,7 @@ app.get("/health", (_req, res) => {
         service: "copilotforge-sidecar",
         nodeVersion: process.version,
         nodeExecPath: process.execPath,
+        processStartedAtMs,
     });
 });
 app.get("/auth/status", (_req, res) => {
@@ -103,10 +106,18 @@ app.post("/prompt", async (req, res) => {
         authenticated: isAuthenticated(),
     }));
     try {
-        await sendPrompt(promptText, req.body?.chatID, req.body?.model, req.body?.projectPath, req.body?.allowedTools, (event) => {
+        await sendPrompt(promptText, req.body?.chatID, req.body?.model, req.body?.projectPath, req.body?.allowedTools, requestId, (event) => {
             const payload = typeof event === "object" && event !== null
                 ? event
                 : { type: "text", text: String(event ?? "") };
+            const maybeText = typeof payload?.text === "string" ? String(payload.text) : "";
+            if (maybeText.length > 0 && protocolMarkerPattern.test(maybeText)) {
+                console.warn("[CopilotForge][PromptTrace] outbound SSE payload contains protocol marker", JSON.stringify({
+                    requestId,
+                    textLength: maybeText.length,
+                    preview: maybeText.slice(0, 180),
+                }));
+            }
             const text = JSON.stringify(payload);
             chunkCount += 1;
             totalChars += text.length;

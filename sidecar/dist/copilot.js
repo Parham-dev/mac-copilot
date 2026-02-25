@@ -77,7 +77,7 @@ export function getCopilotReport() {
 export async function listAvailableModels() {
     return listModelCatalog(client);
 }
-export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, onEvent) {
+export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, requestId, onEvent) {
     if (!client) {
         onEvent({ type: "text", text: "Not authenticated yet. Please complete GitHub auth first." });
         return;
@@ -88,5 +88,6 @@ export async function sendPrompt(prompt, chatID, model, projectPath, allowedTool
         projectPath,
         allowedTools: allowedTools ?? null,
     });
-    await streamPromptWithSession(activeSession, prompt, onEvent);
+    const debugLabel = requestId?.trim().length ? requestId.trim() : chatID;
+    await streamPromptWithSession(activeSession, prompt, onEvent, debugLabel);
 }

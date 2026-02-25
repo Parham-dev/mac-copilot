@@ -8,6 +8,10 @@ struct PromptStreamError: LocalizedError {
 
 final class CopilotPromptStreamClient {
     private let baseURL: URL
+    private static let protocolMarkerRegex = try? NSRegularExpression(
+        pattern: "<\\s*\\/?\\s*(function_calls|system_notification|invoke|parameter)\\b[^>]*>",
+        options: [.caseInsensitive]
+    )
 
     init(baseURL: URL) {
         self.baseURL = baseURL
@@ -17,7 +21,7 @@ final class CopilotPromptStreamClient {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    NSLog("[CopilotForge][Prompt] stream start (chars=%d)", prompt.count)
+                    NSLog("[CopilotForge][Prompt] stream start (chatID=%@ chars=%d)", chatID.uuidString, prompt.count)
                     var request = URLRequest(url: baseURL.appendingPathComponent("prompt"))
                     request.httpMethod = "POST"
                     request.timeoutInterval = 120
@@ -48,6 +52,7 @@ final class CopilotPromptStreamClient {
 
                     var receivedChunks = 0
                     var receivedChars = 0
+                    var protocolMarkerChunkCount = 0
 
                     for try await line in bytes.lines {
                         guard line.hasPrefix("data: ") else { continue }
@@ -99,9 +104,29 @@ final class CopilotPromptStreamClient {
                         if let text = decoded.text, !text.isEmpty {
                             receivedChunks += 1
                             receivedChars += text.count
+
+                            if Self.containsProtocolMarker(in: text) {
+                                protocolMarkerChunkCount += 1
+                                NSLog(
+                                    "[CopilotForge][PromptTrace] decoded text contains protocol marker (chatID=%@ chunk=%d chars=%d preview=%@)",
+                                    chatID.uuidString,
+                                    receivedChunks,
+                                    text.count,
+                                    String(text.prefix(180))
+                                )
+                            }
+
                             continuation.yield(.textDelta(text))
                         }
                     }
+
+                    NSLog(
+                        "[CopilotForge][PromptTrace] stream summary (chatID=%@ chunks=%d chars=%d protocolChunks=%d)",
+                        chatID.uuidString,
+                        receivedChunks,
+                        receivedChars,
+                        protocolMarkerChunkCount
+                    )
 
                     continuation.finish()
                 } catch {
@@ -110,6 +135,17 @@ final class CopilotPromptStreamClient {
                 }
             }
         }
+    }
+}
+
+private extension CopilotPromptStreamClient {
+    static func containsProtocolMarker(in text: String) -> Bool {
+        guard let regex = protocolMarkerRegex else {
+            return false
+        }
+
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.firstMatch(in: text, options: [], range: range) != nil
     }
 }
 

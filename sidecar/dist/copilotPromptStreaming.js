@@ -1,56 +1,82 @@
-const functionCallsStartToken = "<function_calls>";
-const functionCallsEndToken = "</function_calls>";
-class FunctionCallMarkupFilter {
-    inFunctionBlock = false;
+const protocolTagNames = ["function_calls", "system_notification", "invoke", "parameter"];
+const openingTagPattern = new RegExp(`<\\s*(${protocolTagNames.join("|")})\\b[^>]*>`, "i");
+const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
+class ProtocolMarkupFilter {
+    activeTag = null;
     tail = "";
+    maxTailLength = 256;
     process(chunk) {
         let text = this.tail + chunk;
         this.tail = "";
         let output = "";
         while (text.length > 0) {
-            if (this.inFunctionBlock) {
-                const endIndex = text.indexOf(functionCallsEndToken);
-                if (endIndex < 0) {
-                    const keepTailLength = Math.min(text.length, functionCallsEndToken.length - 1);
-                    this.tail = text.slice(-keepTailLength);
+            if (this.activeTag) {
+                const closeMatch = findClosingTag(text, this.activeTag);
+                if (!closeMatch) {
+                    const keepLength = Math.min(text.length, this.maxTailLength);
+                    this.tail = text.slice(-keepLength);
                     return output;
                 }
-                text = text.slice(endIndex + functionCallsEndToken.length);
-                this.inFunctionBlock = false;
+                text = text.slice(closeMatch.end);
+                this.activeTag = null;
                 continue;
             }
-            const startIndex = text.indexOf(functionCallsStartToken);
-            if (startIndex < 0) {
-                const safeLength = Math.max(0, text.length - (functionCallsStartToken.length - 1));
+            const openMatch = findOpeningTag(text);
+            if (!openMatch) {
+                const safeLength = Math.max(0, text.length - this.maxTailLength);
                 output += text.slice(0, safeLength);
                 this.tail = text.slice(safeLength);
-                return output;
+                return sanitizeInlineProtocolTags(output);
             }
-            output += text.slice(0, startIndex);
-            text = text.slice(startIndex + functionCallsStartToken.length);
-            this.inFunctionBlock = true;
+            output += text.slice(0, openMatch.start);
+            text = text.slice(openMatch.end);
+            this.activeTag = openMatch.tagName;
         }
-        return output;
+        return sanitizeInlineProtocolTags(output);
     }
     flush() {
-        if (this.inFunctionBlock) {
+        if (this.activeTag) {
+            this.activeTag = null;
             this.tail = "";
             return "";
         }
-        const remaining = this.tail;
+        const remaining = sanitizeInlineProtocolTags(this.tail);
         this.tail = "";
         return remaining;
     }
 }
-function sanitizeToolMarkup(text) {
-    return text
-        .replace(/<\/?function_calls>/gi, "")
-        .replace(/<invoke[^>]*>/gi, "")
-        .replace(/<\/invoke>/gi, "")
-        .replace(/<parameter[^>]*>/gi, "")
-        .replace(/<\/parameter>/gi, "");
+function findOpeningTag(text) {
+    const match = openingTagPattern.exec(text);
+    if (!match || typeof match.index !== "number") {
+        return null;
+    }
+    return {
+        start: match.index,
+        end: match.index + match[0].length,
+        tagName: String(match[1]).toLowerCase(),
+    };
 }
-export async function streamPromptWithSession(session, prompt, onEvent) {
+function findClosingTag(text, tagName) {
+    const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`<\\s*\\/\\s*${escapedTagName}\\s*>`, "i");
+    const match = pattern.exec(text);
+    if (!match || typeof match.index !== "number") {
+        return null;
+    }
+    return {
+        start: match.index,
+        end: match.index + match[0].length,
+    };
+}
+function sanitizeInlineProtocolTags(text) {
+    return protocolTagNames.reduce((acc, tagName) => {
+        const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return acc
+            .replace(new RegExp(`<\\s*${escapedTagName}\\b[^>]*>`, "gi"), "")
+            .replace(new RegExp(`<\\s*\\/\\s*${escapedTagName}\\s*>`, "gi"), "");
+    }, text);
+}
+export async function streamPromptWithSession(session, prompt, onEvent, debugLabel) {
     const trimmedPrompt = String(prompt ?? "").trim();
     if (!trimmedPrompt) {
         onEvent({ type: "text", text: "Please enter a prompt." });
@@ -69,7 +95,15 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
         rejectDone(new Error(`Copilot response timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     const toolNameByCallID = new Map();
-    const functionCallFilter = new FunctionCallMarkupFilter();
+    const protocolFilter = new ProtocolMarkupFilter();
+    const traceID = debugLabel?.trim().length ? debugLabel.trim() : `session-${Date.now().toString(36)}`;
+    const logTrace = (message, extras) => {
+        if (extras) {
+            console.log(`[CopilotForge][PromptTrace][${traceID}] ${message}`, JSON.stringify(extras));
+            return;
+        }
+        console.log(`[CopilotForge][PromptTrace][${traceID}] ${message}`);
+    };
     onEvent({ type: "status", label: "Analyzing request" });
     const unsubscribeTurnStart = session.on("assistant.turn_start", () => {
         onEvent({ type: "status", label: "Generating response" });
@@ -77,7 +111,19 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
     const unsubscribeDelta = session.on("assistant.message_delta", (event) => {
         const delta = event?.data?.deltaContent;
         if (typeof delta === "string" && delta.length > 0) {
-            const filtered = sanitizeToolMarkup(functionCallFilter.process(delta));
+            const rawHasProtocolMarkup = protocolMarkerPattern.test(delta);
+            const filtered = protocolFilter.process(delta);
+            const filteredHasProtocolMarkup = protocolMarkerPattern.test(filtered);
+            if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
+                logTrace("delta protocol marker observation", {
+                    rawLength: delta.length,
+                    filteredLength: filtered.length,
+                    rawHasProtocolMarkup,
+                    filteredHasProtocolMarkup,
+                    rawPreview: delta.slice(0, 160),
+                    filteredPreview: filtered.slice(0, 160),
+                });
+            }
             if (filtered.length > 0) {
                 sawAnyOutput = true;
                 sawDeltaOutput = true;
@@ -88,7 +134,19 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
     const unsubscribeFinal = session.on("assistant.message", (event) => {
         const content = event?.data?.content;
         if (!sawDeltaOutput && typeof content === "string" && content.length > 0) {
-            const filtered = sanitizeToolMarkup(functionCallFilter.process(content) + functionCallFilter.flush());
+            const filtered = protocolFilter.process(content) + protocolFilter.flush();
+            const rawHasProtocolMarkup = protocolMarkerPattern.test(content);
+            const filteredHasProtocolMarkup = protocolMarkerPattern.test(filtered);
+            if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
+                logTrace("final message protocol marker observation", {
+                    rawLength: content.length,
+                    filteredLength: filtered.length,
+                    rawHasProtocolMarkup,
+                    filteredHasProtocolMarkup,
+                    rawPreview: content.slice(0, 200),
+                    filteredPreview: filtered.slice(0, 200),
+                });
+            }
             if (filtered.length > 0) {
                 sawAnyOutput = true;
                 onEvent({ type: "text", text: filtered });
@@ -156,7 +214,14 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
     try {
         await session.send({ prompt: trimmedPrompt, mode: "immediate" });
         await done;
-        const remaining = sanitizeToolMarkup(functionCallFilter.flush());
+        const remaining = protocolFilter.flush();
+        const remainingHasProtocolMarkup = protocolMarkerPattern.test(remaining);
+        if (remainingHasProtocolMarkup) {
+            logTrace("flush emitted protocol-like marker", {
+                remainingLength: remaining.length,
+                preview: remaining.slice(0, 200),
+            });
+        }
         if (remaining.length > 0) {
             sawAnyOutput = true;
             onEvent({ type: "text", text: remaining });
@@ -166,6 +231,7 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
         }
     }
     finally {
+        logTrace("stream finished", { sawAnyOutput, sawDeltaOutput });
         clearTimeout(timeoutId);
         unsubscribeTurnStart();
         unsubscribeDelta();

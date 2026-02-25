@@ -83,13 +83,25 @@ final class SidecarManager: SidecarLifecycleManaging {
             log("Preflight OK nodeVersion=\(startup.nodeVersion)")
 
             if runtimeUtilities.isHealthySidecarAlreadyRunning(requiredSuccesses: 2) {
-                if runtimeUtilities.isCompatibleHealthySidecarRunning(minimumNodeMajorVersion: minimumNodeMajorVersion) {
+                let reuseDecision = runtimeUtilities.evaluateHealthySidecarForReuse(
+                    minimumNodeMajorVersion: minimumNodeMajorVersion,
+                    localRuntimeScriptURL: startup.scriptURL
+                )
+
+                if reuseDecision == .reuse {
                     transition(to: .healthy)
                     log("Existing sidecar detected on :\(sidecarPort), reusing it")
                     return
                 }
 
-                log("Existing sidecar detected but runtime is incompatible; replacing it")
+                let reason: String
+                if case .replace(let details) = reuseDecision {
+                    reason = details
+                } else {
+                    reason = "unknown reason"
+                }
+
+                log("Existing sidecar detected but must be replaced (\(reason))")
                 runtimeUtilities.terminateStaleSidecarProcesses(matching: startup.scriptURL.path)
             }
 

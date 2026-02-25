@@ -96,6 +96,7 @@ export async function sendPrompt(
   model: string | undefined,
   projectPath: string | undefined,
   allowedTools: string[] | null | undefined,
+  requestId: string | undefined,
   onEvent: (event: Record<string, unknown>) => void
 ) {
   if (!client) {
@@ -110,5 +111,6 @@ export async function sendPrompt(
     allowedTools: allowedTools ?? null,
   });
 
-  await streamPromptWithSession(activeSession, prompt, onEvent);
+  const debugLabel = requestId?.trim().length ? requestId.trim() : chatID;
+  await streamPromptWithSession(activeSession, prompt, onEvent, debugLabel);
 }
