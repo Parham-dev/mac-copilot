@@ -10,6 +10,8 @@ final class SwiftDataChatRepository: ChatRepository {
         case saveMessageFailed(String)
         case updateMessageFetchFailed(String)
         case updateMessageSaveFailed(String)
+        case decodeMetadataFailed(String)
+        case encodeMetadataFailed(String)
         case findProjectFailed(String)
         case findChatFailed(String)
 
@@ -27,6 +29,10 @@ final class SwiftDataChatRepository: ChatRepository {
                 return "Update message fetch failed: \(details)"
             case .updateMessageSaveFailed(let details):
                 return "Update message save failed: \(details)"
+            case .decodeMetadataFailed(let details):
+                return "Decode metadata failed: \(details)"
+            case .encodeMetadataFailed(let details):
+                return "Encode metadata failed: \(details)"
             case .findProjectFailed(let details):
                 return "Find project failed: \(details)"
             case .findChatFailed(let details):
@@ -95,7 +101,9 @@ final class SwiftDataChatRepository: ChatRepository {
             guard let role = ChatMessage.Role(rawValue: entity.roleRaw) else {
                 return nil
             }
-            return ChatMessage(id: entity.id, role: role, text: entity.text, createdAt: entity.createdAt)
+
+            let metadata = decodeMetadata(from: entity.metadataJSON)
+            return ChatMessage(id: entity.id, role: role, text: entity.text, metadata: metadata, createdAt: entity.createdAt)
         }
     }
 
@@ -105,6 +113,7 @@ final class SwiftDataChatRepository: ChatRepository {
             chatID: chatID,
             roleRaw: message.role.rawValue,
             text: message.text,
+            metadataJSON: encodeMetadata(message.metadata),
             createdAt: message.createdAt,
             chat: findChatEntity(id: chatID)
         )
@@ -117,7 +126,7 @@ final class SwiftDataChatRepository: ChatRepository {
         }
     }
 
-    func updateMessage(chatID: UUID, messageID: UUID, text: String) {
+    func updateMessage(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) {
         let predicateMessageID = messageID
         let descriptor = FetchDescriptor<ChatMessageEntity>(
             predicate: #Predicate { $0.id == predicateMessageID }
@@ -137,6 +146,7 @@ final class SwiftDataChatRepository: ChatRepository {
 
         entity.chatID = chatID
         entity.text = text
+        entity.metadataJSON = encodeMetadata(metadata)
         do {
             try context.save()
         } catch {
@@ -174,5 +184,28 @@ final class SwiftDataChatRepository: ChatRepository {
 
     private func log(_ error: RepositoryError) {
         NSLog("[CopilotForge][ChatRepo] %@", error.localizedDescription)
+    }
+
+    private func encodeMetadata(_ metadata: ChatMessage.Metadata?) -> String? {
+        guard let metadata else { return nil }
+
+        do {
+            let data = try JSONEncoder().encode(metadata)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            log(.encodeMetadataFailed(error.localizedDescription))
+            return nil
+        }
+    }
+
+    private func decodeMetadata(from json: String?) -> ChatMessage.Metadata? {
+        guard let json, let data = json.data(using: .utf8) else { return nil }
+
+        do {
+            return try JSONDecoder().decode(ChatMessage.Metadata.self, from: data)
+        } catch {
+            log(.decodeMetadataFailed(error.localizedDescription))
+            return nil
+        }
     }
 }

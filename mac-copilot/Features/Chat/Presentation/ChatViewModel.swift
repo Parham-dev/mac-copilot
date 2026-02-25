@@ -7,6 +7,7 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var isSending = false
     @Published private(set) var messages: [ChatMessage]
     @Published private(set) var statusChipsByMessageID: [UUID: [String]] = [:]
+    @Published private(set) var toolExecutionsByMessageID: [UUID: [ChatMessage.ToolExecution]] = [:]
     @Published private(set) var streamingAssistantMessageID: UUID?
     @Published private(set) var availableModels: [String] = ["gpt-5"]
     @Published var selectedModel = "gpt-5"
@@ -33,7 +34,9 @@ final class ChatViewModel: ObservableObject {
         self.sendPromptUseCase = sendPromptUseCase
         self.fetchModelsUseCase = fetchModelsUseCase
         self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
-        self.messages = sessionCoordinator.bootstrapMessages(chatID: chatID)
+        let bootstrappedMessages = sessionCoordinator.bootstrapMessages(chatID: chatID)
+        self.messages = bootstrappedMessages
+        hydrateMetadata(from: bootstrappedMessages)
     }
 
     func loadModelsIfNeeded() async {
@@ -68,6 +71,7 @@ final class ChatViewModel: ObservableObject {
         let assistantMessage = sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)
         messages.append(assistantMessage)
         statusChipsByMessageID[assistantMessage.id] = ["Queued"]
+        toolExecutionsByMessageID[assistantMessage.id] = []
         streamingAssistantMessageID = assistantMessage.id
         draftPrompt = ""
 
@@ -84,6 +88,8 @@ final class ChatViewModel: ObservableObject {
                     messages[assistantIndex].text += chunk
                 case .status(let label):
                     appendStatus(label, for: assistantMessage.id)
+                case .toolExecution(let tool):
+                    appendToolExecution(tool, for: assistantMessage.id)
                 case .completed:
                     appendStatus("Completed", for: assistantMessage.id)
                 }
@@ -100,7 +106,8 @@ final class ChatViewModel: ObservableObject {
         sessionCoordinator.persistAssistantContent(
             chatID: chatID,
             messageID: assistantMessage.id,
-            text: messages[assistantIndex].text
+            text: messages[assistantIndex].text,
+            metadata: metadata(for: assistantMessage.id)
         )
 
         streamingAssistantMessageID = nil
@@ -111,5 +118,45 @@ final class ChatViewModel: ObservableObject {
         let current = statusChipsByMessageID[messageID] ?? []
         guard current.last != label else { return }
         statusChipsByMessageID[messageID] = current + [label]
+    }
+
+    private func appendToolExecution(_ event: PromptToolExecutionEvent, for messageID: UUID) {
+        let current = toolExecutionsByMessageID[messageID] ?? []
+        let entry = ChatMessage.ToolExecution(
+            toolName: event.toolName,
+            success: event.success,
+            details: event.details
+        )
+        toolExecutionsByMessageID[messageID] = current + [entry]
+    }
+
+    private func metadata(for messageID: UUID) -> ChatMessage.Metadata? {
+        let chips = statusChipsByMessageID[messageID] ?? []
+        let tools = toolExecutionsByMessageID[messageID] ?? []
+        guard !chips.isEmpty || !tools.isEmpty else {
+            return nil
+        }
+
+        return ChatMessage.Metadata(statusChips: chips, toolExecutions: tools)
+    }
+
+    private func hydrateMetadata(from messages: [ChatMessage]) {
+        var chipsMap: [UUID: [String]] = [:]
+        var toolsMap: [UUID: [ChatMessage.ToolExecution]] = [:]
+
+        for message in messages where message.role == .assistant {
+            guard let metadata = message.metadata else { continue }
+
+            if !metadata.statusChips.isEmpty {
+                chipsMap[message.id] = metadata.statusChips
+            }
+
+            if !metadata.toolExecutions.isEmpty {
+                toolsMap[message.id] = metadata.toolExecutions
+            }
+        }
+
+        statusChipsByMessageID = chipsMap
+        toolExecutionsByMessageID = toolsMap
     }
 }

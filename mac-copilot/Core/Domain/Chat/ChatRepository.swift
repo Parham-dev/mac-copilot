@@ -9,5 +9,5 @@ protocol ChatRepository {
 
     func loadMessages(chatID: UUID) -> [ChatMessage]
     func saveMessage(chatID: UUID, message: ChatMessage)
-    func updateMessage(chatID: UUID, messageID: UUID, text: String)
+    func updateMessage(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?)
 }

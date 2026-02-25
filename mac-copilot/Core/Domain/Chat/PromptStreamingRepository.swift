@@ -1,8 +1,15 @@
 import Foundation
 
+struct PromptToolExecutionEvent: Equatable {
+    let toolName: String
+    let success: Bool
+    let details: String?
+}
+
 enum PromptStreamEvent: Equatable {
     case textDelta(String)
     case status(String)
+    case toolExecution(PromptToolExecutionEvent)
     case completed
 }
 

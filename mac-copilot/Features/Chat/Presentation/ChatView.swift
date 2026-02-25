@@ -12,6 +12,7 @@ struct ChatView: View {
             ChatTranscriptView(
                 messages: viewModel.messages,
                 statusChipsByMessageID: viewModel.statusChipsByMessageID,
+                toolExecutionsByMessageID: viewModel.toolExecutionsByMessageID,
                 streamingAssistantMessageID: viewModel.streamingAssistantMessageID
             )
 

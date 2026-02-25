@@ -3,6 +3,7 @@ import SwiftUI
 struct ChatTranscriptView: View {
     let messages: [ChatMessage]
     let statusChipsByMessageID: [UUID: [String]]
+    let toolExecutionsByMessageID: [UUID: [ChatMessage.ToolExecution]]
     let streamingAssistantMessageID: UUID?
 
     var body: some View {
@@ -12,6 +13,7 @@ struct ChatTranscriptView: View {
                     ChatMessageRow(
                         message: message,
                         statusChips: statusChipsByMessageID[message.id] ?? [],
+                        toolExecutions: toolExecutionsByMessageID[message.id] ?? [],
                         isStreaming: streamingAssistantMessageID == message.id
                     )
                 }

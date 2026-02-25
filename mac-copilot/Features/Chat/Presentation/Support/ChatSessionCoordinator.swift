@@ -27,7 +27,7 @@ final class ChatSessionCoordinator {
         return message
     }
 
-    func persistAssistantContent(chatID: UUID, messageID: UUID, text: String) {
-        chatRepository.updateMessage(chatID: chatID, messageID: messageID, text: text)
+    func persistAssistantContent(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) {
+        chatRepository.updateMessage(chatID: chatID, messageID: messageID, text: text, metadata: metadata)
     }
 }

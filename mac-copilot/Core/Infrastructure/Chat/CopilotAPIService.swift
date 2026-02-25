@@ -15,6 +15,7 @@ final class CopilotAPIService {
         let label: String?
         let toolName: String?
         let success: Bool?
+        let details: String?
         let error: String?
     }
 
@@ -103,6 +104,15 @@ final class CopilotAPIService {
                                 if let name = decoded.toolName, !name.isEmpty {
                                     let suffix = (decoded.success == false) ? "failed" : "done"
                                     continuation.yield(.status("Tool \(suffix): \(name)"))
+                                    continuation.yield(
+                                        .toolExecution(
+                                            PromptToolExecutionEvent(
+                                                toolName: name,
+                                                success: decoded.success != false,
+                                                details: decoded.details
+                                            )
+                                        )
+                                    )
                                 }
                             case "done":
                                 continuation.yield(.completed)
