@@ -1,0 +1,179 @@
+import { CopilotClient, approveAll } from "@github/copilot-sdk";
+import { mkdirSync } from "node:fs";
+
+export type SessionState = {
+  chatKey: string;
+  sessionId: string;
+  session: any;
+  model: string;
+  workingDirectory: string | null;
+  availableTools: string[] | null;
+};
+
+type EnsureSessionArgs = {
+  chatID?: string;
+  model?: string;
+  projectPath?: string;
+  allowedTools?: string[] | null;
+};
+
+export class CopilotSessionManager {
+  private readonly sessionByChatKey = new Map<string, SessionState>();
+  private lastSessionState: SessionState | null = null;
+
+  reset() {
+    this.sessionByChatKey.clear();
+    this.lastSessionState = null;
+  }
+
+  hasActiveSessions() {
+    return this.sessionByChatKey.size > 0;
+  }
+
+  sessionCount() {
+    return this.sessionByChatKey.size;
+  }
+
+  activeSnapshot() {
+    return {
+      model: this.lastSessionState?.model ?? "gpt-5",
+      workingDirectory: this.lastSessionState?.workingDirectory ?? null,
+      availableTools: this.lastSessionState?.availableTools ?? null,
+    };
+  }
+
+  async ensureSessionForContext(client: CopilotClient | null, args: EnsureSessionArgs) {
+    const requestedModel = typeof args.model === "string" && args.model.trim().length > 0 ? args.model.trim() : "gpt-5";
+    const requestedWorkingDirectory = typeof args.projectPath === "string" && args.projectPath.trim().length > 0
+      ? args.projectPath.trim()
+      : null;
+    const requestedAvailableTools = normalizeAllowedTools(args.allowedTools);
+    const chatKey = normalizeChatKey(args.chatID, requestedWorkingDirectory ?? undefined);
+    const existing = this.sessionByChatKey.get(chatKey);
+
+    if (existing
+        && existing.model === requestedModel
+        && existing.workingDirectory === requestedWorkingDirectory
+        && sameAllowedTools(existing.availableTools, requestedAvailableTools)) {
+      this.lastSessionState = existing;
+      return existing.session;
+    }
+
+    if (existing?.session && typeof existing.session.destroy === "function") {
+      try {
+        await existing.session.destroy();
+      } catch {
+      }
+    }
+
+    const state = await createOrResumeSessionForContext(client, {
+      chatKey,
+      model: requestedModel,
+      workingDirectory: requestedWorkingDirectory,
+      allowedTools: requestedAvailableTools,
+    });
+
+    this.sessionByChatKey.set(chatKey, state);
+    this.lastSessionState = state;
+    return state.session;
+  }
+}
+
+function normalizeAllowedTools(allowedTools?: string[] | null) {
+  if (!Array.isArray(allowedTools)) {
+    return null;
+  }
+
+  const normalized = Array.from(new Set(
+    allowedTools
+      .filter((entry) => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  )).sort((lhs, rhs) => lhs.localeCompare(rhs));
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function sameAllowedTools(lhs: string[] | null, rhs: string[] | null) {
+  if (lhs === null && rhs === null) {
+    return true;
+  }
+  if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
+    return false;
+  }
+  if (lhs.length !== rhs.length) {
+    return false;
+  }
+  return lhs.every((value, index) => value === rhs[index]);
+}
+
+function normalizeChatKey(chatID?: string, projectPath?: string) {
+  const normalizedID = typeof chatID === "string" ? chatID.trim() : "";
+  if (normalizedID.length > 0) {
+    return normalizedID;
+  }
+
+  const normalizedPath = typeof projectPath === "string" ? projectPath.trim() : "";
+  if (normalizedPath.length > 0) {
+    return `project:${normalizedPath}`;
+  }
+
+  return "default";
+}
+
+function buildSessionIdentifier(chatKey: string) {
+  const sanitized = chatKey
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 96);
+  const suffix = sanitized.length > 0 ? sanitized : "default";
+  return `copilotforge-${suffix}`;
+}
+
+async function createOrResumeSessionForContext(
+  client: CopilotClient | null,
+  args: {
+    chatKey: string;
+    model: string;
+    workingDirectory: string | null;
+    allowedTools: string[] | null;
+  }
+): Promise<SessionState> {
+  if (!client) {
+    throw new Error("Copilot client is not initialized.");
+  }
+
+  if (args.workingDirectory) {
+    mkdirSync(args.workingDirectory, { recursive: true });
+  }
+
+  const sessionId = buildSessionIdentifier(args.chatKey);
+  const config: Record<string, unknown> = {
+    sessionId,
+    model: args.model,
+    streaming: true,
+    onPermissionRequest: approveAll,
+    infiniteSessions: {
+      enabled: true,
+    },
+    ...(args.workingDirectory ? { workingDirectory: args.workingDirectory } : {}),
+    ...(args.allowedTools ? { availableTools: args.allowedTools } : {}),
+  };
+
+  let createdSession: any;
+  try {
+    createdSession = await (client as any).resumeSession(sessionId, config);
+  } catch {
+    createdSession = await client.createSession(config as any);
+  }
+
+  return {
+    chatKey: args.chatKey,
+    sessionId,
+    session: createdSession,
+    model: args.model,
+    workingDirectory: args.workingDirectory,
+    availableTools: args.allowedTools,
+  };
+}
