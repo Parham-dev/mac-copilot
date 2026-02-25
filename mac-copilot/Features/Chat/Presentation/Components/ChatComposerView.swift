@@ -17,10 +17,17 @@ struct ChatComposerView: View {
                 Button {
                     onSend()
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title3)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            Circle()
+                                .fill(Color.accentColor)
+                        )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Circle())
                 .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
             }
 

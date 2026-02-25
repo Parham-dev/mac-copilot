@@ -125,7 +125,11 @@ struct ContentView: View {
                                     .frame(idealWidth: 760)
                                     .layoutPriority(1)
 
-                                ContextPaneView(shellViewModel: shellViewModel, project: activeProject)
+                                ContextPaneView(
+                                    shellViewModel: shellViewModel,
+                                    project: activeProject,
+                                    previewResolver: appEnvironment.sharedPreviewResolver()
+                                )
                                     .frame(idealWidth: 420)
                             }
                         }

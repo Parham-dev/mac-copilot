@@ -9,6 +9,7 @@ final class AppEnvironment: ObservableObject {
     private let promptRepository: PromptStreamingRepository
     private let modelRepository: ModelListingRepository
     private let profileRepository: ProfileRepository
+    private let previewResolver: ProjectPreviewResolver
     private var chatViewModels: [String: ChatViewModel] = [:]
     private lazy var profileViewModel: ProfileViewModel = {
         let useCase = FetchProfileUseCase(repository: profileRepository)
@@ -28,6 +29,9 @@ final class AppEnvironment: ObservableObject {
         self.promptRepository = copilotRepository
         self.modelRepository = copilotRepository
         self.profileRepository = GitHubProfileRepository()
+        self.previewResolver = ProjectPreviewResolver(adapters: [
+            SimpleHTMLPreviewAdapter()
+        ])
     }
 
     func chatViewModel(for chatTitle: String, project: ProjectRef) -> ChatViewModel {
@@ -51,6 +55,10 @@ final class AppEnvironment: ObservableObject {
 
     func sharedProfileViewModel() -> ProfileViewModel {
         profileViewModel
+    }
+
+    func sharedPreviewResolver() -> ProjectPreviewResolver {
+        previewResolver
     }
 
     static func preview() -> AppEnvironment {
