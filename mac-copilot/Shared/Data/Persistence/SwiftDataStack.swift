@@ -2,13 +2,12 @@ import Foundation
 import SwiftData
 
 @MainActor
-final class SwiftDataStack {
-    static let shared = SwiftDataStack()
+final class SwiftDataStack: SwiftDataStoreProviding {
 
     let container: ModelContainer
     let context: ModelContext
 
-    private init() {
+    init() {
         let schema = Schema([
             ProjectEntity.self,
             ChatThreadEntity.self,

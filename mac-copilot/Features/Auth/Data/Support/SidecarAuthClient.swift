@@ -7,7 +7,7 @@ final class SidecarAuthClient {
 
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
-        sidecarLifecycle: SidecarLifecycleManaging = SidecarManager.shared
+        sidecarLifecycle: SidecarLifecycleManaging
     ) {
         self.baseURL = baseURL
         self.sidecarLifecycle = sidecarLifecycle

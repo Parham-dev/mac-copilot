@@ -6,11 +6,14 @@ struct ModelsManagementSheet: View {
     let modelSelectionStore: ModelSelectionStore
     @StateObject private var viewModel: ModelsManagementViewModel
 
-    init(isPresented: Binding<Bool>, modelSelectionStore: ModelSelectionStore) {
+    init(isPresented: Binding<Bool>, modelSelectionStore: ModelSelectionStore, modelRepository: ModelListingRepository) {
         self._isPresented = isPresented
         self.modelSelectionStore = modelSelectionStore
         self._viewModel = StateObject(
-            wrappedValue: ModelsManagementViewModel(modelSelectionStore: modelSelectionStore)
+            wrappedValue: ModelsManagementViewModel(
+                modelSelectionStore: modelSelectionStore,
+                modelRepository: modelRepository
+            )
         )
     }
 

@@ -59,7 +59,8 @@ struct ContentView: View {
         .sheet(isPresented: $showsModelsSheet) {
             ModelsManagementSheet(
                 isPresented: $showsModelsSheet,
-                modelSelectionStore: appEnvironment.sharedModelSelectionStore()
+                modelSelectionStore: appEnvironment.sharedModelSelectionStore(),
+                modelRepository: appEnvironment.sharedModelRepository()
             )
                 .frame(minWidth: 980, minHeight: 640)
         }

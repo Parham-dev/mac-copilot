@@ -38,6 +38,7 @@ struct ShellDetailPaneView: View {
                     project: activeProject,
                     previewResolver: appEnvironment.sharedPreviewResolver(),
                     previewRuntimeManager: appEnvironment.sharedPreviewRuntimeManager(),
+                    gitRepositoryManager: appEnvironment.sharedGitRepositoryManager(),
                     onFixLogsRequest: { prompt in
                         Task {
                             await chatViewModel.send(prompt: prompt)

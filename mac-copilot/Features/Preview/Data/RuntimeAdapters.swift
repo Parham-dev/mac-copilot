@@ -3,13 +3,14 @@ import Foundation
 struct SimpleHTMLRuntimeAdapter: PreviewRuntimeAdapter {
     let id: String = "simple-html"
     let displayName: String = "Simple HTML"
+    private let utilities = PreviewRuntimeUtilities()
 
-    func canHandle(project: ProjectRef, utilities: PreviewRuntimeUtilities) -> Bool {
+    func canHandle(project: ProjectRef) -> Bool {
         let root = utilities.expandedProjectURL(for: project)
         return utilities.firstHTMLFile(in: root) != nil
     }
 
-    func makePlan(project: ProjectRef, utilities: PreviewRuntimeUtilities) throws -> PreviewRuntimePlan {
+    func makePlan(project: ProjectRef) throws -> PreviewRuntimePlan {
         let root = utilities.expandedProjectURL(for: project)
         guard let htmlURL = utilities.firstHTMLFile(in: root) else {
             throw NSError(domain: "Preview", code: 1001, userInfo: [NSLocalizedDescriptionKey: "No HTML file found for simple HTML preview."])
@@ -27,13 +28,14 @@ struct SimpleHTMLRuntimeAdapter: PreviewRuntimeAdapter {
 struct NodeRuntimeAdapter: PreviewRuntimeAdapter {
     let id: String = "node"
     let displayName: String = "Node"
+    private let utilities = PreviewRuntimeUtilities()
 
-    func canHandle(project: ProjectRef, utilities: PreviewRuntimeUtilities) -> Bool {
+    func canHandle(project: ProjectRef) -> Bool {
         let root = utilities.expandedProjectURL(for: project)
         return utilities.fileExists("package.json", in: root)
     }
 
-    func makePlan(project: ProjectRef, utilities: PreviewRuntimeUtilities) throws -> PreviewRuntimePlan {
+    func makePlan(project: ProjectRef) throws -> PreviewRuntimePlan {
         let root = utilities.expandedProjectURL(for: project)
         let packageJSONURL = root.appendingPathComponent("package.json")
         guard let json = utilities.readJSON(at: packageJSONURL) else {
@@ -83,15 +85,16 @@ struct NodeRuntimeAdapter: PreviewRuntimeAdapter {
 struct PythonRuntimeAdapter: PreviewRuntimeAdapter {
     let id: String = "python"
     let displayName: String = "Python"
+    private let utilities = PreviewRuntimeUtilities()
 
-    func canHandle(project: ProjectRef, utilities: PreviewRuntimeUtilities) -> Bool {
+    func canHandle(project: ProjectRef) -> Bool {
         let root = utilities.expandedProjectURL(for: project)
         return utilities.fileExists("requirements.txt", in: root)
             || utilities.fileExists("pyproject.toml", in: root)
             || utilities.fileExists("app.py", in: root)
     }
 
-    func makePlan(project: ProjectRef, utilities: PreviewRuntimeUtilities) throws -> PreviewRuntimePlan {
+    func makePlan(project: ProjectRef) throws -> PreviewRuntimePlan {
         let root = utilities.expandedProjectURL(for: project)
         guard let pythonExecutable = utilities.resolveExecutable(candidates: ["python3", "python"]) else {
             throw NSError(domain: "Preview", code: 1004, userInfo: [NSLocalizedDescriptionKey: "python3/python not found on PATH"])

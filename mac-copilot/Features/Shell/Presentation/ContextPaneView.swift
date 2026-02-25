@@ -1,24 +1,35 @@
 import SwiftUI
 import Foundation
 
-private struct GitPanelError: LocalizedError {
-    let message: String
-
-    var errorDescription: String? {
-        message
-    }
-}
-
 struct ContextPaneView: View {
     @ObservedObject var shellViewModel: ShellViewModel
     let project: ProjectRef
     let previewResolver: ProjectPreviewResolver
     @ObservedObject var previewRuntimeManager: PreviewRuntimeManager
+    private let checkGitRepositoryUseCase: CheckGitRepositoryUseCase
+    private let initializeGitRepositoryUseCase: InitializeGitRepositoryUseCase
     let onFixLogsRequest: ((String) -> Void)?
 
     @State private var hasGitRepository = false
     @State private var isInitializingGit = false
     @State private var gitErrorMessage: String?
+
+    init(
+        shellViewModel: ShellViewModel,
+        project: ProjectRef,
+        previewResolver: ProjectPreviewResolver,
+        previewRuntimeManager: PreviewRuntimeManager,
+        gitRepositoryManager: GitRepositoryManaging,
+        onFixLogsRequest: ((String) -> Void)?
+    ) {
+        self.shellViewModel = shellViewModel
+        self.project = project
+        self.previewResolver = previewResolver
+        self.previewRuntimeManager = previewRuntimeManager
+        self.onFixLogsRequest = onFixLogsRequest
+        self.checkGitRepositoryUseCase = CheckGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
+        self.initializeGitRepositoryUseCase = InitializeGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
+    }
 
     var body: some View {
         VSplitView {
@@ -28,9 +39,15 @@ struct ContextPaneView: View {
             gitPanel
                 .frame(minHeight: 180, idealHeight: 260)
         }
-        .onAppear(perform: refreshGitStatus)
+        .onAppear {
+            Task {
+                await refreshGitStatus()
+            }
+        }
         .onChange(of: project.id) { _, _ in
-            refreshGitStatus()
+            Task {
+                await refreshGitStatus()
+            }
         }
         .alert("Git", isPresented: gitErrorAlertBinding) {
             Button("OK", role: .cancel) {
@@ -105,35 +122,8 @@ struct ContextPaneView: View {
         )
     }
 
-    private func refreshGitStatus() {
-        hasGitRepository = isGitRepository(project.localPath)
-    }
-
-    private func isGitRepository(_ path: String) -> Bool {
-        let gitURL = URL(fileURLWithPath: path).appendingPathComponent(".git")
-        if FileManager.default.fileExists(atPath: gitURL.path) {
-            return true
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = ["-C", path, "rev-parse", "--is-inside-work-tree"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus != 0 {
-                return false
-            }
-            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            return output.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
-        } catch {
-            return false
-        }
+    private func refreshGitStatus() async {
+        hasGitRepository = await checkGitRepositoryUseCase.execute(path: project.localPath)
     }
 
     private func initializeGitRepository() async {
@@ -141,34 +131,10 @@ struct ContextPaneView: View {
         isInitializingGit = true
         defer { isInitializingGit = false }
 
-        let result = await Task.detached(priority: .userInitiated) { () -> Result<Void, GitPanelError> in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = ["-C", project.localPath, "init"]
-
-            let outputPipe = Pipe()
-            process.standardOutput = outputPipe
-            process.standardError = outputPipe
-
-            do {
-                try process.run()
-                process.waitUntilExit()
-
-                if process.terminationStatus == 0 {
-                    return .success(())
-                }
-
-                let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                return .failure(GitPanelError(message: output.trimmingCharacters(in: .whitespacesAndNewlines)))
-            } catch {
-                return .failure(GitPanelError(message: error.localizedDescription))
-            }
-        }.value
-
-        switch result {
-        case .success:
-            refreshGitStatus()
-        case .failure(let error):
+        do {
+            try await initializeGitRepositoryUseCase.execute(path: project.localPath)
+            await refreshGitStatus()
+        } catch {
             let message = error.localizedDescription
             gitErrorMessage = message.isEmpty ? "Could not initialize Git repository." : message
         }
@@ -183,6 +149,7 @@ struct ContextPaneView: View {
         project: project,
         previewResolver: environment.sharedPreviewResolver(),
         previewRuntimeManager: environment.sharedPreviewRuntimeManager(),
+        gitRepositoryManager: environment.sharedGitRepositoryManager(),
         onFixLogsRequest: nil
     )
 }

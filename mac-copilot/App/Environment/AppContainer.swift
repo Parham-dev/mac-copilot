@@ -2,13 +2,31 @@ import Foundation
 import FactoryKit
 
 extension Container {
-    var swiftDataStack: Factory<SwiftDataStack> {
-        self { @MainActor in SwiftDataStack.shared }
+    var sidecarLifecycleManager: Factory<any SidecarLifecycleManaging> {
+        self { @MainActor in SidecarManager.shared }
+            .singleton
+    }
+
+    var swiftDataStack: Factory<any SwiftDataStoreProviding> {
+        self { @MainActor in SwiftDataStack() }
+            .singleton
+    }
+
+    var modelSelectionPreferencesStore: Factory<ModelSelectionPreferencesStoring> {
+        self { @MainActor in UserDefaultsModelSelectionPreferencesStore() }
+            .singleton
+    }
+
+    var gitRepositoryManager: Factory<any GitRepositoryManaging> {
+        self { @MainActor in LocalGitRepositoryManager() }
             .singleton
     }
 
     var authService: Factory<GitHubAuthService> {
-        self { @MainActor in GitHubAuthService() }
+        self { @MainActor in
+            let client = SidecarAuthClient(sidecarLifecycle: self.sidecarLifecycleManager())
+            return GitHubAuthService(sidecarClient: client)
+        }
             .singleton
     }
 

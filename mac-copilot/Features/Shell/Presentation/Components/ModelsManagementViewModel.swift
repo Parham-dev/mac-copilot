@@ -9,11 +9,12 @@ final class ModelsManagementViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    private let apiService = CopilotAPIService()
     private let modelSelectionStore: ModelSelectionStore
+    private let modelRepository: ModelListingRepository
 
-    init(modelSelectionStore: ModelSelectionStore) {
+    init(modelSelectionStore: ModelSelectionStore, modelRepository: ModelListingRepository) {
         self.modelSelectionStore = modelSelectionStore
+        self.modelRepository = modelRepository
     }
 
     var focusedModel: CopilotModelCatalogItem? {
@@ -27,7 +28,7 @@ final class ModelsManagementViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        let fetched = await apiService.fetchModelCatalog()
+        let fetched = await modelRepository.fetchModelCatalog()
         models = fetched
 
         let persisted = Set(modelSelectionStore.selectedModelIDs())

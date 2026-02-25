@@ -19,9 +19,10 @@ final class GitHubAuthService: ObservableObject {
     private var isRestoring = false
 
     private let keychain = KeychainTokenStore()
-    private let sidecarClient = SidecarAuthClient()
+    private let sidecarClient: SidecarAuthClient
 
-    init() {
+    init(sidecarClient: SidecarAuthClient) {
+        self.sidecarClient = sidecarClient
         self.clientID = Self.configuredClientID
     }
 

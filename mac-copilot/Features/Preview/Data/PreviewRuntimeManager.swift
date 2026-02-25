@@ -71,7 +71,7 @@ final class PreviewRuntimeManager: ObservableObject {
         activeURL = nil
         logs.removeAll(keepingCapacity: true)
 
-        guard let adapter = adapters.first(where: { $0.canHandle(project: project, utilities: utilities) }) else {
+        guard let adapter = adapters.first(where: { $0.canHandle(project: project) }) else {
             state = .failed("No preview adapter supports this project yet")
             appendLog("No adapter matched project")
             return
@@ -81,7 +81,7 @@ final class PreviewRuntimeManager: ObservableObject {
         appendLog("Using adapter: \(adapter.displayName)")
 
         do {
-            let plan = try adapter.makePlan(project: project, utilities: utilities)
+            let plan = try adapter.makePlan(project: project)
 
             switch plan.mode {
             case .directOpen(let target):

@@ -4,17 +4,21 @@ import FactoryKit
 
 @MainActor
 final class ModelSelectionStore: ObservableObject {
-    private static let selectedModelIDsKey = "copilotforge.selectedModelIDs"
+    private let preferencesStore: ModelSelectionPreferencesStoring
     @Published private(set) var changeToken: Int = 0
 
+    init(preferencesStore: ModelSelectionPreferencesStoring) {
+        self.preferencesStore = preferencesStore
+    }
+
     func selectedModelIDs() -> [String] {
-        let raw = UserDefaults.standard.stringArray(forKey: ModelSelectionStore.selectedModelIDsKey) ?? []
+        let raw = preferencesStore.readSelectedModelIDs()
         return Self.normalize(raw)
     }
 
     func setSelectedModelIDs(_ ids: [String]) {
         let normalized = Self.normalize(ids)
-        UserDefaults.standard.set(normalized, forKey: ModelSelectionStore.selectedModelIDsKey)
+        preferencesStore.writeSelectedModelIDs(normalized)
         changeToken += 1
     }
 
@@ -43,6 +47,8 @@ final class AppEnvironment: ObservableObject {
     private let chatRepository: ChatRepository
     private let previewResolver: ProjectPreviewResolver
     private let previewRuntimeManager: PreviewRuntimeManager
+    private let sidecarLifecycle: SidecarLifecycleManaging
+    private let gitRepositoryManager: GitRepositoryManaging
     let modelSelectionStore: ModelSelectionStore
     private var chatViewModels: [String: ChatViewModel] = [:]
     private var didBootstrap = false
@@ -63,7 +69,9 @@ final class AppEnvironment: ObservableObject {
         self.profileRepository = container.profileRepository()
         self.previewResolver = container.previewResolver()
         self.previewRuntimeManager = container.previewRuntimeManager()
-        self.modelSelectionStore = ModelSelectionStore()
+        self.sidecarLifecycle = container.sidecarLifecycleManager()
+        self.gitRepositoryManager = container.gitRepositoryManager()
+        self.modelSelectionStore = ModelSelectionStore(preferencesStore: container.modelSelectionPreferencesStore())
     }
 
     func bootstrapIfNeeded() async {
@@ -71,7 +79,7 @@ final class AppEnvironment: ObservableObject {
         didBootstrap = true
 
         launchPhase = .checking
-        SidecarManager.shared.startIfNeeded()
+        sidecarLifecycle.startIfNeeded()
         await authViewModel.restoreSessionIfNeeded()
         launchPhase = .ready
     }
@@ -114,6 +122,14 @@ final class AppEnvironment: ObservableObject {
 
     func sharedModelSelectionStore() -> ModelSelectionStore {
         modelSelectionStore
+    }
+
+    func sharedGitRepositoryManager() -> GitRepositoryManaging {
+        gitRepositoryManager
+    }
+
+    func sharedModelRepository() -> ModelListingRepository {
+        modelRepository
     }
 
     static func preview() -> AppEnvironment {
