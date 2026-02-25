@@ -93,23 +93,23 @@ final class SidecarManager {
         }
 
         let sourceFileURL = URL(fileURLWithPath: #filePath)
-        let projectAppFolder = sourceFileURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let projectRootFolder = projectAppFolder.deletingLastPathComponent()
+        var searchCursor = sourceFileURL.deletingLastPathComponent()
 
-        let candidatePaths = [
-            projectRootFolder
+        for _ in 0 ..< 10 {
+            let candidate = searchCursor
                 .appendingPathComponent("sidecar", isDirectory: true)
-                .appendingPathComponent("index.js", isDirectory: false),
-            projectAppFolder
-                .appendingPathComponent("sidecar", isDirectory: true)
-                .appendingPathComponent("index.js", isDirectory: false),
-        ]
+                .appendingPathComponent("index.js", isDirectory: false)
 
-        for candidate in candidatePaths where FileManager.default.fileExists(atPath: candidate.path) {
-            NSLog("[CopilotForge] Using local sidecar source at %@", candidate.path)
-            return candidate
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                NSLog("[CopilotForge] Using local sidecar source at %@", candidate.path)
+                return candidate
+            }
+
+            let parent = searchCursor.deletingLastPathComponent()
+            if parent.path == searchCursor.path {
+                break
+            }
+            searchCursor = parent
         }
 
         return nil
