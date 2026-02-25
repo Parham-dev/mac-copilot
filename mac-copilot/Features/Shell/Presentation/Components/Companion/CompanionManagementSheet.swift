@@ -116,9 +116,9 @@ struct CompanionManagementSheet: View {
                 }
 
                 VStack(alignment: .center, spacing: 8) {
-                    CompanionQRCodeView(payload: companionStatusStore.pairingQRCodePayload)
+                    CompanionQRCodeView(payload: companionStatusStore.pairingQRCodePayload, size: 220)
                     Text("Scan with iPhone companion app")
-                        .font(.caption)
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
             }
