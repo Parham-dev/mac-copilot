@@ -3,15 +3,6 @@ import Foundation
 final class SidecarManager: SidecarLifecycleManaging {
     static let shared = SidecarManager()
 
-    private enum SidecarState: Equatable {
-        case stopped
-        case starting
-        case healthy
-        case degraded
-        case restarting
-        case failed(String)
-    }
-
     private enum StartReason: String {
         case appBoot = "app_boot"
         case manualRestart = "manual_restart"
@@ -25,11 +16,11 @@ final class SidecarManager: SidecarLifecycleManaging {
     private lazy var preflight = SidecarPreflight(minimumNodeMajorVersion: minimumNodeMajorVersion)
     private let restartPolicy = SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
     private let logger = SidecarLogger()
+    private let stateMachine = SidecarStateMachine()
 
     private lazy var runtimeUtilities = SidecarRuntimeUtilities(port: sidecarPort)
     private lazy var processController = SidecarProcessController(callbackQueue: queue)
 
-    private var state: SidecarState = .stopped
     private var isStarting = false
     private var runID: String?
 
@@ -45,13 +36,13 @@ final class SidecarManager: SidecarLifecycleManaging {
         queue.async { [weak self] in
             guard let self else { return }
 
-            if self.state == .restarting || self.isStarting {
+            if !self.stateMachine.canRestartWhileNotStarting(isStarting: self.isStarting) {
                 self.log("Restart ignored: sidecar is already restarting")
                 return
             }
 
             self.log("Restarting sidecar")
-            self.transition(to: .restarting)
+            self.stateMachine.transition(to: .restarting, log: self.log)
             self.stopLocked()
             self.startIfNeededLocked(reason: .manualRestart)
         }
@@ -64,7 +55,7 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private func startIfNeededLocked(reason: StartReason) {
-        if processController.isRunning, state == .healthy {
+        if stateMachine.isHealthyRunning(processIsRunning: processController.isRunning) {
             return
         }
 
@@ -89,7 +80,7 @@ final class SidecarManager: SidecarLifecycleManaging {
                 )
 
                 if reuseDecision == .reuse {
-                    transition(to: .healthy)
+                    stateMachine.transition(to: .healthy, log: log)
                     log("Existing sidecar detected on :\(sidecarPort), reusing it")
                     return
                 }
@@ -107,7 +98,7 @@ final class SidecarManager: SidecarLifecycleManaging {
 
             if !restartPolicy.canAttemptRestart() {
                 let message = "Restart guard tripped: too many restarts in 60s"
-                transition(to: .failed(message))
+                stateMachine.transition(to: .failed(message), log: log)
                 log(message)
                 return
             }
@@ -115,7 +106,7 @@ final class SidecarManager: SidecarLifecycleManaging {
             runtimeUtilities.terminateStaleSidecarProcesses(matching: startup.scriptURL.path)
 
             isStarting = true
-            transition(to: .starting)
+            stateMachine.transition(to: .starting, log: log)
             runID = UUID().uuidString
             log("Starting sidecar runId=\(runID ?? "n/a") reason=\(reason.rawValue) node=\(startup.nodeExecutable.path) script=\(startup.scriptURL.path)")
 
@@ -123,17 +114,17 @@ final class SidecarManager: SidecarLifecycleManaging {
 
             if runtimeUtilities.waitForHealthySidecar(timeout: startupTimeout) {
                 restartPolicy.resetRetryAttempt()
-                transition(to: .healthy)
+                stateMachine.transition(to: .healthy, log: log)
                 log("Sidecar healthy on :\(sidecarPort)")
             } else {
-                transition(to: .degraded)
+                stateMachine.transition(to: .degraded, log: log)
                 log("Sidecar failed readiness check within \(Int(startupTimeout))s")
                 stopLocked()
                 scheduleRetryIfAllowed()
             }
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            transition(to: .failed(message))
+            stateMachine.transition(to: .failed(message), log: log)
             log(message)
         }
 
@@ -154,39 +145,26 @@ final class SidecarManager: SidecarLifecycleManaging {
             )
             log("Sidecar process launched")
         } catch {
-            transition(to: .failed("Failed to start sidecar: \(error.localizedDescription)"))
+            stateMachine.transition(to: .failed("Failed to start sidecar: \(error.localizedDescription)"), log: log)
             log("Failed to start sidecar: \(error.localizedDescription)")
         }
     }
 
     private func handleTermination(_ termination: SidecarProcessTermination) {
-        log("Sidecar terminated (reason=\(termination.reasonRawValue), status=\(termination.status))")
-
-        if termination.intentional {
-            log("Intentional sidecar termination acknowledged")
-            if case .restarting = state {
-                transition(to: .stopped)
-            }
-            return
-        }
-
-        if state == .healthy || state == .starting {
-            transition(to: .degraded)
+        if stateMachine.handleTermination(termination, log: log) {
             scheduleRetryIfAllowed()
-        } else if case .restarting = state {
-            transition(to: .stopped)
         }
     }
 
     private func stopLocked() {
         processController.stop()
-        transition(to: .stopped)
+        stateMachine.transition(to: .stopped, log: log)
     }
 
     private func scheduleRetryIfAllowed() {
         guard restartPolicy.canAttemptRestart() else {
             let message = "Retry skipped: restart guard tripped"
-            transition(to: .failed(message))
+            stateMachine.transition(to: .failed(message), log: log)
             log(message)
             return
         }
@@ -196,29 +174,6 @@ final class SidecarManager: SidecarLifecycleManaging {
 
         queue.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.startIfNeededLocked(reason: .retry)
-        }
-    }
-
-    private func transition(to next: SidecarState) {
-        guard next != state else { return }
-        state = next
-        log("State => \(describe(state: next))")
-    }
-
-    private func describe(state: SidecarState) -> String {
-        switch state {
-        case .stopped:
-            return "stopped"
-        case .starting:
-            return "starting"
-        case .healthy:
-            return "healthy"
-        case .degraded:
-            return "degraded"
-        case .restarting:
-            return "restarting"
-        case .failed(let message):
-            return "failed(\(message))"
         }
     }
 
