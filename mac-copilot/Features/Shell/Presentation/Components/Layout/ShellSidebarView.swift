@@ -2,14 +2,15 @@ import SwiftUI
 
 struct ShellSidebarView: View {
     @ObservedObject var shellViewModel: ShellViewModel
+    @ObservedObject var companionStatusStore: CompanionStatusStore
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
+    let onManageCompanion: () -> Void
     let onManageModels: () -> Void
     let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
 
     @State private var showsUpdatePlaceholder = false
-    @State private var showsProfileMenu = false
     @State private var hoveredChatID: ChatThreadRef.ID?
 
     var body: some View {
@@ -56,106 +57,24 @@ struct ShellSidebarView: View {
     }
 
     private func bottomProfileBar(sidebarWidth: CGFloat) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                showsUpdatePlaceholder = true
-            } label: {
-                Text("Update")
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.9)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                showsProfileMenu.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "gearshape")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    Text("Settings")
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showsProfileMenu, arrowEdge: .bottom) {
-                profileMenuContent(sidebarWidth: sidebarWidth)
-            }
-        }
-    }
-
-    private func profileMenuContent(sidebarWidth: CGFloat) -> some View {
-        let popoverWidth = max(220, sidebarWidth - 24)
-
-        return VStack(alignment: .leading, spacing: 6) {
-            profileMenuButton("Profile", systemImage: "person.crop.circle") {
-                shellViewModel.selectedItem = .profile
-                showsProfileMenu = false
-            }
-
-            profileMenuButton("Models", systemImage: "slider.horizontal.3") {
-                onManageModels()
-                showsProfileMenu = false
-            }
-
-            profileMenuButton("MCP Tools", systemImage: "wrench.and.screwdriver") {
-                onManageMCPTools()
-                showsProfileMenu = false
-            }
-
-            if isAuthenticated {
-                Divider()
-                profileMenuButton("Log Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
-                    onSignOut()
-                    showsProfileMenu = false
-                }
-            }
-        }
-        .padding(10)
-        .frame(width: popoverWidth, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func profileMenuButton(_ title: String, systemImage: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
-        Button(role: role, action: action) {
-            Label(title, systemImage: systemImage)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        ShellSidebarBottomBarView(
+            isAuthenticated: isAuthenticated,
+            sidebarWidth: sidebarWidth,
+            onUpdate: { showsUpdatePlaceholder = true },
+            onOpenProfile: { shellViewModel.selectedItem = .profile },
+            onManageModels: onManageModels,
+            onManageMCPTools: onManageMCPTools,
+            onSignOut: onSignOut
+        )
     }
 
     private var projectsHeader: some View {
-        HStack {
-            Text("Projects")
-            Spacer()
-            Button {
-                onCreateProject()
-            } label: {
-                Image(systemName: "folder.badge.plus")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 18, alignment: .center)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 4)
-            .help("Add New Project")
-        }
+        ShellSidebarProjectsHeaderView(
+            statusLabel: companionStatusStore.statusLabel,
+            statusColor: companionStatusStore.statusColor,
+            onManageCompanion: onManageCompanion,
+            onCreateProject: onCreateProject
+        )
     }
 
     private func projectDisclosure(_ project: ProjectRef) -> some View {

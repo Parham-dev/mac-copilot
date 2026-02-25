@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject private var appEnvironment: AppEnvironment
     @ObservedObject var shellViewModel: ShellViewModel
     @State private var projectCreationError: String?
+    @State private var showsCompanionSheet = false
     @State private var showsModelsSheet = false
     @State private var showsMCPToolsSheet = false
     private let projectCreationService: ProjectCreationService
@@ -25,8 +26,10 @@ struct ContentView: View {
         NavigationSplitView {
             ShellSidebarView(
                 shellViewModel: shellViewModel,
+                companionStatusStore: appEnvironment.sharedCompanionStatusStore(),
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
+                onManageCompanion: { showsCompanionSheet = true },
                 onManageModels: { showsModelsSheet = true },
                 onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
@@ -57,6 +60,13 @@ struct ContentView: View {
             }
         } message: {
             Text(projectCreationError ?? "Unknown error")
+        }
+        .sheet(isPresented: $showsCompanionSheet) {
+            CompanionManagementSheet(
+                isPresented: $showsCompanionSheet,
+                companionStatusStore: appEnvironment.sharedCompanionStatusStore()
+            )
+            .frame(minWidth: 680, minHeight: 480)
         }
         .sheet(isPresented: $showsModelsSheet) {
             ModelsManagementSheet(

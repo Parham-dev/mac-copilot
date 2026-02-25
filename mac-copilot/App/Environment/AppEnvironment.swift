@@ -3,34 +3,6 @@ import Combine
 import FactoryKit
 
 @MainActor
-final class ModelSelectionStore: ObservableObject {
-    private let preferencesStore: ModelSelectionPreferencesStoring
-    @Published private(set) var changeToken: Int = 0
-
-    init(preferencesStore: ModelSelectionPreferencesStoring) {
-        self.preferencesStore = preferencesStore
-    }
-
-    func selectedModelIDs() -> [String] {
-        let raw = preferencesStore.readSelectedModelIDs()
-        return Self.normalize(raw)
-    }
-
-    func setSelectedModelIDs(_ ids: [String]) {
-        let normalized = Self.normalize(ids)
-        preferencesStore.writeSelectedModelIDs(normalized)
-        changeToken += 1
-    }
-
-    private static func normalize(_ ids: [String]) -> [String] {
-        let trimmed = ids
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return Array(Set(trimmed)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-}
-
-@MainActor
 final class AppEnvironment: ObservableObject {
     enum LaunchPhase {
         case checking
@@ -51,6 +23,7 @@ final class AppEnvironment: ObservableObject {
     private let gitRepositoryManager: GitRepositoryManaging
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
+    let companionStatusStore: CompanionStatusStore
     private var chatViewModels: [String: ChatViewModel] = [:]
     private var didBootstrap = false
     private lazy var profileViewModel: ProfileViewModel = {
@@ -74,6 +47,7 @@ final class AppEnvironment: ObservableObject {
         self.gitRepositoryManager = container.gitRepositoryManager()
         self.modelSelectionStore = ModelSelectionStore(preferencesStore: container.modelSelectionPreferencesStore())
         self.mcpToolsStore = MCPToolsStore(preferencesStore: container.mcpToolsPreferencesStore())
+        self.companionStatusStore = CompanionStatusStore()
     }
 
     func bootstrapIfNeeded() async {
@@ -137,6 +111,10 @@ final class AppEnvironment: ObservableObject {
 
     func sharedModelRepository() -> ModelListingRepository {
         modelRepository
+    }
+
+    func sharedCompanionStatusStore() -> CompanionStatusStore {
+        companionStatusStore
     }
 
     static func preview() -> AppEnvironment {
