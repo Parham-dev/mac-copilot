@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { loadCompanionState, saveCompanionState } from "./persistence.js";
 
 export interface CompanionStatusPayload {
   connected: boolean;
@@ -34,6 +35,21 @@ export class CompanionStore {
   private pairingSession: PairingSession | null = null;
   private connectedDeviceId: string | null = null;
   private readonly devices = new Map<string, TrustedDevice>();
+
+  constructor() {
+    const restored = loadCompanionState();
+    this.connectedDeviceId = restored.connectedDeviceId;
+
+    for (const device of restored.devices) {
+      this.devices.set(device.id, {
+        id: device.id,
+        name: device.name,
+        publicKey: device.publicKey,
+        pairedAt: device.pairedAt,
+        lastSeenAt: device.lastSeenAt,
+      });
+    }
+  }
 
   status(): CompanionStatusPayload {
     const device = this.connectedDeviceId ? this.devices.get(this.connectedDeviceId) ?? null : null;
@@ -115,11 +131,13 @@ export class CompanionStore {
 
     this.connectedDeviceId = id;
     this.pairingSession = null;
+    this.persist();
     return this.status();
   }
 
   disconnect(): CompanionStatusPayload {
     this.connectedDeviceId = null;
+    this.persist();
     return this.status();
   }
 
@@ -143,6 +161,15 @@ export class CompanionStore {
       this.connectedDeviceId = null;
     }
 
+    this.persist();
+
     return this.status();
+  }
+
+  private persist() {
+    saveCompanionState({
+      connectedDeviceId: this.connectedDeviceId,
+      devices: Array.from(this.devices.values()),
+    });
   }
 }

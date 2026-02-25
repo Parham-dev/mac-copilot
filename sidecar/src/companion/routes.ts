@@ -2,9 +2,20 @@ import type { Express } from "express";
 import { CompanionStore } from "./store.js";
 
 const store = new CompanionStore();
+const minimumPairingTTLSeconds = 60;
+const maximumPairingTTLSeconds = 900;
 
 function asErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizePairingTTL(input: unknown) {
+  const value = Number(input ?? 300);
+  if (!Number.isFinite(value)) {
+    return 300;
+  }
+
+  return Math.max(minimumPairingTTLSeconds, Math.min(maximumPairingTTLSeconds, Math.trunc(value)));
 }
 
 export function registerCompanionRoutes(app: Express) {
@@ -14,8 +25,8 @@ export function registerCompanionRoutes(app: Express) {
 
   app.post("/companion/pairing/start", (req, res) => {
     try {
-      const ttlSeconds = Number(req.body?.ttlSeconds ?? 300);
-      const payload = store.startPairing(Number.isFinite(ttlSeconds) ? ttlSeconds : 300);
+      const ttlSeconds = normalizePairingTTL(req.body?.ttlSeconds);
+      const payload = store.startPairing(ttlSeconds);
       res.json({ ok: true, ...payload });
     } catch (error) {
       res.status(400).json({ ok: false, error: asErrorMessage(error) });

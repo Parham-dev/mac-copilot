@@ -25,6 +25,35 @@ final class SidecarCompanionClient {
         try await post(path: "companion/disconnect", body: EmptyBody(), as: SidecarCompanionStatusResponse.self)
     }
 
+    private func waitForSidecarReady(maxAttempts: Int, delaySeconds: TimeInterval) async -> Bool {
+        for attempt in 1 ... maxAttempts {
+            if await pingHealth() {
+                return true
+            }
+
+            if attempt < maxAttempts {
+                let nanos = UInt64(max(delaySeconds, 0.1) * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+            }
+        }
+
+        return false
+    }
+
+    private func isRecoverableConnectionError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .networkConnectionLost, .cannotConnectToHost, .timedOut, .notConnectedToInternet, .cannotFindHost:
+                return true
+            default:
+                break
+            }
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == URLError.networkConnectionLost.rawValue
+    }
+
     private func get<ResponseBody: Decodable>(path: String, as type: ResponseBody.Type) async throws -> ResponseBody {
         sidecarLifecycle.startIfNeeded()
         let endpoint = baseURL.appendingPathComponent(path)
@@ -44,28 +73,65 @@ final class SidecarCompanionClient {
     }
 
     private func send<ResponseBody: Decodable>(request: URLRequest, as type: ResponseBody.Type) async throws -> ResponseBody {
-        var bounded = request
-        bounded.timeoutInterval = 10
+        _ = await waitForSidecarReady(maxAttempts: 3, delaySeconds: 0.25)
 
-        let (data, response) = try await URLSession.shared.data(for: bounded)
-        guard let http = response as? HTTPURLResponse else {
-            throw CompanionClientError.invalidResponse
-        }
-
-        let decoder = JSONDecoder()
-        if (200 ... 299).contains(http.statusCode) {
+        var lastError: Error?
+        for attempt in 0 ... 1 {
             do {
-                return try decoder.decode(ResponseBody.self, from: data)
+                var bounded = request
+                bounded.timeoutInterval = 10
+
+                let (data, response) = try await URLSession.shared.data(for: bounded)
+                guard let http = response as? HTTPURLResponse else {
+                    throw CompanionClientError.invalidResponse
+                }
+
+                let decoder = JSONDecoder()
+                if (200 ... 299).contains(http.statusCode) {
+                    do {
+                        return try decoder.decode(ResponseBody.self, from: data)
+                    } catch {
+                        throw CompanionClientError.invalidPayload
+                    }
+                }
+
+                if let apiError = try? decoder.decode(SidecarCompanionErrorResponse.self, from: data) {
+                    throw CompanionClientError.server(apiError.error)
+                }
+
+                throw CompanionClientError.server("HTTP \(http.statusCode)")
             } catch {
-                throw CompanionClientError.invalidPayload
+                lastError = error
+                if isRecoverableConnectionError(error), attempt == 0 {
+                    sidecarLifecycle.startIfNeeded()
+                    let ready = await waitForSidecarReady(maxAttempts: 8, delaySeconds: 0.30)
+                    if !ready {
+                        throw CompanionClientError.server("Local sidecar is still starting. Please retry in a moment.")
+                    }
+                    continue
+                }
+
+                throw error
             }
         }
 
-        if let apiError = try? decoder.decode(SidecarCompanionErrorResponse.self, from: data) {
-            throw CompanionClientError.server(apiError.error)
-        }
+        throw lastError ?? CompanionClientError.server("Unknown companion request failure")
+    }
 
-        throw CompanionClientError.server("HTTP \(http.statusCode)")
+    private func pingHealth() async -> Bool {
+        let endpoint = baseURL.appendingPathComponent("health")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return false
+            }
+            return (200 ... 299).contains(http.statusCode)
+        } catch {
+            return false
+        }
     }
 }
 

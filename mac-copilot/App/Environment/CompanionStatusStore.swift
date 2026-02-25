@@ -18,6 +18,7 @@ final class CompanionStatusStore: ObservableObject {
     @Published private(set) var lastErrorMessage: String?
 
     private let service: CompanionConnectionServicing
+    private var latestOperationID: Int = 0
 
     init(service: CompanionConnectionServicing) {
         self.service = service
@@ -60,15 +61,17 @@ final class CompanionStatusStore: ObservableObject {
     }
 
     func refreshStatus() async {
-        await runOperation {
+        await runOperation { operationID in
             let snapshot = try await service.fetchStatus()
+            guard operationID == latestOperationID else { return }
             apply(snapshot)
         }
     }
 
     func startPairing() async {
-        await runOperation {
+        await runOperation { operationID in
             let session = try await service.startPairing()
+            guard operationID == latestOperationID else { return }
             pairingCode = session.code
             pairingQRCodePayload = session.qrPayload
             pairingExpiresAt = session.expiresAt
@@ -77,8 +80,9 @@ final class CompanionStatusStore: ObservableObject {
     }
 
     func disconnect() async {
-        await runOperation {
+        await runOperation { operationID in
             let snapshot = try await service.disconnect()
+            guard operationID == latestOperationID else { return }
             apply(snapshot)
             pairingCode = "------"
             pairingQRCodePayload = nil
@@ -86,15 +90,23 @@ final class CompanionStatusStore: ObservableObject {
         }
     }
 
-    private func runOperation(_ operation: () async throws -> Void) async {
+    private func runOperation(_ operation: (_ operationID: Int) async throws -> Void) async {
+        latestOperationID += 1
+        let operationID = latestOperationID
         isBusy = true
         lastErrorMessage = nil
-        defer { isBusy = false }
+        defer {
+            if operationID == latestOperationID {
+                isBusy = false
+            }
+        }
 
         do {
-            try await operation()
+            try await operation(operationID)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            if operationID == latestOperationID {
+                lastErrorMessage = error.localizedDescription
+            }
         }
     }
 
