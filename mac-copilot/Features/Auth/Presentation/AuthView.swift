@@ -52,5 +52,5 @@ struct AuthView: View {
 
 #Preview {
     AuthView()
-    .environmentObject(AppEnvironment.preview().authViewModel)
+    .environmentObject(AppEnvironment.preview().authEnvironment.authViewModel)
 }

@@ -9,7 +9,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
-    @EnvironmentObject private var appEnvironment: AppEnvironment
+    @EnvironmentObject private var shellEnvironment: ShellEnvironment
+    @EnvironmentObject private var companionEnvironment: CompanionEnvironment
     @ObservedObject var shellViewModel: ShellViewModel
     @State private var projectCreationError: String?
     @State private var showsCompanionSheet = false
@@ -23,7 +24,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        let companionStatusStore = appEnvironment.companionStatusStore
+        let companionStatusStore = companionEnvironment.companionStatusStore
 
         NavigationSplitView {
             ShellSidebarView(
@@ -64,7 +65,7 @@ struct ContentView: View {
         } detail: {
             ShellDetailPaneView(
                 shellViewModel: shellViewModel,
-                appEnvironment: appEnvironment,
+                shellEnvironment: shellEnvironment,
                 isAuthenticated: authViewModel.isAuthenticated
             )
         }
@@ -88,15 +89,15 @@ struct ContentView: View {
         .sheet(isPresented: $showsModelsSheet) {
             ModelsManagementSheet(
                 isPresented: $showsModelsSheet,
-                modelSelectionStore: appEnvironment.modelSelectionStore,
-                modelRepository: appEnvironment.modelRepository
+                modelSelectionStore: shellEnvironment.modelSelectionStore,
+                modelRepository: shellEnvironment.modelRepository
             )
                 .frame(minWidth: 980, minHeight: 640)
         }
         .sheet(isPresented: $showsMCPToolsSheet) {
             MCPToolsManagementSheet(
                 isPresented: $showsMCPToolsSheet,
-                mcpToolsStore: appEnvironment.mcpToolsStore
+                mcpToolsStore: shellEnvironment.mcpToolsStore
             )
             .frame(minWidth: 980, minHeight: 640)
         }
@@ -128,7 +129,12 @@ struct ContentView: View {
 
 #Preview {
     let environment = AppEnvironment.preview()
-    ContentView(shellViewModel: environment.shellViewModel, projectCreationService: environment.projectCreationService)
+    ContentView(
+        shellViewModel: environment.shellEnvironment.shellViewModel,
+        projectCreationService: environment.shellEnvironment.projectCreationService
+    )
         .environmentObject(environment)
-        .environmentObject(environment.authViewModel)
+        .environmentObject(environment.authEnvironment.authViewModel)
+        .environmentObject(environment.shellEnvironment)
+        .environmentObject(environment.companionEnvironment)
 }

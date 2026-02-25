@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ShellDetailPaneView: View {
     @ObservedObject var shellViewModel: ShellViewModel
-    @ObservedObject var appEnvironment: AppEnvironment
+    @ObservedObject var shellEnvironment: ShellEnvironment
     let isAuthenticated: Bool
 
     var body: some View {
@@ -11,7 +11,7 @@ struct ShellDetailPaneView: View {
         } else if let selectedItem = shellViewModel.selectedItem {
             switch selectedItem {
             case .profile:
-                ProfileView(viewModel: appEnvironment.profileViewModel)
+                ProfileView(viewModel: shellEnvironment.profileViewModel)
             case .chat(let projectID, let selectedChatID):
                 chatDetailContent(projectID: projectID, selectedChatID: selectedChatID)
             }
@@ -24,21 +24,21 @@ struct ShellDetailPaneView: View {
     private func chatDetailContent(projectID: UUID, selectedChatID: UUID) -> some View {
         if let activeProject = shellViewModel.project(for: projectID),
            let selectedChat = shellViewModel.chat(for: selectedChatID, in: projectID) {
-            let chatViewModel = appEnvironment.chatViewModel(for: selectedChat, project: activeProject)
+            let chatViewModel = shellEnvironment.chatViewModel(for: selectedChat, project: activeProject)
 
             HSplitView {
                 ChatView(
                     viewModel: chatViewModel,
-                    modelSelectionStore: appEnvironment.modelSelectionStore
+                    modelSelectionStore: shellEnvironment.modelSelectionStore
                 )
                     .frame(minWidth: 300, idealWidth: 470)
 
                 ContextPaneView(
                     shellViewModel: shellViewModel,
                     project: activeProject,
-                    controlCenterResolver: appEnvironment.controlCenterResolver,
-                    controlCenterRuntimeManager: appEnvironment.controlCenterRuntimeManager,
-                    gitRepositoryManager: appEnvironment.gitRepositoryManager,
+                    controlCenterResolver: shellEnvironment.controlCenterResolver,
+                    controlCenterRuntimeManager: shellEnvironment.controlCenterRuntimeManager,
+                    gitRepositoryManager: shellEnvironment.gitRepositoryManager,
                     onFixLogsRequest: { prompt in
                         Task {
                             await chatViewModel.send(prompt: prompt)

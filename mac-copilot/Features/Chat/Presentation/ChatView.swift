@@ -52,11 +52,12 @@ struct ChatView: View {
 #Preview {
     NavigationStack {
         let environment = AppEnvironment.preview()
-        let project = environment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
-        let chat = environment.shellViewModel.chats(for: project.id).first ?? ChatThreadRef(projectID: project.id, title: "General")
+        let shellEnvironment = environment.shellEnvironment
+        let project = shellEnvironment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
+        let chat = shellEnvironment.shellViewModel.chats(for: project.id).first ?? ChatThreadRef(projectID: project.id, title: "General")
         ChatView(
-            viewModel: environment.chatViewModel(for: chat, project: project),
-            modelSelectionStore: environment.modelSelectionStore
+            viewModel: shellEnvironment.chatViewModel(for: chat, project: project),
+            modelSelectionStore: shellEnvironment.modelSelectionStore
         )
     }
 }

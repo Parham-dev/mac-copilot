@@ -16,7 +16,9 @@ struct mac_copilotApp: App {
         WindowGroup {
             OnboardingRootView()
                 .environmentObject(appEnvironment)
-                .environmentObject(appEnvironment.authViewModel)
+                .environmentObject(appEnvironment.authEnvironment.authViewModel)
+                .environmentObject(appEnvironment.shellEnvironment)
+                .environmentObject(appEnvironment.companionEnvironment)
                 .background(WindowFrameGuard())
         }
         .defaultSize(width: 1040, height: 900)
