@@ -18,7 +18,7 @@ struct ChatMessageRow: View {
                     if !statusChips.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
-                                ForEach(statusChips, id: \.self) { chip in
+                                ForEach(Array(statusChips.enumerated()), id: \.offset) { _, chip in
                                     Text(chip)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -92,7 +92,7 @@ struct ChatMessageRow: View {
             if isStreaming {
                 HStack(spacing: 6) {
                     ProgressView()
-                        .scaleEffect(0.7)
+                        .controlSize(.small)
                     Text("Working…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
