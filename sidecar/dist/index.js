@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot.js";
 import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
+import { companionChatStore } from "./companion/chatStore.js";
 import { registerCompanionRoutes } from "./companion/routes.js";
 const app = express();
 app.use(express.json());
@@ -96,6 +97,8 @@ app.post("/auth", async (req, res) => {
 app.post("/prompt", async (req, res) => {
     const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const promptText = String(req.body?.prompt ?? "");
+    const chatID = typeof req.body?.chatID === "string" ? req.body.chatID : undefined;
+    const projectPath = typeof req.body?.projectPath === "string" ? req.body.projectPath : undefined;
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -104,13 +107,19 @@ app.post("/prompt", async (req, res) => {
     }
     let chunkCount = 0;
     let totalChars = 0;
+    let assistantText = "";
+    companionChatStore.recordUserPrompt({
+        chatId: chatID,
+        projectPath,
+        prompt: promptText,
+    });
     console.log("[CopilotForge][Prompt] start", JSON.stringify({
         requestId,
         promptChars: promptText.length,
         authenticated: isAuthenticated(),
     }));
     try {
-        await sendPrompt(promptText, req.body?.chatID, req.body?.model, req.body?.projectPath, req.body?.allowedTools, requestId, (event) => {
+        await sendPrompt(promptText, chatID, req.body?.model, projectPath, req.body?.allowedTools, requestId, (event) => {
             const payload = typeof event === "object" && event !== null
                 ? event
                 : { type: "text", text: String(event ?? "") };
@@ -123,10 +132,16 @@ app.post("/prompt", async (req, res) => {
                 }));
             }
             const text = JSON.stringify(payload);
+            if (payload.type === "text" && typeof payload.text === "string") {
+                assistantText += payload.text;
+            }
             chunkCount += 1;
             totalChars += text.length;
             res.write(`data: ${text}\n\n`);
         });
+        if (chatID && assistantText.trim().length > 0) {
+            companionChatStore.recordAssistantResponse(chatID, assistantText);
+        }
         console.log("[CopilotForge][Prompt] done", JSON.stringify({
             requestId,
             chunkCount,

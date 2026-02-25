@@ -150,15 +150,15 @@ struct ContextPaneView: View {
     }
 }
 
-#Preview {
-    let environment = AppEnvironment.preview()
-    let project = environment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
-    ContextPaneView(
-        shellViewModel: environment.shellViewModel,
-        project: project,
-        controlCenterResolver: environment.controlCenterResolver,
-        controlCenterRuntimeManager: environment.controlCenterRuntimeManager,
-        gitRepositoryManager: environment.gitRepositoryManager,
-        onFixLogsRequest: nil
-    )
-}
+//#Preview {
+//    let environment = AppEnvironment.preview()
+//    let project = environment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
+//    ContextPaneView(
+//        shellViewModel: environment.shellViewModel,
+//        project: project,
+//        controlCenterResolver: environment.controlCenterResolver,
+//        controlCenterRuntimeManager: environment.controlCenterRuntimeManager,
+//        gitRepositoryManager: environment.gitRepositoryManager,
+//        onFixLogsRequest: nil
+//    )
+//}
