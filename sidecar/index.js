@@ -76,17 +76,48 @@ app.post("/auth", async (req, res) => {
 });
 
 app.post("/prompt", async (req, res) => {
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const promptText = String(req.body?.prompt ?? "");
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
+  let chunkCount = 0;
+  let totalChars = 0;
+
+  console.log("[CopilotForge][Prompt] start", JSON.stringify({
+    requestId,
+    promptChars: promptText.length,
+    authenticated: isAuthenticated(),
+  }));
 
   try {
-    await sendPrompt(req.body?.prompt ?? "", (chunk) => {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+    await sendPrompt(promptText, (chunk) => {
+      const text = typeof chunk === "string" ? chunk : JSON.stringify(chunk);
+      chunkCount += 1;
+      totalChars += text.length;
+      res.write(`data: ${JSON.stringify({ text })}\n\n`);
     });
-    res.write("data: [DONE]\\n\\n");
+
+    console.log("[CopilotForge][Prompt] done", JSON.stringify({
+      requestId,
+      chunkCount,
+      totalChars,
+    }));
+
+    res.write("data: [DONE]\n\n");
   } catch (error) {
-    res.write(`data: ${JSON.stringify({ error: String(error) })}\\n\\n`);
+    console.error("[CopilotForge][Prompt] error", JSON.stringify({
+      requestId,
+      error: String(error),
+      chunkCount,
+      totalChars,
+    }));
+    res.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
   }
 
   res.end();

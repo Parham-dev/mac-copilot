@@ -8,7 +8,7 @@ struct ChatMessage: Identifiable, Hashable {
 
     let id = UUID()
     let role: Role
-    let text: String
+    var text: String
     let createdAt: Date
 
     init(role: Role, text: String, createdAt: Date = .now) {

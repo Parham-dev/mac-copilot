@@ -3,7 +3,10 @@ import SwiftUI
 struct ChatView: View {
     let chatTitle: String
 
+    private let copilotService = CopilotAPIService()
+
     @State private var draftPrompt = ""
+    @State private var isSending = false
     @State private var messages: [ChatMessage] = [
         ChatMessage(role: .assistant, text: "Hi! Describe the app you want to build."),
     ]
@@ -35,10 +38,10 @@ struct ChatView: View {
                     .lineLimit(1...5)
 
                 Button("Send") {
-                    send()
+                    Task { await send() }
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
             }
             .padding()
         }
@@ -55,13 +58,34 @@ struct ChatView: View {
             .frame(maxWidth: 600, alignment: alignment)
     }
 
-    private func send() {
+    private func send() async {
         let text = draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        guard !isSending else { return }
+
+        isSending = true
+
         messages.append(ChatMessage(role: .user, text: text))
-        messages.append(ChatMessage(role: .assistant, text: "Sidecar wiring ready. Next: stream real Copilot response."))
+        let assistantIndex = messages.count
+        messages.append(ChatMessage(role: .assistant, text: ""))
         draftPrompt = ""
+
+        do {
+            var hasContent = false
+            for try await chunk in copilotService.streamPrompt(text) {
+                hasContent = true
+                messages[assistantIndex].text += chunk
+            }
+
+            if !hasContent {
+                messages[assistantIndex].text = "No response from Copilot."
+            }
+        } catch {
+            messages[assistantIndex].text = "Error: \(error.localizedDescription)"
+        }
+
+        isSending = false
     }
 }
 
