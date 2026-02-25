@@ -6,54 +6,44 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var chats: [String] = ["New Project", "Landing Page", "CRM Dashboard"]
+    @State private var selectedChat: String? = "New Project"
 
     var body: some View {
         NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
+            List(selection: $selectedChat) {
+                ForEach(chats, id: \.self) { chat in
+                    Label(chat, systemImage: "bubble.left.and.bubble.right")
+                        .tag(chat)
                 }
-                .onDelete(perform: deleteItems)
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .navigationTitle("CopilotForge")
             .toolbar {
                 ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                    Button(action: createChat) {
+                        Label("New Chat", systemImage: "plus")
                     }
                 }
             }
         } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+            if let selectedChat {
+                ChatView(chatTitle: selectedChat)
+            } else {
+                ContentUnavailableView("Select a chat", systemImage: "message")
             }
         }
+    }
+
+    private func createChat() {
+        let title = "Chat \(chats.count + 1)"
+        chats.append(title)
+        selectedChat = title
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }

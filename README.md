@@ -1,0 +1,274 @@
+# CopilotForge 🛠️
+### A Lovable-style App Builder for Non-Developers, powered by your GitHub Copilot subscription
+
+> Build real apps through conversation — no coding required.  
+> Your Copilot subscription is the engine. CopilotForge is the cockpit.
+
+---
+
+## What Is This?
+
+CopilotForge is a native **macOS app** (SwiftUI) that wraps the GitHub Copilot SDK into a non-developer-friendly interface.
+Think Lovable or Bolt.new — but instead of charging users for AI tokens, it runs on the **GitHub Copilot subscription they already have**.
+
+A product manager, designer, or founder can open CopilotForge, describe what they want to build, and watch a real app get generated, edited, and deployed — without touching a terminal or IDE.
+
+---
+
+## Core Architecture
+
+```text
+┌──────────────────────────────────────────────────────┐
+│              CopilotForge (SwiftUI Mac App)         │
+│                                                      │
+│   Chat UI  │  File Explorer  │  Live Preview Pane   │
+│                                                      │
+│        ↕ XPC / Local HTTP (localhost:7878)          │
+│                                                      │
+│      Node.js Sidecar (bundled inside .app)          │
+│      └─ @github/copilot-sdk  (npm package)          │
+│      └─ Custom Tools (file write, git, deploy)      │
+│      └─ MCP Servers (Supabase, GitHub, Vercel)      │
+│                                                      │
+│        ↕ JSON-RPC                                    │
+│                                                      │
+│      Copilot CLI (installed on host machine)        │
+└──────────────────────────────────┬───────────────────┘
+                                   │ GitHub OAuth
+                                   ▼
+                     GitHub Copilot API
+                     (user's own subscription)
+```
+
+**Key design principle:** CopilotForge never stores or proxies a user’s AI traffic.
+Every prompt goes directly from the local Copilot CLI to GitHub’s API using the user’s own token.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| Mac UI | SwiftUI | Native feel, mature ecosystem, shared models with iOS companion |
+| AI Engine | GitHub Copilot SDK (`@github/copilot-sdk`) | Embeds the full Copilot CLI agentic loop |
+| Sidecar Runtime | Node.js 20 (bundled) | SDK is an npm package; avoids bridge mismatch |
+| UI↔Sidecar Bridge | Local HTTP (Express) or XPC | Simple, debuggable, fast |
+| Code Editor (in-app) | WKWebView + Monaco Editor | Best-in-class editing experience |
+| Preview Pane | WKWebView | Renders generated web apps inline |
+| Auth | GitHub OAuth Device Flow | No passwords, no secrets stored in plaintext |
+| Backend-as-a-service | Supabase (via MCP) | One-click DB + auth for generated apps |
+| Deployment | Vercel / Netlify CLI (via Copilot tools) | Non-developer-friendly deploy |
+| Companion App | SwiftUI iOS | Shared SwiftData models, monitor + approve agent actions |
+
+---
+
+## Phased Roadmap
+
+### ✅ Phase 1 — GitHub Auth + First Prompt (Current)
+**Goal:** Prove the core loop. User signs in with GitHub, types a prompt, and sees Copilot respond.  
+**Deliverable:** Working Mac app shell that authenticates and streams a Copilot response.
+
+#### Scope
+- [x] SwiftUI app skeleton (window, sidebar, chat pane)
+- [x] Node.js sidecar bundled inside the `.app` package
+- [ ] Sidecar launches on app start, exposes `localhost:7878`
+- [ ] GitHub Device Flow OAuth
+- [ ] Token stored securely in macOS Keychain
+- [ ] `POST /prompt` endpoint calls `@github/copilot-sdk`
+- [ ] Streaming response piped back to SwiftUI via SSE or chunked HTTP
+- [ ] Chat bubble UI renders streamed Copilot output
+
+#### Suggested File Structure
+
+```text
+CopilotForge/
+├── CopilotForge.xcodeproj
+├── CopilotForge/
+│   ├── App/
+│   │   ├── CopilotForgeApp.swift
+│   │   └── SidecarManager.swift
+│   ├── Views/
+│   │   ├── ContentView.swift
+│   │   ├── ChatView.swift
+│   │   └── AuthView.swift
+│   ├── Services/
+│   │   ├── GitHubAuthService.swift
+│   │   └── CopilotAPIService.swift
+│   └── Models/
+│       └── ChatMessage.swift
+└── sidecar/
+    ├── package.json
+    ├── index.js
+    ├── copilot.js
+    └── auth.js
+```
+
+#### Phase 1 Sidecar Example (`sidecar/copilot.js`)
+
+```js
+import { CopilotClient } from "@github/copilot-sdk";
+
+let client = null;
+let session = null;
+
+export async function startClient(token) {
+  process.env.GITHUB_TOKEN = token;
+  client = new CopilotClient();
+  await client.start();
+  session = await client.createSession({ model: "gpt-4o" });
+}
+
+export async function sendPrompt(prompt, onChunk) {
+  if (!session) throw new Error("Not authenticated");
+  await session.send({ prompt }, { onChunk });
+}
+```
+
+#### Phase 1 Sidecar Example (`sidecar/index.js`)
+
+```js
+import express from "express";
+import { startClient, sendPrompt } from "./copilot.js";
+
+const app = express();
+app.use(express.json());
+
+app.post("/auth", async (req, res) => {
+  await startClient(req.body.token);
+  res.json({ ok: true });
+});
+
+app.post("/prompt", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  await sendPrompt(req.body.prompt, (chunk) => {
+    res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+  });
+  res.write("data: [DONE]\n\n");
+  res.end();
+});
+
+app.listen(7878, () => console.log("Sidecar ready on :7878"));
+```
+
+#### Phase 1 Sidecar Launch Example (`SidecarManager.swift`)
+
+```swift
+class SidecarManager: ObservableObject {
+    private var process: Process?
+
+    func start() {
+        guard let nodePath = Bundle.main.path(forResource: "node", ofType: nil),
+              let sidecarDir = Bundle.main.resourcePath else { return }
+
+        process = Process()
+        process?.executableURL = URL(fileURLWithPath: nodePath)
+        process?.arguments = ["\(sidecarDir)/sidecar/index.js"]
+        process?.environment = ProcessInfo.processInfo.environment
+        try? process?.run()
+    }
+
+    func stop() { process?.terminate() }
+}
+```
+
+#### Phase 1 Success Criteria
+- App launches without errors
+- GitHub OAuth completes (device flow, no password)
+- User types “What is 2+2?” and sees streamed Copilot response
+- Token survives app restart (stored in Keychain)
+
+---
+
+### 🔜 Phase 2 — App Generation (File Writing + Preview)
+**Goal:** User describes an app, Copilot writes real files to a project folder, and live preview renders.
+
+- Project folder picker / creator
+- File explorer sidebar (NSOutlineView-backed SwiftUI)
+- Copilot SDK file-writing tools enabled (read, write, create, delete)
+- WKWebView preview pane with hot reload on file change
+- Monaco Editor embedded in WKWebView for manual edits
+- “Plan → Build → Review” agent flow (Copilot plan mode)
+- Project state persistence (SwiftData)
+
+---
+
+### 🔜 Phase 3 — Deployment + MCP Integrations
+**Goal:** One-click deploy. Connect to Supabase, GitHub repo, and Vercel.
+
+- Supabase MCP server integration (tables, auth, storage via chat)
+- GitHub MCP integration (create repo, commit, push)
+- Vercel CLI tool integration (single-action deploy)
+- Deployment status shown in companion iOS app
+- Environment variable management (secrets vault, never shown to LLM)
+
+---
+
+### 🔜 Phase 4 — SaaS Layer + iOS Companion
+**Goal:** Monetize the workflow layer (not AI token resale).
+
+- iCloud-backed project sync across user devices
+- iOS companion app: status, approvals, chat on the go
+- Team workspaces for collaborative projects
+- Stripe billing (hosting, advanced templates, priority support)
+- Custom agents marketplace (share/sell workflows)
+
+---
+
+## Business Model
+
+| Tier | Price | Includes |
+|---|---:|---|
+| Free | $0 | 1 active project, community templates |
+| Pro | $15/mo | Unlimited projects, iCloud sync, iOS companion |
+| Team | $25/seat/mo | Shared workspace, deployment pipelines, priority support |
+
+**Positioning:** “Your company already pays for Copilot. Now use it to build, not just to code.”
+
+---
+
+## Prerequisites (Phase 1 Dev Setup)
+
+```bash
+# 1) Install GitHub CLI + Copilot extension
+brew install gh
+gh extension install github/gh-copilot
+
+# 2) Install Node.js 20+ (bundled in final app)
+brew install node@20
+
+# 3) Install sidecar dependencies
+cd sidecar && npm install
+
+# 4) Register a GitHub OAuth App
+# github.com/settings/developers -> New OAuth App
+# Callback URL: x-copilotforge://oauth/callback
+# Keep your Client ID
+
+# 5) Open Xcode project
+open CopilotForge.xcodeproj
+```
+
+---
+
+## GitHub ToS Note
+
+The Copilot SDK is published by GitHub for third-party app builders.  
+Commercial use may be allowed depending on current terms; review the SDK and platform terms before public launch, especially around token handling and resale/proxying patterns.
+
+- Copilot SDK: https://github.com/github/copilot-sdk
+
+---
+
+## Current Status
+
+| Phase | Status |
+|---|---|
+| Phase 1 — Auth + First Prompt | 🔨 In Progress |
+| Phase 2 — File Generation + Preview | 📋 Planned |
+| Phase 3 — Deploy + MCP | 📋 Planned |
+| Phase 4 — SaaS + iOS | 📋 Planned |
+
+---
+
+Built with SwiftUI · Powered by GitHub Copilot SDK · For non-developers with ideas, not IDEs.
