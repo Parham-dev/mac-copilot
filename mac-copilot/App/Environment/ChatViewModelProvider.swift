@@ -1,0 +1,49 @@
+import Foundation
+
+@MainActor
+final class ChatViewModelProvider {
+    private let promptRepository: PromptStreamingRepository
+    private let modelRepository: ModelListingRepository
+    private let chatRepository: ChatRepository
+    private let modelSelectionStore: ModelSelectionStore
+    private let mcpToolsStore: MCPToolsStore
+
+    private var cache: [String: ChatViewModel] = [:]
+
+    init(
+        promptRepository: PromptStreamingRepository,
+        modelRepository: ModelListingRepository,
+        chatRepository: ChatRepository,
+        modelSelectionStore: ModelSelectionStore,
+        mcpToolsStore: MCPToolsStore
+    ) {
+        self.promptRepository = promptRepository
+        self.modelRepository = modelRepository
+        self.chatRepository = chatRepository
+        self.modelSelectionStore = modelSelectionStore
+        self.mcpToolsStore = mcpToolsStore
+    }
+
+    func viewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
+        let cacheKey = "\(project.id.uuidString)|\(chat.id.uuidString)"
+
+        if let existing = cache[cacheKey] {
+            return existing
+        }
+
+        let created = ChatViewModel(
+            chatID: chat.id,
+            chatTitle: chat.title,
+            projectPath: project.localPath,
+            sendPromptUseCase: SendPromptUseCase(repository: promptRepository),
+            fetchModelsUseCase: FetchModelsUseCase(repository: modelRepository),
+            fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: modelRepository),
+            modelSelectionStore: modelSelectionStore,
+            mcpToolsStore: mcpToolsStore,
+            chatRepository: chatRepository
+        )
+
+        cache[cacheKey] = created
+        return created
+    }
+}

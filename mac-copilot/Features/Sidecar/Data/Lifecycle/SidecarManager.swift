@@ -1,8 +1,6 @@
 import Foundation
 
 final class SidecarManager: SidecarLifecycleManaging {
-    static let shared = SidecarManager()
-
     private enum StartReason: String {
         case appBoot = "app_boot"
         case manualRestart = "manual_restart"
@@ -24,7 +22,7 @@ final class SidecarManager: SidecarLifecycleManaging {
     private var isStarting = false
     private var runID: String?
 
-    private init() {}
+    init() {}
 
     func startIfNeeded() {
         queue.async { [weak self] in

@@ -86,6 +86,6 @@ struct ProfileView: View {
 
 #Preview {
     let environment = AppEnvironment.preview()
-    ProfileView(viewModel: environment.sharedProfileViewModel())
+    ProfileView(viewModel: environment.profileViewModel)
         .environmentObject(environment.authViewModel)
 }

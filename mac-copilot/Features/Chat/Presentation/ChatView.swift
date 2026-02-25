@@ -56,7 +56,7 @@ struct ChatView: View {
         let chat = environment.shellViewModel.chats(for: project.id).first ?? ChatThreadRef(projectID: project.id, title: "General")
         ChatView(
             viewModel: environment.chatViewModel(for: chat, project: project),
-            modelSelectionStore: environment.sharedModelSelectionStore()
+            modelSelectionStore: environment.modelSelectionStore
         )
     }
 }

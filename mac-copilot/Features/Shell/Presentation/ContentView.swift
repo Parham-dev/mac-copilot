@@ -17,12 +17,14 @@ struct ContentView: View {
     @State private var showsMCPToolsSheet = false
     private let projectCreationService: ProjectCreationService
 
-    init(shellViewModel: ShellViewModel, projectCreationService: ProjectCreationService = ProjectCreationService()) {
+    init(shellViewModel: ShellViewModel, projectCreationService: ProjectCreationService) {
         self.shellViewModel = shellViewModel
         self.projectCreationService = projectCreationService
     }
 
     var body: some View {
+        let companionStatusStore = appEnvironment.companionStatusStore
+
         NavigationSplitView {
             ShellSidebarView(
                 shellViewModel: shellViewModel,
@@ -41,10 +43,10 @@ struct ContentView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(appEnvironment.sharedCompanionStatusStore().statusColor)
+                                .fill(companionStatusStore.statusColor)
                                 .frame(width: 6, height: 6)
                             Image(systemName: "iphone")
-                            Text(appEnvironment.sharedCompanionStatusStore().statusLabel)
+                            Text(companionStatusStore.statusLabel)
                                 .font(.caption)
                         }
                     }
@@ -79,22 +81,22 @@ struct ContentView: View {
         .sheet(isPresented: $showsCompanionSheet) {
             CompanionManagementSheet(
                 isPresented: $showsCompanionSheet,
-                companionStatusStore: appEnvironment.sharedCompanionStatusStore()
+                companionStatusStore: companionStatusStore
             )
             .frame(minWidth: 680, minHeight: 480)
         }
         .sheet(isPresented: $showsModelsSheet) {
             ModelsManagementSheet(
                 isPresented: $showsModelsSheet,
-                modelSelectionStore: appEnvironment.sharedModelSelectionStore(),
-                modelRepository: appEnvironment.sharedModelRepository()
+                modelSelectionStore: appEnvironment.modelSelectionStore,
+                modelRepository: appEnvironment.modelRepository
             )
                 .frame(minWidth: 980, minHeight: 640)
         }
         .sheet(isPresented: $showsMCPToolsSheet) {
             MCPToolsManagementSheet(
                 isPresented: $showsMCPToolsSheet,
-                mcpToolsStore: appEnvironment.sharedMCPToolsStore()
+                mcpToolsStore: appEnvironment.mcpToolsStore
             )
             .frame(minWidth: 980, minHeight: 640)
         }
@@ -126,7 +128,7 @@ struct ContentView: View {
 
 #Preview {
     let environment = AppEnvironment.preview()
-    ContentView(shellViewModel: environment.shellViewModel)
+    ContentView(shellViewModel: environment.shellViewModel, projectCreationService: environment.projectCreationService)
         .environmentObject(environment)
         .environmentObject(environment.authViewModel)
 }

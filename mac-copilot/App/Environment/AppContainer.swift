@@ -3,7 +3,7 @@ import FactoryKit
 
 extension Container {
     var sidecarLifecycleManager: Factory<any SidecarLifecycleManaging> {
-        self { @MainActor in SidecarManager.shared }
+        self { @MainActor in SidecarManager() }
             .singleton
     }
 
@@ -22,11 +22,26 @@ extension Container {
             .singleton
     }
 
+    var modelSelectionStore: Factory<ModelSelectionStore> {
+        self { @MainActor in ModelSelectionStore(preferencesStore: self.modelSelectionPreferencesStore()) }
+            .singleton
+    }
+
+    var mcpToolsStore: Factory<MCPToolsStore> {
+        self { @MainActor in MCPToolsStore(preferencesStore: self.mcpToolsPreferencesStore()) }
+            .singleton
+    }
+
     var companionConnectionService: Factory<any CompanionConnectionServicing> {
         self { @MainActor in
             let client = SidecarCompanionClient(sidecarLifecycle: self.sidecarLifecycleManager())
             return SidecarCompanionConnectionService(client: client)
         }
+            .singleton
+    }
+
+    var companionStatusStore: Factory<CompanionStatusStore> {
+        self { @MainActor in CompanionStatusStore(service: self.companionConnectionService()) }
             .singleton
     }
 
@@ -88,6 +103,13 @@ extension Container {
             .singleton
     }
 
+    var profileViewModel: Factory<ProfileViewModel> {
+        self { @MainActor in
+            ProfileViewModel(fetchProfileUseCase: FetchProfileUseCase(repository: self.profileRepository()))
+        }
+        .singleton
+    }
+
     var controlCenterResolver: Factory<ProjectControlCenterResolver> {
         self { @MainActor in
             ProjectControlCenterResolver(adapters: [
@@ -104,6 +126,35 @@ extension Container {
                 PythonRuntimeAdapter(),
                 SimpleHTMLRuntimeAdapter(),
             ])
+        }
+        .singleton
+    }
+
+    var chatViewModelProvider: Factory<ChatViewModelProvider> {
+        self { @MainActor in
+            ChatViewModelProvider(
+                promptRepository: self.promptRepository(),
+                modelRepository: self.modelRepository(),
+                chatRepository: self.chatRepository(),
+                modelSelectionStore: self.modelSelectionStore(),
+                mcpToolsStore: self.mcpToolsStore()
+            )
+        }
+        .singleton
+    }
+
+    var projectCreationService: Factory<ProjectCreationService> {
+        self { @MainActor in ProjectCreationService() }
+            .singleton
+    }
+
+    var appBootstrapService: Factory<AppBootstrapService> {
+        self { @MainActor in
+            AppBootstrapService(
+                sidecarLifecycle: self.sidecarLifecycleManager(),
+                authViewModel: self.authViewModel(),
+                companionStatusStore: self.companionStatusStore()
+            )
         }
         .singleton
     }

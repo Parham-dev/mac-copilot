@@ -156,9 +156,9 @@ struct ContextPaneView: View {
     ContextPaneView(
         shellViewModel: environment.shellViewModel,
         project: project,
-        controlCenterResolver: environment.sharedControlCenterResolver(),
-        controlCenterRuntimeManager: environment.sharedControlCenterRuntimeManager(),
-        gitRepositoryManager: environment.sharedGitRepositoryManager(),
+        controlCenterResolver: environment.controlCenterResolver,
+        controlCenterRuntimeManager: environment.controlCenterRuntimeManager,
+        gitRepositoryManager: environment.gitRepositoryManager,
         onFixLogsRequest: nil
     )
 }

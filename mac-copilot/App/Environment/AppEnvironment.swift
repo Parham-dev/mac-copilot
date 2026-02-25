@@ -13,114 +13,50 @@ final class AppEnvironment: ObservableObject {
     let shellViewModel: ShellViewModel
     @Published private(set) var launchPhase: LaunchPhase = .checking
 
-    private let promptRepository: PromptStreamingRepository
-    private let modelRepository: ModelListingRepository
-    private let profileRepository: ProfileRepository
-    private let chatRepository: ChatRepository
-    private let controlCenterResolver: ProjectControlCenterResolver
-    private let controlCenterRuntimeManager: ControlCenterRuntimeManager
-    private let sidecarLifecycle: SidecarLifecycleManaging
-    private let gitRepositoryManager: GitRepositoryManaging
-    private let companionConnectionService: CompanionConnectionServicing
+    let modelRepository: ModelListingRepository
+    let controlCenterResolver: ProjectControlCenterResolver
+    let controlCenterRuntimeManager: ControlCenterRuntimeManager
+    let gitRepositoryManager: GitRepositoryManaging
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
     let companionStatusStore: CompanionStatusStore
-    private var chatViewModels: [String: ChatViewModel] = [:]
-    private var didBootstrap = false
-    private lazy var profileViewModel: ProfileViewModel = {
-        let useCase = FetchProfileUseCase(repository: profileRepository)
-        return ProfileViewModel(fetchProfileUseCase: useCase)
-    }()
+    let profileViewModel: ProfileViewModel
+    let projectCreationService: ProjectCreationService
+
+    private let bootstrapService: AppBootstrapService
+    private let chatViewModelProvider: ChatViewModelProvider
 
     init(container: Container = .shared) {
         self.authViewModel = container.authViewModel()
-        self.chatRepository = container.chatRepository()
+        let chatRepository = container.chatRepository()
         self.shellViewModel = ShellViewModel(
             projectRepository: container.projectRepository(),
-            chatRepository: self.chatRepository
+            chatRepository: chatRepository
         )
-        self.promptRepository = container.promptRepository()
         self.modelRepository = container.modelRepository()
-        self.profileRepository = container.profileRepository()
         self.controlCenterResolver = container.controlCenterResolver()
         self.controlCenterRuntimeManager = container.controlCenterRuntimeManager()
-        self.sidecarLifecycle = container.sidecarLifecycleManager()
         self.gitRepositoryManager = container.gitRepositoryManager()
-        self.companionConnectionService = container.companionConnectionService()
-        self.modelSelectionStore = ModelSelectionStore(preferencesStore: container.modelSelectionPreferencesStore())
-        self.mcpToolsStore = MCPToolsStore(preferencesStore: container.mcpToolsPreferencesStore())
-        self.companionStatusStore = CompanionStatusStore(service: companionConnectionService)
+        self.modelSelectionStore = container.modelSelectionStore()
+        self.mcpToolsStore = container.mcpToolsStore()
+        self.companionStatusStore = container.companionStatusStore()
+        self.profileViewModel = container.profileViewModel()
+        self.projectCreationService = container.projectCreationService()
+        self.bootstrapService = container.appBootstrapService()
+        self.chatViewModelProvider = container.chatViewModelProvider()
     }
 
     func bootstrapIfNeeded() async {
-        guard !didBootstrap else { return }
-        didBootstrap = true
-
         launchPhase = .checking
-        sidecarLifecycle.startIfNeeded()
-        await authViewModel.restoreSessionIfNeeded()
-        await companionStatusStore.refreshStatus()
+        await bootstrapService.bootstrapIfNeeded()
         launchPhase = .ready
     }
 
     func chatViewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
-        let cacheKey = "\(project.id.uuidString)|\(chat.id.uuidString)"
-
-        if let existing = chatViewModels[cacheKey] {
-            return existing
-        }
-
-        let sendUseCase = SendPromptUseCase(repository: promptRepository)
-        let fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
-        let fetchModelCatalogUseCase = FetchModelCatalogUseCase(repository: modelRepository)
-        let created = ChatViewModel(
-            chatID: chat.id,
-            chatTitle: chat.title,
-            projectPath: project.localPath,
-            sendPromptUseCase: sendUseCase,
-            fetchModelsUseCase: fetchModelsUseCase,
-            fetchModelCatalogUseCase: fetchModelCatalogUseCase,
-            modelSelectionStore: modelSelectionStore,
-            mcpToolsStore: mcpToolsStore,
-            chatRepository: chatRepository
-        )
-        chatViewModels[cacheKey] = created
-        return created
-    }
-
-    func sharedProfileViewModel() -> ProfileViewModel {
-        profileViewModel
-    }
-
-    func sharedControlCenterResolver() -> ProjectControlCenterResolver {
-        controlCenterResolver
-    }
-
-    func sharedControlCenterRuntimeManager() -> ControlCenterRuntimeManager {
-        controlCenterRuntimeManager
-    }
-
-    func sharedModelSelectionStore() -> ModelSelectionStore {
-        modelSelectionStore
-    }
-
-    func sharedMCPToolsStore() -> MCPToolsStore {
-        mcpToolsStore
-    }
-
-    func sharedGitRepositoryManager() -> GitRepositoryManaging {
-        gitRepositoryManager
-    }
-
-    func sharedModelRepository() -> ModelListingRepository {
-        modelRepository
-    }
-
-    func sharedCompanionStatusStore() -> CompanionStatusStore {
-        companionStatusStore
+        chatViewModelProvider.viewModel(for: chat, project: project)
     }
 
     static func preview() -> AppEnvironment {
-        AppEnvironment()
+        Container.shared.appEnvironment()
     }
 }

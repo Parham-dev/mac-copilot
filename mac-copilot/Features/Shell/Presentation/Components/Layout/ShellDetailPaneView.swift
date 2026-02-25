@@ -11,7 +11,7 @@ struct ShellDetailPaneView: View {
         } else if let selectedItem = shellViewModel.selectedItem {
             switch selectedItem {
             case .profile:
-                ProfileView(viewModel: appEnvironment.sharedProfileViewModel())
+                ProfileView(viewModel: appEnvironment.profileViewModel)
             case .chat(let projectID, let selectedChatID):
                 chatDetailContent(projectID: projectID, selectedChatID: selectedChatID)
             }
@@ -29,16 +29,16 @@ struct ShellDetailPaneView: View {
             HSplitView {
                 ChatView(
                     viewModel: chatViewModel,
-                    modelSelectionStore: appEnvironment.sharedModelSelectionStore()
+                    modelSelectionStore: appEnvironment.modelSelectionStore
                 )
                     .frame(minWidth: 300, idealWidth: 470)
 
                 ContextPaneView(
                     shellViewModel: shellViewModel,
                     project: activeProject,
-                    controlCenterResolver: appEnvironment.sharedControlCenterResolver(),
-                    controlCenterRuntimeManager: appEnvironment.sharedControlCenterRuntimeManager(),
-                    gitRepositoryManager: appEnvironment.sharedGitRepositoryManager(),
+                    controlCenterResolver: appEnvironment.controlCenterResolver,
+                    controlCenterRuntimeManager: appEnvironment.controlCenterRuntimeManager,
+                    gitRepositoryManager: appEnvironment.gitRepositoryManager,
                     onFixLogsRequest: { prompt in
                         Task {
                             await chatViewModel.send(prompt: prompt)

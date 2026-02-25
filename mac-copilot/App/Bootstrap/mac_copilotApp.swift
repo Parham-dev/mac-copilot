@@ -6,10 +6,11 @@
 //
 
 import SwiftUI
+import FactoryKit
 
 @main
 struct mac_copilotApp: App {
-    @StateObject private var appEnvironment = AppEnvironment()
+    @StateObject private var appEnvironment = Container.shared.appEnvironment()
 
     var body: some Scene {
         WindowGroup {

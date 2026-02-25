@@ -9,7 +9,10 @@ struct OnboardingRootView: View {
             if appEnvironment.launchPhase == .checking {
                 loadingView
             } else if authViewModel.isAuthenticated {
-                ContentView(shellViewModel: appEnvironment.shellViewModel)
+                ContentView(
+                    shellViewModel: appEnvironment.shellViewModel,
+                    projectCreationService: appEnvironment.projectCreationService
+                )
             } else {
                 onboardingView
             }
