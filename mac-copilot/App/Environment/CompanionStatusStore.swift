@@ -11,7 +11,15 @@ final class CompanionStatusStore: ObservableObject {
     }
 
     @Published private(set) var status: Status = .disconnected
-    @Published private(set) var pairingCode: String = CompanionStatusStore.generatePairingCode()
+    @Published private(set) var pairingCode: String = "------"
+    @Published private(set) var isBusy = false
+    @Published private(set) var lastErrorMessage: String?
+
+    private let service: CompanionConnectionServicing
+
+    init(service: CompanionConnectionServicing) {
+        self.service = service
+    }
 
     var statusLabel: String {
         switch status {
@@ -49,21 +57,53 @@ final class CompanionStatusStore: ObservableObject {
         return deviceName
     }
 
-    func startPairing() {
-        pairingCode = Self.generatePairingCode()
-        status = .pairing
+    func refreshStatus() async {
+        await runOperation {
+            let snapshot = try await service.fetchStatus()
+            apply(snapshot)
+        }
     }
 
-    func markConnected(deviceName: String) {
-        status = .connected(deviceName: deviceName, connectedAt: Date())
+    func startPairing() async {
+        await runOperation {
+            let session = try await service.startPairing()
+            pairingCode = session.code
+            status = .pairing
+        }
     }
 
-    func disconnect() {
-        status = .disconnected
+    func connect(deviceName: String) async {
+        await runOperation {
+            let snapshot = try await service.connect(deviceName: deviceName)
+            apply(snapshot)
+        }
     }
 
-    private static func generatePairingCode() -> String {
-        let value = Int.random(in: 0 ... 999_999)
-        return String(format: "%06d", value)
+    func disconnect() async {
+        await runOperation {
+            let snapshot = try await service.disconnect()
+            apply(snapshot)
+            pairingCode = "------"
+        }
+    }
+
+    private func runOperation(_ operation: () async throws -> Void) async {
+        isBusy = true
+        lastErrorMessage = nil
+        defer { isBusy = false }
+
+        do {
+            try await operation()
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func apply(_ snapshot: CompanionConnectionSnapshot) {
+        if snapshot.isConnected {
+            status = .connected(deviceName: snapshot.connectedDeviceName ?? "iPhone", connectedAt: snapshot.connectedAt ?? Date())
+        } else {
+            status = .disconnected
+        }
     }
 }

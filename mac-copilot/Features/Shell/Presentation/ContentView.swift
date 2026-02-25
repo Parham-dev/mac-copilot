@@ -26,10 +26,8 @@ struct ContentView: View {
         NavigationSplitView {
             ShellSidebarView(
                 shellViewModel: shellViewModel,
-                companionStatusStore: appEnvironment.sharedCompanionStatusStore(),
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
-                onManageCompanion: { showsCompanionSheet = true },
                 onManageModels: { showsModelsSheet = true },
                 onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
@@ -37,6 +35,23 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 260, ideal: 300)
             .navigationTitle("CopilotForge")
             .toolbar {
+                ToolbarItem {
+                    Button {
+                        showsCompanionSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(appEnvironment.sharedCompanionStatusStore().statusColor)
+                                .frame(width: 6, height: 6)
+                            Image(systemName: "iphone")
+                            Text(appEnvironment.sharedCompanionStatusStore().statusLabel)
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("Mobile companion status")
+                }
+
                 ToolbarItem {
                     Button(action: shellViewModel.createChatInActiveProject) {
                         Label("New Chat", systemImage: "plus")

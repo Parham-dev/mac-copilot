@@ -22,6 +22,11 @@ extension Container {
             .singleton
     }
 
+    var companionConnectionService: Factory<any CompanionConnectionServicing> {
+        self { @MainActor in InMemoryCompanionConnectionService() }
+            .singleton
+    }
+
     var gitRepositoryManager: Factory<any GitRepositoryManaging> {
         self { @MainActor in LocalGitRepositoryManager() }
             .singleton

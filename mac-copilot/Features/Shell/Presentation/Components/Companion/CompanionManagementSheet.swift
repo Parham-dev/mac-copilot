@@ -3,6 +3,7 @@ import SwiftUI
 struct CompanionManagementSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject var companionStatusStore: CompanionStatusStore
+    @State private var deviceName = "Parham’s iPhone"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -29,6 +30,17 @@ struct CompanionManagementSheet: View {
                 pairingSection
             }
 
+            if companionStatusStore.isBusy {
+                ProgressView("Updating companion state…")
+                    .font(.callout)
+            }
+
+            if let lastErrorMessage = companionStatusStore.lastErrorMessage {
+                Text(lastErrorMessage)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
+
             Spacer(minLength: 0)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -43,6 +55,9 @@ struct CompanionManagementSheet: View {
             .foregroundStyle(.secondary)
         }
         .padding(20)
+        .task {
+            await companionStatusStore.refreshStatus()
+        }
     }
 
     private var statusCard: some View {
@@ -75,11 +90,22 @@ struct CompanionManagementSheet: View {
 
                     HStack(spacing: 10) {
                         Button("Generate New Code") {
-                            companionStatusStore.startPairing()
+                            Task {
+                                await companionStatusStore.startPairing()
+                            }
                         }
-                        Button("Simulate Connected") {
-                            companionStatusStore.markConnected(deviceName: "Parham’s iPhone")
+                        .disabled(companionStatusStore.isBusy)
+
+                        TextField("Device name", text: $deviceName)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 180)
+
+                        Button("Connect") {
+                            Task {
+                                await companionStatusStore.connect(deviceName: deviceName)
+                            }
                         }
+                        .disabled(companionStatusStore.isBusy)
                     }
                 }
 
@@ -108,8 +134,11 @@ struct CompanionManagementSheet: View {
                     .font(.body.weight(.medium))
                 Spacer()
                 Button("Disconnect", role: .destructive) {
-                    companionStatusStore.disconnect()
+                    Task {
+                        await companionStatusStore.disconnect()
+                    }
                 }
+                .disabled(companionStatusStore.isBusy)
             }
             .padding(12)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

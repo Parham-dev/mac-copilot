@@ -2,10 +2,8 @@ import SwiftUI
 
 struct ShellSidebarView: View {
     @ObservedObject var shellViewModel: ShellViewModel
-    @ObservedObject var companionStatusStore: CompanionStatusStore
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
-    let onManageCompanion: () -> Void
     let onManageModels: () -> Void
     let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
@@ -70,9 +68,6 @@ struct ShellSidebarView: View {
 
     private var projectsHeader: some View {
         ShellSidebarProjectsHeaderView(
-            statusLabel: companionStatusStore.statusLabel,
-            statusColor: companionStatusStore.statusColor,
-            onManageCompanion: onManageCompanion,
             onCreateProject: onCreateProject
         )
     }

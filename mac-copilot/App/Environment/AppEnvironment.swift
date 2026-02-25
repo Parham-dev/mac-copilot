@@ -21,6 +21,7 @@ final class AppEnvironment: ObservableObject {
     private let controlCenterRuntimeManager: ControlCenterRuntimeManager
     private let sidecarLifecycle: SidecarLifecycleManaging
     private let gitRepositoryManager: GitRepositoryManaging
+    private let companionConnectionService: CompanionConnectionServicing
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
     let companionStatusStore: CompanionStatusStore
@@ -45,9 +46,10 @@ final class AppEnvironment: ObservableObject {
         self.controlCenterRuntimeManager = container.controlCenterRuntimeManager()
         self.sidecarLifecycle = container.sidecarLifecycleManager()
         self.gitRepositoryManager = container.gitRepositoryManager()
+        self.companionConnectionService = container.companionConnectionService()
         self.modelSelectionStore = ModelSelectionStore(preferencesStore: container.modelSelectionPreferencesStore())
         self.mcpToolsStore = MCPToolsStore(preferencesStore: container.mcpToolsPreferencesStore())
-        self.companionStatusStore = CompanionStatusStore()
+        self.companionStatusStore = CompanionStatusStore(service: companionConnectionService)
     }
 
     func bootstrapIfNeeded() async {
@@ -57,6 +59,7 @@ final class AppEnvironment: ObservableObject {
         launchPhase = .checking
         sidecarLifecycle.startIfNeeded()
         await authViewModel.restoreSessionIfNeeded()
+        await companionStatusStore.refreshStatus()
         launchPhase = .ready
     }
 
