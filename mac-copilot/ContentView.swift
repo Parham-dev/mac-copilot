@@ -31,6 +31,16 @@ struct ContentView: View {
                             .tag(SidebarItem.chat(chat))
                     }
                 }
+
+                if authService.isAuthenticated {
+                    Section {
+                        Button {
+                            authService.signOut()
+                        } label: {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .navigationTitle("CopilotForge")
@@ -40,14 +50,6 @@ struct ContentView: View {
                         Label("New Chat", systemImage: "plus")
                     }
                     .disabled(!authService.isAuthenticated)
-                }
-
-                ToolbarItem {
-                    if authService.isAuthenticated {
-                        Button("Sign Out") {
-                            authService.signOut()
-                        }
-                    }
                 }
             }
         } detail: {

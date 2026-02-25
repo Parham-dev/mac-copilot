@@ -22,9 +22,18 @@ final class GitHubProfileService: ObservableObject {
         let plan: String?
     }
 
+    struct CopilotReport {
+        let sessionReady: Bool
+        let usingGitHubToken: Bool
+        let oauthScope: String?
+        let lastAuthAt: String?
+        let lastAuthError: String?
+    }
+
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var userProfile: UserProfile?
+    @Published var copilotReport: CopilotReport?
     @Published var rawUserJSON = ""
     @Published var checks: [EndpointCheck] = []
 
@@ -35,6 +44,7 @@ final class GitHubProfileService: ObservableObject {
         isLoading = true
         errorMessage = nil
         checks = []
+        copilotReport = nil
         NSLog("[CopilotForge][Profile] Refresh started")
 
         do {
@@ -68,6 +78,7 @@ final class GitHubProfileService: ObservableObject {
 
             let copilotResult = try await requestLocal(path: "copilot/report")
             NSLog("[CopilotForge][Profile] local:/copilot/report status=%d body=%@", copilotResult.statusCode, preview(from: copilotResult.data))
+            copilotReport = parseCopilotReport(from: copilotResult.data)
             builtChecks.append(
                 EndpointCheck(
                     name: "Copilot SDK Session Report",
@@ -132,6 +143,20 @@ final class GitHubProfileService: ObservableObject {
             publicRepos: object["public_repos"] as? Int,
             followers: object["followers"] as? Int,
             plan: planName
+        )
+    }
+
+    private func parseCopilotReport(from data: Data) -> CopilotReport? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        return CopilotReport(
+            sessionReady: object["sessionReady"] as? Bool ?? false,
+            usingGitHubToken: object["usingGitHubToken"] as? Bool ?? false,
+            oauthScope: object["oauthScope"] as? String,
+            lastAuthAt: object["lastAuthAt"] as? String,
+            lastAuthError: object["lastAuthError"] as? String
         )
     }
 
