@@ -56,6 +56,11 @@ struct CompanionManagementSheet: View {
         .padding(20)
         .task {
             await companionStatusStore.refreshStatus()
+
+            if !companionStatusStore.isConnected,
+               companionStatusStore.pairingQRCodePayload == nil {
+                await companionStatusStore.startPairing()
+            }
         }
     }
 
