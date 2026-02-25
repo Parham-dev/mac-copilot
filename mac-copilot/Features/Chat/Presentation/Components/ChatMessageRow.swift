@@ -68,7 +68,7 @@ struct ChatMessageRow: View {
 
                     if !message.text.isEmpty {
                         Button {
-                            copyToClipboard(message.text)
+                            copyToClipboard(fullCopyText)
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
                                 .font(.caption)
@@ -133,5 +133,31 @@ struct ChatMessageRow: View {
     private func copyToClipboard(_ value: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    private var fullCopyText: String {
+        var sections: [String] = []
+
+        if !message.text.isEmpty {
+            sections.append(message.text)
+        }
+
+        if !statusChips.isEmpty {
+            let statusBlock = statusChips.joined(separator: "\n- ")
+            sections.append("Status:\n- \(statusBlock)")
+        }
+
+        if !toolExecutions.isEmpty {
+            let toolLines = toolExecutions.map { tool in
+                let state = tool.success ? "success" : "failed"
+                if let details = tool.details, !details.isEmpty {
+                    return "- \(tool.toolName) [\(state)]\n  \(details)"
+                }
+                return "- \(tool.toolName) [\(state)]"
+            }
+            sections.append("Tool Calls:\n\(toolLines.joined(separator: "\n"))")
+        }
+
+        return sections.joined(separator: "\n\n")
     }
 }

@@ -8,6 +8,26 @@ let lastAuthAt = null;
 let activeModel = "gpt-5";
 let activeWorkingDirectory = null;
 
+function ensureCopilotShellPath() {
+  const currentPath = String(process.env.PATH ?? "");
+  const requiredSegments = [
+    "/opt/homebrew/bin",
+    "/opt/homebrew/opt/node@20/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+  ];
+
+  const existing = new Set(currentPath.split(":").filter((entry) => entry.length > 0));
+  for (const segment of requiredSegments) {
+    existing.add(segment);
+  }
+
+  process.env.PATH = Array.from(existing).join(":");
+}
+
 export function isAuthenticated() {
   return session !== null;
 }
@@ -15,6 +35,7 @@ export function isAuthenticated() {
 export async function startClient(token) {
   try {
     process.env.GITHUB_TOKEN = token;
+    ensureCopilotShellPath();
     client = new CopilotClient();
     await client.start();
     session = await client.createSession({
@@ -143,6 +164,8 @@ export async function sendPrompt(prompt, model, projectPath, onEvent) {
     rejectDone(new Error(`Copilot response timed out after ${timeoutMs}ms`));
   }, timeoutMs);
 
+  const toolNameByCallID = new Map();
+
   onEvent({ type: "status", label: "Analyzing request" });
 
   const unsubscribeTurnStart = session.on("assistant.turn_start", () => {
@@ -167,13 +190,30 @@ export async function sendPrompt(prompt, model, projectPath, onEvent) {
   });
 
   const unsubscribeToolStart = session.on("tool.execution_start", (event) => {
+    const toolCallID = event?.data?.toolCallId;
+    const toolName = event?.data?.toolName ?? event?.data?.mcpToolName ?? "Tool";
+
+    if (typeof toolCallID === "string" && toolCallID.length > 0) {
+      toolNameByCallID.set(toolCallID, toolName);
+    }
+
     onEvent({
       type: "tool_start",
-      toolName: event?.data?.toolName ?? "Tool",
+      toolName,
     });
   });
 
   const unsubscribeToolComplete = session.on("tool.execution_complete", (event) => {
+    const toolCallID = event?.data?.toolCallId;
+    const toolName =
+      event?.data?.toolName
+      ?? (typeof toolCallID === "string" ? toolNameByCallID.get(toolCallID) : null)
+      ?? "Tool";
+
+    if (typeof toolCallID === "string" && toolCallID.length > 0) {
+      toolNameByCallID.delete(toolCallID);
+    }
+
     const resultContents = event?.data?.result?.contents;
     const firstContentText = Array.isArray(resultContents)
       ? resultContents
@@ -209,7 +249,7 @@ export async function sendPrompt(prompt, model, projectPath, onEvent) {
 
     onEvent({
       type: "tool_complete",
-      toolName: event?.data?.toolName ?? "Tool",
+      toolName,
       success: event?.data?.success !== false,
       details: details.length > 0 ? details.slice(0, 280) : undefined,
     });
