@@ -13,7 +13,7 @@ struct ChatToolbarControlsView: View {
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .frame(minWidth: 140)
+            .frame(minWidth: 110)
 
             Text("Model")
                 .font(.caption)

@@ -10,6 +10,7 @@ final class AppEnvironment: ObservableObject {
     private let modelRepository: ModelListingRepository
     private let profileRepository: ProfileRepository
     private let previewResolver: ProjectPreviewResolver
+    private let previewRuntimeManager: PreviewRuntimeManager
     private var chatViewModels: [String: ChatViewModel] = [:]
     private lazy var profileViewModel: ProfileViewModel = {
         let useCase = FetchProfileUseCase(repository: profileRepository)
@@ -31,6 +32,11 @@ final class AppEnvironment: ObservableObject {
         self.profileRepository = GitHubProfileRepository()
         self.previewResolver = ProjectPreviewResolver(adapters: [
             SimpleHTMLPreviewAdapter()
+        ])
+        self.previewRuntimeManager = PreviewRuntimeManager(adapters: [
+            NodeRuntimeAdapter(),
+            PythonRuntimeAdapter(),
+            SimpleHTMLRuntimeAdapter(),
         ])
     }
 
@@ -59,6 +65,10 @@ final class AppEnvironment: ObservableObject {
 
     func sharedPreviewResolver() -> ProjectPreviewResolver {
         previewResolver
+    }
+
+    func sharedPreviewRuntimeManager() -> PreviewRuntimeManager {
+        previewRuntimeManager
     }
 
     static func preview() -> AppEnvironment {

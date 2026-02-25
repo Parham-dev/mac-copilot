@@ -1,0 +1,143 @@
+import SwiftUI
+import AppKit
+
+struct WindowFrameGuard: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ObserverView()
+        view.onWindowChange = { window in
+            context.coordinator.bind(to: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    final class Coordinator {
+        private weak var window: NSWindow?
+        private var observers: [NSObjectProtocol] = []
+
+        deinit {
+            removeObservers()
+        }
+
+        func bind(to window: NSWindow?) {
+            guard let window else { return }
+            guard self.window !== window else {
+                clamp(window: window)
+                return
+            }
+
+            removeObservers()
+            self.window = window
+
+            clamp(window: window)
+
+            let center = NotificationCenter.default
+            observers.append(
+                center.addObserver(
+                    forName: NSWindow.didResizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    guard let self, let window = self.window else { return }
+                    self.clamp(window: window)
+                }
+            )
+
+            observers.append(
+                center.addObserver(
+                    forName: NSWindow.didChangeScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    guard let self, let window = self.window else { return }
+                    self.clamp(window: window)
+                }
+            )
+
+            observers.append(
+                center.addObserver(
+                    forName: NSApplication.didChangeScreenParametersNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    guard let self, let window = self.window else { return }
+                    self.clamp(window: window)
+                }
+            )
+        }
+
+        private func clamp(window: NSWindow) {
+            guard let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else { return }
+
+            let horizontalPadding: CGFloat = 20
+            let verticalPadding: CGFloat = 24
+            let maxWidth = max(visible.width - horizontalPadding, 700)
+            let maxHeight = max(visible.height - verticalPadding, 560)
+
+            let preferredMinWidth: CGFloat = 900
+            let preferredMinHeight: CGFloat = 700
+            let clampedMinWidth = min(preferredMinWidth, maxWidth)
+            let clampedMinHeight = min(preferredMinHeight, maxHeight)
+            window.minSize = NSSize(width: clampedMinWidth, height: clampedMinHeight)
+
+            var frame = window.frame
+            var changed = false
+
+            if frame.width > maxWidth {
+                frame.size.width = maxWidth
+                changed = true
+            }
+
+            if frame.height > maxHeight {
+                frame.size.height = maxHeight
+                changed = true
+            }
+
+            if frame.minX < visible.minX {
+                frame.origin.x = visible.minX
+                changed = true
+            }
+
+            if frame.maxX > visible.maxX {
+                frame.origin.x = visible.maxX - frame.width
+                changed = true
+            }
+
+            if frame.minY < visible.minY {
+                frame.origin.y = visible.minY
+                changed = true
+            }
+
+            if frame.maxY > visible.maxY {
+                frame.origin.y = visible.maxY - frame.height
+                changed = true
+            }
+
+            if changed {
+                window.setFrame(frame, display: true, animate: false)
+            }
+        }
+
+        private func removeObservers() {
+            let center = NotificationCenter.default
+            for observer in observers {
+                center.removeObserver(observer)
+            }
+            observers.removeAll()
+        }
+    }
+
+    final class ObserverView: NSView {
+        var onWindowChange: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChange?(window)
+        }
+    }
+}

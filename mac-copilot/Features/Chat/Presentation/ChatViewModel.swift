@@ -46,6 +46,11 @@ final class ChatViewModel: ObservableObject {
 
     func send() async {
         let text = draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        await send(prompt: text)
+    }
+
+    func send(prompt: String) async {
+        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         guard !isSending else { return }
 

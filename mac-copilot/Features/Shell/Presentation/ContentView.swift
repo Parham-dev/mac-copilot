@@ -61,7 +61,6 @@ struct ContentView: View {
                                 }
                                 .menuIndicator(.hidden)
                                 .menuStyle(.borderlessButton)
-                                .fixedSize()
 
                                 if shellViewModel.activeProjectID == project.id {
                                     Image(systemName: "checkmark")
@@ -97,7 +96,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 210)
             .navigationTitle("CopilotForge")
             .toolbar {
                 ToolbarItem {
@@ -116,21 +115,28 @@ struct ContentView: View {
                     ProfileView(viewModel: appEnvironment.sharedProfileViewModel())
                 case .chat(let projectID, let selectedChat):
                     if let activeProject = shellViewModel.project(for: projectID) {
+                        let chatViewModel = appEnvironment.chatViewModel(for: selectedChat, project: activeProject)
+
                         VStack(spacing: 0) {
                             activeProjectHeader(activeProject)
                             Divider()
 
                             HSplitView {
-                                ChatView(viewModel: appEnvironment.chatViewModel(for: selectedChat, project: activeProject))
-                                    .frame(idealWidth: 760)
-                                    .layoutPriority(1)
+                                ChatView(viewModel: chatViewModel)
+                                    .frame(minWidth: 300, idealWidth: 470)
 
                                 ContextPaneView(
                                     shellViewModel: shellViewModel,
                                     project: activeProject,
-                                    previewResolver: appEnvironment.sharedPreviewResolver()
+                                    previewResolver: appEnvironment.sharedPreviewResolver(),
+                                    previewRuntimeManager: appEnvironment.sharedPreviewRuntimeManager(),
+                                    onFixLogsRequest: { prompt in
+                                        Task {
+                                            await chatViewModel.send(prompt: prompt)
+                                        }
+                                    }
                                 )
-                                    .frame(idealWidth: 420)
+                                    .frame(minWidth: 300, idealWidth: 470)
                             }
                         }
                     } else {
