@@ -11,6 +11,7 @@ struct ChatComposerView: View {
     @Binding var draftPrompt: String
     @Binding var selectedModel: String
     let availableModels: [String]
+    let selectedModelInfoLabel: String
     let isSending: Bool
     let onSend: () -> Void
 
@@ -82,7 +83,11 @@ struct ChatComposerView: View {
             }
 
             HStack {
-                ChatToolbarControlsView(selectedModel: $selectedModel, availableModels: availableModels)
+                ChatToolbarControlsView(
+                    selectedModel: $selectedModel,
+                    availableModels: availableModels,
+                    selectedModelInfoLabel: selectedModelInfoLabel
+                )
                 Spacer()
                 Text(isSending ? "Generating…" : "Ready")
                     .font(.caption)

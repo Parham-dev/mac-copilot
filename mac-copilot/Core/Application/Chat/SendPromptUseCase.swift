@@ -23,3 +23,15 @@ struct FetchModelsUseCase {
         await repository.fetchModels()
     }
 }
+
+struct FetchModelCatalogUseCase {
+    private let repository: ModelListingRepository
+
+    init(repository: ModelListingRepository) {
+        self.repository = repository
+    }
+
+    func execute() async -> [CopilotModelCatalogItem] {
+        await repository.fetchModelCatalog()
+    }
+}

@@ -2,6 +2,29 @@ import Foundation
 import Combine
 import FactoryKit
 
+enum ModelSelectionPreferences {
+    private static let selectedModelIDsKey = "copilotforge.selectedModelIDs"
+    static let didChangeNotification = Notification.Name("ModelSelectionPreferencesDidChange")
+
+    static func selectedModelIDs() -> [String] {
+        let raw = UserDefaults.standard.stringArray(forKey: selectedModelIDsKey) ?? []
+        return normalize(raw)
+    }
+
+    static func setSelectedModelIDs(_ ids: [String]) {
+        let normalized = normalize(ids)
+        UserDefaults.standard.set(normalized, forKey: selectedModelIDsKey)
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    private static func normalize(_ ids: [String]) -> [String] {
+        let trimmed = ids
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return Array(Set(trimmed)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+}
+
 @MainActor
 final class AppEnvironment: ObservableObject {
     enum LaunchPhase {
@@ -59,12 +82,14 @@ final class AppEnvironment: ObservableObject {
 
         let sendUseCase = SendPromptUseCase(repository: promptRepository)
         let fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
+        let fetchModelCatalogUseCase = FetchModelCatalogUseCase(repository: modelRepository)
         let created = ChatViewModel(
             chatID: chat.id,
             chatTitle: chat.title,
             projectPath: project.localPath,
             sendPromptUseCase: sendUseCase,
             fetchModelsUseCase: fetchModelsUseCase,
+            fetchModelCatalogUseCase: fetchModelCatalogUseCase,
             chatRepository: chatRepository
         )
         chatViewModels[cacheKey] = created

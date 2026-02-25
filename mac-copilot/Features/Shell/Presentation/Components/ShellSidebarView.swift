@@ -4,10 +4,10 @@ struct ShellSidebarView: View {
     @ObservedObject var shellViewModel: ShellViewModel
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
+    let onManageModels: () -> Void
     let onSignOut: () -> Void
 
     @State private var showsUpdatePlaceholder = false
-    @State private var showsModelsPlaceholder = false
     @State private var showsProfileMenu = false
 
     var body: some View {
@@ -31,11 +31,6 @@ struct ShellSidebarView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Update action placeholder. I’ll wire the real behavior next.")
-            }
-            .alert("Models", isPresented: $showsModelsPlaceholder) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Models placeholder. I’ll wire this after you define the flow.")
             }
             .alert("Could not create chat", isPresented: chatCreationErrorAlertBinding) {
                 Button("OK", role: .cancel) {
@@ -111,7 +106,7 @@ struct ShellSidebarView: View {
             }
 
             profileMenuButton("Models", systemImage: "slider.horizontal.3") {
-                showsModelsPlaceholder = true
+                onManageModels()
                 showsProfileMenu = false
             }
 

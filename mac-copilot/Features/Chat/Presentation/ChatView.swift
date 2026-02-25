@@ -18,6 +18,7 @@ struct ChatView: View {
                 draftPrompt: $viewModel.draftPrompt,
                 selectedModel: $viewModel.selectedModel,
                 availableModels: viewModel.availableModels,
+                selectedModelInfoLabel: viewModel.selectedModelInfoLabel,
                 isSending: viewModel.isSending,
                 onSend: { Task { await viewModel.send() } }
             )
@@ -25,6 +26,11 @@ struct ChatView: View {
         .navigationTitle(viewModel.chatTitle)
         .task {
             await viewModel.loadModelsIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ModelSelectionPreferences.didChangeNotification)) { _ in
+            Task {
+                await viewModel.loadModelsIfNeeded(forceReload: true)
+            }
         }
     }
 }
