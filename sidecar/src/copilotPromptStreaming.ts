@@ -1,5 +1,69 @@
 type PromptEvent = Record<string, unknown>;
 
+const functionCallsStartToken = "<function_calls>";
+const functionCallsEndToken = "</function_calls>";
+
+class FunctionCallMarkupFilter {
+  private inFunctionBlock = false;
+  private tail = "";
+
+  process(chunk: string): string {
+    let text = this.tail + chunk;
+    this.tail = "";
+
+    let output = "";
+
+    while (text.length > 0) {
+      if (this.inFunctionBlock) {
+        const endIndex = text.indexOf(functionCallsEndToken);
+        if (endIndex < 0) {
+          const keepTailLength = Math.min(text.length, functionCallsEndToken.length - 1);
+          this.tail = text.slice(-keepTailLength);
+          return output;
+        }
+
+        text = text.slice(endIndex + functionCallsEndToken.length);
+        this.inFunctionBlock = false;
+        continue;
+      }
+
+      const startIndex = text.indexOf(functionCallsStartToken);
+      if (startIndex < 0) {
+        const safeLength = Math.max(0, text.length - (functionCallsStartToken.length - 1));
+        output += text.slice(0, safeLength);
+        this.tail = text.slice(safeLength);
+        return output;
+      }
+
+      output += text.slice(0, startIndex);
+      text = text.slice(startIndex + functionCallsStartToken.length);
+      this.inFunctionBlock = true;
+    }
+
+    return output;
+  }
+
+  flush(): string {
+    if (this.inFunctionBlock) {
+      this.tail = "";
+      return "";
+    }
+
+    const remaining = this.tail;
+    this.tail = "";
+    return remaining;
+  }
+}
+
+function sanitizeToolMarkup(text: string): string {
+  return text
+    .replace(/<\/?function_calls>/gi, "")
+    .replace(/<invoke[^>]*>/gi, "")
+    .replace(/<\/invoke>/gi, "")
+    .replace(/<parameter[^>]*>/gi, "")
+    .replace(/<\/parameter>/gi, "");
+}
+
 export async function streamPromptWithSession(
   session: any,
   prompt: string,
@@ -27,6 +91,7 @@ export async function streamPromptWithSession(
   }, timeoutMs);
 
   const toolNameByCallID = new Map<string, string>();
+  const functionCallFilter = new FunctionCallMarkupFilter();
 
   onEvent({ type: "status", label: "Analyzing request" });
 
@@ -37,17 +102,23 @@ export async function streamPromptWithSession(
   const unsubscribeDelta = session.on("assistant.message_delta", (event: any) => {
     const delta = event?.data?.deltaContent;
     if (typeof delta === "string" && delta.length > 0) {
-      sawAnyOutput = true;
-      sawDeltaOutput = true;
-      onEvent({ type: "text", text: delta });
+      const filtered = sanitizeToolMarkup(functionCallFilter.process(delta));
+      if (filtered.length > 0) {
+        sawAnyOutput = true;
+        sawDeltaOutput = true;
+        onEvent({ type: "text", text: filtered });
+      }
     }
   });
 
   const unsubscribeFinal = session.on("assistant.message", (event: any) => {
     const content = event?.data?.content;
     if (!sawDeltaOutput && typeof content === "string" && content.length > 0) {
-      sawAnyOutput = true;
-      onEvent({ type: "text", text: content });
+      const filtered = sanitizeToolMarkup(functionCallFilter.process(content) + functionCallFilter.flush());
+      if (filtered.length > 0) {
+        sawAnyOutput = true;
+        onEvent({ type: "text", text: filtered });
+      }
     }
   });
 
@@ -125,6 +196,12 @@ export async function streamPromptWithSession(
   try {
     await session.send({ prompt: trimmedPrompt, mode: "immediate" });
     await done;
+
+    const remaining = sanitizeToolMarkup(functionCallFilter.flush());
+    if (remaining.length > 0) {
+      sawAnyOutput = true;
+      onEvent({ type: "text", text: remaining });
+    }
 
     if (!sawAnyOutput) {
       onEvent({ type: "text", text: "Copilot returned no text output for this request." });

@@ -1,3 +1,55 @@
+const functionCallsStartToken = "<function_calls>";
+const functionCallsEndToken = "</function_calls>";
+class FunctionCallMarkupFilter {
+    inFunctionBlock = false;
+    tail = "";
+    process(chunk) {
+        let text = this.tail + chunk;
+        this.tail = "";
+        let output = "";
+        while (text.length > 0) {
+            if (this.inFunctionBlock) {
+                const endIndex = text.indexOf(functionCallsEndToken);
+                if (endIndex < 0) {
+                    const keepTailLength = Math.min(text.length, functionCallsEndToken.length - 1);
+                    this.tail = text.slice(-keepTailLength);
+                    return output;
+                }
+                text = text.slice(endIndex + functionCallsEndToken.length);
+                this.inFunctionBlock = false;
+                continue;
+            }
+            const startIndex = text.indexOf(functionCallsStartToken);
+            if (startIndex < 0) {
+                const safeLength = Math.max(0, text.length - (functionCallsStartToken.length - 1));
+                output += text.slice(0, safeLength);
+                this.tail = text.slice(safeLength);
+                return output;
+            }
+            output += text.slice(0, startIndex);
+            text = text.slice(startIndex + functionCallsStartToken.length);
+            this.inFunctionBlock = true;
+        }
+        return output;
+    }
+    flush() {
+        if (this.inFunctionBlock) {
+            this.tail = "";
+            return "";
+        }
+        const remaining = this.tail;
+        this.tail = "";
+        return remaining;
+    }
+}
+function sanitizeToolMarkup(text) {
+    return text
+        .replace(/<\/?function_calls>/gi, "")
+        .replace(/<invoke[^>]*>/gi, "")
+        .replace(/<\/invoke>/gi, "")
+        .replace(/<parameter[^>]*>/gi, "")
+        .replace(/<\/parameter>/gi, "");
+}
 export async function streamPromptWithSession(session, prompt, onEvent) {
     const trimmedPrompt = String(prompt ?? "").trim();
     if (!trimmedPrompt) {
@@ -17,6 +69,7 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
         rejectDone(new Error(`Copilot response timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     const toolNameByCallID = new Map();
+    const functionCallFilter = new FunctionCallMarkupFilter();
     onEvent({ type: "status", label: "Analyzing request" });
     const unsubscribeTurnStart = session.on("assistant.turn_start", () => {
         onEvent({ type: "status", label: "Generating response" });
@@ -24,16 +77,22 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
     const unsubscribeDelta = session.on("assistant.message_delta", (event) => {
         const delta = event?.data?.deltaContent;
         if (typeof delta === "string" && delta.length > 0) {
-            sawAnyOutput = true;
-            sawDeltaOutput = true;
-            onEvent({ type: "text", text: delta });
+            const filtered = sanitizeToolMarkup(functionCallFilter.process(delta));
+            if (filtered.length > 0) {
+                sawAnyOutput = true;
+                sawDeltaOutput = true;
+                onEvent({ type: "text", text: filtered });
+            }
         }
     });
     const unsubscribeFinal = session.on("assistant.message", (event) => {
         const content = event?.data?.content;
         if (!sawDeltaOutput && typeof content === "string" && content.length > 0) {
-            sawAnyOutput = true;
-            onEvent({ type: "text", text: content });
+            const filtered = sanitizeToolMarkup(functionCallFilter.process(content) + functionCallFilter.flush());
+            if (filtered.length > 0) {
+                sawAnyOutput = true;
+                onEvent({ type: "text", text: filtered });
+            }
         }
     });
     const unsubscribeToolStart = session.on("tool.execution_start", (event) => {
@@ -97,6 +156,11 @@ export async function streamPromptWithSession(session, prompt, onEvent) {
     try {
         await session.send({ prompt: trimmedPrompt, mode: "immediate" });
         await done;
+        const remaining = sanitizeToolMarkup(functionCallFilter.flush());
+        if (remaining.length > 0) {
+            sawAnyOutput = true;
+            onEvent({ type: "text", text: remaining });
+        }
         if (!sawAnyOutput) {
             onEvent({ type: "text", text: "Copilot returned no text output for this request." });
         }
