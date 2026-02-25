@@ -1,20 +1,20 @@
 import Foundation
 
-enum PreviewLaunchTarget {
+enum ControlCenterLaunchTarget {
     case file(URL)
     case web(URL)
 }
 
-struct PreviewLaunch {
+struct ControlCenterLaunch {
     let adapterID: String
     let adapterName: String
     let summary: String
     let detail: String
     let actionTitle: String
-    let target: PreviewLaunchTarget
+    let target: ControlCenterLaunchTarget
 }
 
-enum PreviewResolution {
-    case ready(PreviewLaunch)
+enum ControlCenterResolution {
+    case ready(ControlCenterLaunch)
     case unavailable(message: String)
 }

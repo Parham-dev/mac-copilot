@@ -1,15 +1,15 @@
 import Foundation
 
-struct PreviewCommand {
+struct ControlCenterCommand {
     let executable: String
     let arguments: [String]
 }
 
-enum PreviewRuntimeMode {
+enum ControlCenterRuntimeMode {
     case directOpen(target: URL)
     case managedServer(
-        install: PreviewCommand?,
-        start: PreviewCommand,
+        install: ControlCenterCommand?,
+        start: ControlCenterCommand,
         healthCheckURL: URL,
         openURL: URL,
         bootTimeoutSeconds: TimeInterval,
@@ -17,14 +17,14 @@ enum PreviewRuntimeMode {
     )
 }
 
-struct PreviewRuntimePlan {
+struct ControlCenterRuntimePlan {
     let adapterID: String
     let adapterName: String
     let workingDirectory: URL
-    let mode: PreviewRuntimeMode
+    let mode: ControlCenterRuntimeMode
 }
 
-enum PreviewRuntimeState: Equatable {
+enum ControlCenterRuntimeState: Equatable {
     case idle
     case installing
     case starting

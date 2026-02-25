@@ -9,7 +9,7 @@ final class ShellViewModel: ObservableObject {
     }
 
     enum ContextTab: String, CaseIterable, Identifiable {
-        case preview
+        case controlCenter
         case git
 
         var id: String { rawValue }
@@ -19,7 +19,7 @@ final class ShellViewModel: ObservableObject {
     @Published private(set) var projectChats: [ProjectRef.ID: [ChatThreadRef]]
     @Published private(set) var expandedProjectIDs: Set<ProjectRef.ID>
     @Published var selectedItem: SidebarItem?
-    @Published var selectedContextTab: ContextTab = .preview
+    @Published var selectedContextTab: ContextTab = .controlCenter
     @Published var activeProjectID: ProjectRef.ID?
     @Published private(set) var chatCreationError: String?
 

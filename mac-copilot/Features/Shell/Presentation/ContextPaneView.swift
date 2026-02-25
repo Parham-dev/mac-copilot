@@ -4,8 +4,8 @@ import Foundation
 struct ContextPaneView: View {
     @ObservedObject var shellViewModel: ShellViewModel
     let project: ProjectRef
-    let previewResolver: ProjectPreviewResolver
-    @ObservedObject var previewRuntimeManager: PreviewRuntimeManager
+    let controlCenterResolver: ProjectControlCenterResolver
+    @ObservedObject var controlCenterRuntimeManager: ControlCenterRuntimeManager
     private let checkGitRepositoryUseCase: CheckGitRepositoryUseCase
     private let initializeGitRepositoryUseCase: InitializeGitRepositoryUseCase
     let onFixLogsRequest: ((String) -> Void)?
@@ -17,15 +17,15 @@ struct ContextPaneView: View {
     init(
         shellViewModel: ShellViewModel,
         project: ProjectRef,
-        previewResolver: ProjectPreviewResolver,
-        previewRuntimeManager: PreviewRuntimeManager,
+        controlCenterResolver: ProjectControlCenterResolver,
+        controlCenterRuntimeManager: ControlCenterRuntimeManager,
         gitRepositoryManager: GitRepositoryManaging,
         onFixLogsRequest: ((String) -> Void)?
     ) {
         self.shellViewModel = shellViewModel
         self.project = project
-        self.previewResolver = previewResolver
-        self.previewRuntimeManager = previewRuntimeManager
+        self.controlCenterResolver = controlCenterResolver
+        self.controlCenterRuntimeManager = controlCenterRuntimeManager
         self.onFixLogsRequest = onFixLogsRequest
         self.checkGitRepositoryUseCase = CheckGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
         self.initializeGitRepositoryUseCase = InitializeGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
@@ -33,7 +33,7 @@ struct ContextPaneView: View {
 
     var body: some View {
         VSplitView {
-            previewPlaceholder
+            controlCenterPanel
                 .frame(minHeight: 220, idealHeight: 320)
 
             gitPanel
@@ -58,11 +58,11 @@ struct ContextPaneView: View {
         }
     }
 
-    private var previewPlaceholder: some View {
-        PreviewContextView(
+    private var controlCenterPanel: some View {
+        ControlCenterView(
             project: project,
-            previewResolver: previewResolver,
-            previewRuntimeManager: previewRuntimeManager,
+            controlCenterResolver: controlCenterResolver,
+            controlCenterRuntimeManager: controlCenterRuntimeManager,
             onFixLogsRequest: onFixLogsRequest
         )
     }
@@ -156,8 +156,8 @@ struct ContextPaneView: View {
     ContextPaneView(
         shellViewModel: environment.shellViewModel,
         project: project,
-        previewResolver: environment.sharedPreviewResolver(),
-        previewRuntimeManager: environment.sharedPreviewRuntimeManager(),
+        controlCenterResolver: environment.sharedControlCenterResolver(),
+        controlCenterRuntimeManager: environment.sharedControlCenterRuntimeManager(),
         gitRepositoryManager: environment.sharedGitRepositoryManager(),
         onFixLogsRequest: nil
     )

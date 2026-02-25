@@ -45,8 +45,8 @@ final class AppEnvironment: ObservableObject {
     private let modelRepository: ModelListingRepository
     private let profileRepository: ProfileRepository
     private let chatRepository: ChatRepository
-    private let previewResolver: ProjectPreviewResolver
-    private let previewRuntimeManager: PreviewRuntimeManager
+    private let controlCenterResolver: ProjectControlCenterResolver
+    private let controlCenterRuntimeManager: ControlCenterRuntimeManager
     private let sidecarLifecycle: SidecarLifecycleManaging
     private let gitRepositoryManager: GitRepositoryManaging
     let modelSelectionStore: ModelSelectionStore
@@ -67,8 +67,8 @@ final class AppEnvironment: ObservableObject {
         self.promptRepository = container.promptRepository()
         self.modelRepository = container.modelRepository()
         self.profileRepository = container.profileRepository()
-        self.previewResolver = container.previewResolver()
-        self.previewRuntimeManager = container.previewRuntimeManager()
+        self.controlCenterResolver = container.controlCenterResolver()
+        self.controlCenterRuntimeManager = container.controlCenterRuntimeManager()
         self.sidecarLifecycle = container.sidecarLifecycleManager()
         self.gitRepositoryManager = container.gitRepositoryManager()
         self.modelSelectionStore = ModelSelectionStore(preferencesStore: container.modelSelectionPreferencesStore())
@@ -112,12 +112,12 @@ final class AppEnvironment: ObservableObject {
         profileViewModel
     }
 
-    func sharedPreviewResolver() -> ProjectPreviewResolver {
-        previewResolver
+    func sharedControlCenterResolver() -> ProjectControlCenterResolver {
+        controlCenterResolver
     }
 
-    func sharedPreviewRuntimeManager() -> PreviewRuntimeManager {
-        previewRuntimeManager
+    func sharedControlCenterRuntimeManager() -> ControlCenterRuntimeManager {
+        controlCenterRuntimeManager
     }
 
     func sharedModelSelectionStore() -> ModelSelectionStore {

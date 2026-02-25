@@ -75,18 +75,18 @@ extension Container {
             .singleton
     }
 
-    var previewResolver: Factory<ProjectPreviewResolver> {
+    var controlCenterResolver: Factory<ProjectControlCenterResolver> {
         self { @MainActor in
-            ProjectPreviewResolver(adapters: [
-                SimpleHTMLPreviewAdapter(),
+            ProjectControlCenterResolver(adapters: [
+                SimpleHTMLControlCenterAdapter(),
             ])
         }
         .singleton
     }
 
-    var previewRuntimeManager: Factory<PreviewRuntimeManager> {
+    var controlCenterRuntimeManager: Factory<ControlCenterRuntimeManager> {
         self { @MainActor in
-            PreviewRuntimeManager(adapters: [
+            ControlCenterRuntimeManager(adapters: [
                 NodeRuntimeAdapter(),
                 PythonRuntimeAdapter(),
                 SimpleHTMLRuntimeAdapter(),

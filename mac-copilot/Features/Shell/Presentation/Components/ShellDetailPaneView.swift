@@ -36,8 +36,8 @@ struct ShellDetailPaneView: View {
                 ContextPaneView(
                     shellViewModel: shellViewModel,
                     project: activeProject,
-                    previewResolver: appEnvironment.sharedPreviewResolver(),
-                    previewRuntimeManager: appEnvironment.sharedPreviewRuntimeManager(),
+                    controlCenterResolver: appEnvironment.sharedControlCenterResolver(),
+                    controlCenterRuntimeManager: appEnvironment.sharedControlCenterRuntimeManager(),
                     gitRepositoryManager: appEnvironment.sharedGitRepositoryManager(),
                     onFixLogsRequest: { prompt in
                         Task {

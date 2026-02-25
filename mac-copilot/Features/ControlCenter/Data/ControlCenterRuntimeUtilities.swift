@@ -1,6 +1,6 @@
 import Foundation
 
-final class PreviewRuntimeUtilities {
+final class ControlCenterRuntimeUtilities {
     private let fileManager = FileManager.default
 
     func expandedProjectURL(for project: ProjectRef) -> URL {

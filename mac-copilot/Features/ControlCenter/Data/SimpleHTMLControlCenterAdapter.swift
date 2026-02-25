@@ -1,18 +1,18 @@
 import Foundation
 
-struct SimpleHTMLPreviewAdapter: ProjectPreviewAdapter {
+struct SimpleHTMLControlCenterAdapter: ProjectControlCenterAdapter {
     let id: String = "simple-html"
     let displayName: String = "Simple HTML"
 
-    func makeLaunch(for project: ProjectRef) -> PreviewLaunch? {
+    func makeLaunch(for project: ProjectRef) -> ControlCenterLaunch? {
         guard let htmlURL = findHTMLFile(in: project.localPath) else {
             return nil
         }
 
-        return PreviewLaunch(
+        return ControlCenterLaunch(
             adapterID: id,
             adapterName: displayName,
-            summary: "Found HTML preview file in \(project.name).",
+            summary: "Found HTML file in \(project.name).",
             detail: htmlURL.path,
             actionTitle: "Open in Browser",
             target: .file(htmlURL)

@@ -1,9 +1,9 @@
 import SwiftUI
 
-struct PreviewContextView: View {
+struct ControlCenterView: View {
     let project: ProjectRef
-    let previewResolver: ProjectPreviewResolver
-    @ObservedObject var previewRuntimeManager: PreviewRuntimeManager
+    let controlCenterResolver: ProjectControlCenterResolver
+    @ObservedObject var controlCenterRuntimeManager: ControlCenterRuntimeManager
     let onFixLogsRequest: ((String) -> Void)?
 
     var body: some View {
@@ -13,15 +13,15 @@ struct PreviewContextView: View {
             controlRow
             statusView
 
-            if let url = previewRuntimeManager.activeURL,
-               previewRuntimeManager.activeProjectID == project.id {
+            if let url = controlCenterRuntimeManager.activeURL,
+               controlCenterRuntimeManager.activeProjectID == project.id {
                 Text(url.absoluteString)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
-            if previewRuntimeManager.logs.isEmpty {
+            if controlCenterRuntimeManager.logs.isEmpty {
                 emptyState
             } else {
                 logsSection
@@ -36,41 +36,41 @@ struct PreviewContextView: View {
     private var controlRow: some View {
         HStack(spacing: 8) {
             Button {
-                if previewRuntimeManager.isRunning,
-                   previewRuntimeManager.activeProjectID == project.id {
-                    previewRuntimeManager.stop()
+                if controlCenterRuntimeManager.isRunning,
+                   controlCenterRuntimeManager.activeProjectID == project.id {
+                    controlCenterRuntimeManager.stop()
                 } else {
-                    previewRuntimeManager.start(project: project, autoOpen: true)
+                    controlCenterRuntimeManager.start(project: project, autoOpen: true)
                 }
             } label: {
-                if previewRuntimeManager.isRunning,
-                   previewRuntimeManager.activeProjectID == project.id {
+                if controlCenterRuntimeManager.isRunning,
+                   controlCenterRuntimeManager.activeProjectID == project.id {
                     Label("Stop", systemImage: "stop.fill")
                 } else {
                     Label("Start", systemImage: "play.fill")
                 }
             }
-            .disabled(previewRuntimeManager.isBusy)
+            .disabled(controlCenterRuntimeManager.isBusy)
 
             Button {
-                previewRuntimeManager.refresh(project: project)
+                controlCenterRuntimeManager.refresh(project: project)
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(previewRuntimeManager.isBusy || previewRuntimeManager.activeProjectID != project.id)
+            .disabled(controlCenterRuntimeManager.isBusy || controlCenterRuntimeManager.activeProjectID != project.id)
 
             Button {
-                previewRuntimeManager.openInBrowser()
+                controlCenterRuntimeManager.openInBrowser()
             } label: {
                 Label("Open", systemImage: "safari")
             }
-            .disabled(previewRuntimeManager.activeURL == nil)
+            .disabled(controlCenterRuntimeManager.activeURL == nil)
         }
     }
 
     private var emptyState: some View {
         Group {
-            switch previewResolver.resolve(for: project) {
+            switch controlCenterResolver.resolve(for: project) {
             case .ready(let launch):
                 VStack(alignment: .leading, spacing: 6) {
                     Text(launch.summary)
@@ -96,14 +96,14 @@ struct PreviewContextView: View {
                 } label: {
                     Label("Fix with AI", systemImage: "sparkles")
                 }
-                .disabled(onFixLogsRequest == nil || previewRuntimeManager.isBusy)
+                .disabled(onFixLogsRequest == nil || controlCenterRuntimeManager.isBusy)
 
                 Spacer()
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(previewRuntimeManager.logs.enumerated()), id: \.offset) { _, line in
+                    ForEach(Array(controlCenterRuntimeManager.logs.enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -120,7 +120,7 @@ struct PreviewContextView: View {
 
     private var statusView: some View {
         let text: String
-        switch previewRuntimeManager.state {
+        switch controlCenterRuntimeManager.state {
         case .idle:
             text = "Idle"
         case .installing:
@@ -137,7 +137,7 @@ struct PreviewContextView: View {
             Text(text)
                 .font(.body)
                 .foregroundStyle(.secondary)
-            if let adapter = previewRuntimeManager.adapterName {
+            if let adapter = controlCenterRuntimeManager.adapterName {
                 Text("• \(adapter)")
                     .font(.body)
                     .foregroundStyle(.secondary)
@@ -157,7 +157,7 @@ struct PreviewContextView: View {
 
     private var fixPrompt: String {
         let stateText: String
-        switch previewRuntimeManager.state {
+        switch controlCenterRuntimeManager.state {
         case .idle:
             stateText = "idle"
         case .installing:
@@ -170,11 +170,11 @@ struct PreviewContextView: View {
             stateText = "failed: \(message)"
         }
 
-        let adapter = previewRuntimeManager.adapterName ?? "unknown"
-        let logs = previewRuntimeManager.logs.suffix(120).joined(separator: "\n")
+        let adapter = controlCenterRuntimeManager.adapterName ?? "unknown"
+        let logs = controlCenterRuntimeManager.logs.suffix(120).joined(separator: "\n")
 
         return """
-        We tried to start project \(project.name) at path \(project.localPath), but preview runtime has issues.
+        We tried to start project \(project.name) at path \(project.localPath), but control center runtime has issues.
 
         Adapter: \(adapter)
         Runtime state: \(stateText)

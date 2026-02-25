@@ -3,20 +3,20 @@ import AppKit
 import Combine
 
 @MainActor
-final class PreviewRuntimeManager: ObservableObject {
-    @Published private(set) var state: PreviewRuntimeState = .idle
+final class ControlCenterRuntimeManager: ObservableObject {
+    @Published private(set) var state: ControlCenterRuntimeState = .idle
     @Published private(set) var adapterName: String?
     @Published private(set) var activeURL: URL?
     @Published private(set) var logs: [String] = []
     @Published private(set) var activeProjectID: UUID?
 
-    private let adapters: [any PreviewRuntimeAdapter]
-    private let utilities: PreviewRuntimeUtilities
+    private let adapters: [any ControlCenterRuntimeAdapter]
+    private let utilities: ControlCenterRuntimeUtilities
 
     private var process: Process?
     private var outputPipe: Pipe?
 
-    init(adapters: [any PreviewRuntimeAdapter], utilities: PreviewRuntimeUtilities = PreviewRuntimeUtilities()) {
+    init(adapters: [any ControlCenterRuntimeAdapter], utilities: ControlCenterRuntimeUtilities = ControlCenterRuntimeUtilities()) {
         self.adapters = adapters
         self.utilities = utilities
     }
@@ -50,7 +50,7 @@ final class PreviewRuntimeManager: ObservableObject {
         process?.terminate()
         cleanupProcessHandles()
         state = .idle
-        appendLog("Stopped preview runtime")
+        appendLog("Stopped control center runtime")
     }
 
     func openInBrowser() {
@@ -60,10 +60,10 @@ final class PreviewRuntimeManager: ObservableObject {
 
     private func startInternal(project: ProjectRef, autoOpen: Bool, isRefresh: Bool) async {
         if isRefresh {
-            appendLog("Refreshing preview for \(project.name)")
+            appendLog("Refreshing control center for \(project.name)")
             stop()
         } else if activeProjectID != nil, activeProjectID != project.id {
-            appendLog("Switching preview runtime to \(project.name)")
+            appendLog("Switching control center runtime to \(project.name)")
             stop()
         }
 
@@ -72,7 +72,7 @@ final class PreviewRuntimeManager: ObservableObject {
         logs.removeAll(keepingCapacity: true)
 
         guard let adapter = adapters.first(where: { $0.canHandle(project: project) }) else {
-            state = .failed("No preview adapter supports this project yet")
+            state = .failed("No control center adapter supports this project yet")
             appendLog("No adapter matched project")
             return
         }
@@ -128,11 +128,11 @@ final class PreviewRuntimeManager: ObservableObject {
             }
         } catch {
             state = .failed(error.localizedDescription)
-            appendLog("Preview failed: \(error.localizedDescription)")
+            appendLog("Control center failed: \(error.localizedDescription)")
         }
     }
 
-    private func launchServer(command: PreviewCommand, cwd: URL, environment: [String: String]) throws {
+    private func launchServer(command: ControlCenterCommand, cwd: URL, environment: [String: String]) throws {
         cleanupProcessHandles()
 
         let process = Process()
@@ -175,7 +175,7 @@ final class PreviewRuntimeManager: ObservableObject {
         self.process = process
     }
 
-    private func runAndCapture(command: PreviewCommand, cwd: URL, environment: [String: String]) async throws -> (exitCode: Int32, output: String) {
+    private func runAndCapture(command: ControlCenterCommand, cwd: URL, environment: [String: String]) async throws -> (exitCode: Int32, output: String) {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
