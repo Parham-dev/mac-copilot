@@ -9,6 +9,7 @@ This folder contains operational and release documentation for CopilotForge.
 - [Chat Session History Architecture](chat-session-history.md)
 - [iOS Companion Architecture](ios-companion-architecture.md)
 - [iOS Companion AI Agent Build Brief](ios-companion-ai-agent-brief.md)
+- [Companion Validation Smoke Test](companion-validation-smoke.md)
 - [Troubleshooting](troubleshooting.md)
 - End-to-end release wrapper: `./scripts/release_dmg.sh --skip-notarize` (or pass keychain profile for production)
 - One-command local DMG: `./scripts/build_dmg.sh`

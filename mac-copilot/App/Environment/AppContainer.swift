@@ -45,6 +45,17 @@ extension Container {
             .singleton
     }
 
+    var companionWorkspaceSyncService: Factory<any CompanionWorkspaceSyncing> {
+        self { @MainActor in
+            SidecarCompanionWorkspaceSyncService(
+                projectRepository: self.projectRepository(),
+                chatRepository: self.chatRepository(),
+                sidecarLifecycle: self.sidecarLifecycleManager()
+            )
+        }
+            .singleton
+    }
+
     var gitRepositoryManager: Factory<any GitRepositoryManaging> {
         self { @MainActor in LocalGitRepositoryManager() }
             .singleton
@@ -153,7 +164,8 @@ extension Container {
             AppBootstrapService(
                 sidecarLifecycle: self.sidecarLifecycleManager(),
                 authViewModel: self.authViewModel(),
-                companionStatusStore: self.companionStatusStore()
+                companionStatusStore: self.companionStatusStore(),
+                companionWorkspaceSyncService: self.companionWorkspaceSyncService()
             )
         }
         .singleton

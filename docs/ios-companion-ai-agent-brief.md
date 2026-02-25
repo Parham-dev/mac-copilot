@@ -295,6 +295,16 @@ ios-companion/
 - Revoking currently connected device returns app to disconnected state
 - SSE continue call handles `[DONE]` and stream interruption gracefully
 
+## Mac Preflight (Before iOS QA)
+Run the companion smoke test on Mac to confirm backend readiness before iOS validation:
+
+```bash
+./scripts/companion_validation_smoke.sh
+```
+
+Smoke guide and expected outputs:
+- `docs/companion-validation-smoke.md`
+
 ## Non-Goals (Phase 2)
 - Signed command protocol with nonce/replay
 - End-to-end encrypted command payloads

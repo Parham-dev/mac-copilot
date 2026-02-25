@@ -79,6 +79,15 @@ export function registerCompanionRoutes(app: Express) {
     res.json({ ok: true, ...payload });
   });
 
+  app.post("/companion/sync/snapshot", (req, res) => {
+    try {
+      const imported = companionChatStore.importSnapshot(req.body ?? {});
+      res.json({ ok: true, imported });
+    } catch (error) {
+      res.status(400).json({ ok: false, error: asErrorMessage(error) });
+    }
+  });
+
   app.get("/companion/projects", (_req, res) => {
     if (!ensureCompanionAccess(res)) {
       return;

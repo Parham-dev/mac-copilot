@@ -28,6 +28,12 @@ type PersistedChatState = {
   messagesByChat: Record<string, CompanionMessage[]>;
 };
 
+type CompanionSnapshot = {
+  projects?: CompanionProject[];
+  chats?: CompanionChat[];
+  messages?: Array<CompanionMessage & { chatId: string }>;
+};
+
 const defaultState: PersistedChatState = {
   projects: [],
   chats: [],
@@ -87,6 +93,41 @@ export class CompanionChatStore {
     return this.chats.get(chatId) ?? null;
   }
 
+  importSnapshot(snapshot: CompanionSnapshot) {
+    const projects = Array.isArray(snapshot.projects) ? snapshot.projects : [];
+    const chats = Array.isArray(snapshot.chats) ? snapshot.chats : [];
+    const messages = Array.isArray(snapshot.messages) ? snapshot.messages : [];
+
+    for (const project of projects) {
+      if (!project.id || !project.name) continue;
+      this.upsertProject(project);
+    }
+
+    for (const chat of chats) {
+      if (!chat.id || !chat.projectId) continue;
+      this.upsertChat(chat);
+    }
+
+    let importedMessages = 0;
+    for (const message of messages) {
+      if (!message.chatId || !message.id) continue;
+      this.upsertMessage(message.chatId, {
+        id: message.id,
+        role: message.role === "assistant" ? "assistant" : "user",
+        text: String(message.text ?? ""),
+        createdAt: normalizeTimestamp(message.createdAt),
+      });
+      importedMessages += 1;
+    }
+
+    this.persist();
+    return {
+      projects: projects.length,
+      chats: chats.length,
+      messages: importedMessages,
+    };
+  }
+
   private ensureProject(projectPath?: string) {
     const localPath = normalizePath(projectPath);
     const projectId = localPath ? hashId(localPath) : "default-project";
@@ -103,6 +144,77 @@ export class CompanionChatStore {
 
     this.projects.set(projectId, existing ? { ...existing, ...updated } : updated);
     return this.projects.get(projectId)!;
+  }
+
+  private upsertProject(project: CompanionProject) {
+    const existing = this.projects.get(project.id);
+    const normalized: CompanionProject = {
+      id: project.id,
+      name: project.name,
+      localPath: normalizePath(project.localPath),
+      lastUpdatedAt: normalizeTimestamp(project.lastUpdatedAt),
+    };
+
+    if (!existing) {
+      this.projects.set(project.id, normalized);
+      return;
+    }
+
+    this.projects.set(project.id, {
+      ...existing,
+      ...normalized,
+      lastUpdatedAt: maxTimestamp(existing.lastUpdatedAt, normalized.lastUpdatedAt),
+    });
+  }
+
+  private upsertChat(chat: CompanionChat) {
+    const existing = this.chats.get(chat.id);
+    const normalized: CompanionChat = {
+      id: chat.id,
+      projectId: chat.projectId,
+      title: String(chat.title ?? "New Chat"),
+      lastUpdatedAt: normalizeTimestamp(chat.lastUpdatedAt),
+    };
+
+    if (!existing) {
+      this.chats.set(chat.id, normalized);
+    } else {
+      this.chats.set(chat.id, {
+        ...existing,
+        ...normalized,
+        lastUpdatedAt: maxTimestamp(existing.lastUpdatedAt, normalized.lastUpdatedAt),
+      });
+    }
+
+    const project = this.projects.get(normalized.projectId);
+    if (project) {
+      this.projects.set(normalized.projectId, {
+        ...project,
+        lastUpdatedAt: maxTimestamp(project.lastUpdatedAt, normalized.lastUpdatedAt),
+      });
+    }
+  }
+
+  private upsertMessage(chatId: string, message: CompanionMessage) {
+    const list = this.messagesByChat.get(chatId) ?? [];
+    const existingIndex = list.findIndex((entry) => entry.id === message.id);
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = message;
+    } else {
+      list.push(message);
+    }
+
+    list.sort((lhs, rhs) => lhs.createdAt.localeCompare(rhs.createdAt));
+    this.messagesByChat.set(chatId, list);
+
+    const chat = this.chats.get(chatId);
+    if (chat) {
+      this.chats.set(chatId, {
+        ...chat,
+        lastUpdatedAt: maxTimestamp(chat.lastUpdatedAt, message.createdAt),
+      });
+    }
   }
 
   private ensureChat(chatId: string, projectId: string, titleSeed: string) {
@@ -171,6 +283,17 @@ function createChatTitle(seed: string) {
   const cleaned = seed.replace(/\s+/g, " ").trim();
   if (!cleaned) return "New Chat";
   return cleaned.length <= 48 ? cleaned : `${cleaned.slice(0, 45)}...`;
+}
+
+function normalizeTimestamp(input: string | undefined) {
+  const value = String(input ?? "").trim();
+  if (!value) return new Date().toISOString();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
+}
+
+function maxTimestamp(lhs: string, rhs: string) {
+  return lhs.localeCompare(rhs) >= 0 ? lhs : rhs;
 }
 
 function resolveStateFilePath() {
