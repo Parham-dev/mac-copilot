@@ -6,31 +6,115 @@ struct ShellSidebarView: View {
     let onCreateProject: () -> Void
     let onSignOut: () -> Void
 
+    @State private var showsUpdatePlaceholder = false
+    @State private var showsSettingsPlaceholder = false
+    @State private var showsProfileMenu = false
+
     var body: some View {
-        List(selection: $shellViewModel.selectedItem) {
-            Section("Workspace") {
-                Label("Profile", systemImage: "person.crop.circle")
-                    .tag(ShellViewModel.SidebarItem.profile)
+        GeometryReader { geometry in
+            List(selection: $shellViewModel.selectedItem) {
+                Section {
+                    ForEach(shellViewModel.projects) { project in
+                        projectDisclosure(project)
+                    }
+                } header: {
+                    projectsHeader
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                bottomProfileBar(sidebarWidth: geometry.size.width)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial)
+            }
+            .alert("Update", isPresented: $showsUpdatePlaceholder) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Update action placeholder. I’ll wire the real behavior next.")
+            }
+            .alert("Settings", isPresented: $showsSettingsPlaceholder) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Settings placeholder. I’ll wire this after you define the flow.")
+            }
+        }
+    }
+
+    private func bottomProfileBar(sidebarWidth: CGFloat) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                showsUpdatePlaceholder = true
+            } label: {
+                Text("Update")
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showsProfileMenu.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text("Profile")
+                        .fontWeight(.medium)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showsProfileMenu, arrowEdge: .bottom) {
+                profileMenuContent(sidebarWidth: sidebarWidth)
+            }
+        }
+    }
+
+    private func profileMenuContent(sidebarWidth: CGFloat) -> some View {
+        let popoverWidth = max(220, sidebarWidth - 24)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            profileMenuButton("Profile", systemImage: "person.crop.circle") {
+                shellViewModel.selectedItem = .profile
+                showsProfileMenu = false
             }
 
-            Section {
-                ForEach(shellViewModel.projects) { project in
-                    projectDisclosure(project)
-                }
-            } header: {
-                projectsHeader
+            profileMenuButton("Settings", systemImage: "gearshape") {
+                showsSettingsPlaceholder = true
+                showsProfileMenu = false
             }
 
             if isAuthenticated {
-                Section {
-                    Button {
-                        onSignOut()
-                    } label: {
-                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                    }
+                Divider()
+                profileMenuButton("Log Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    onSignOut()
+                    showsProfileMenu = false
                 }
             }
         }
+        .padding(10)
+        .frame(width: popoverWidth, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func profileMenuButton(_ title: String, systemImage: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            Label(title, systemImage: systemImage)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var projectsHeader: some View {
@@ -74,16 +158,12 @@ struct ShellSidebarView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .foregroundStyle(.secondary)
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundColor(Color(nsColor: .secondaryLabelColor))
                         .frame(width: 18, alignment: .center)
                 }
                 .menuIndicator(.hidden)
                 .menuStyle(.borderlessButton)
-
-                if shellViewModel.activeProjectID == project.id {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.secondary)
-                }
             }
         }
     }

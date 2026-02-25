@@ -84,9 +84,6 @@ struct ChatComposerView: View {
             HStack {
                 ChatToolbarControlsView(selectedModel: $selectedModel, availableModels: availableModels)
                 Spacer()
-                Text("Enter: new line • Shift+Enter: send")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 Text(isSending ? "Generating…" : "Ready")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -177,11 +174,14 @@ private struct ComposerTextView: NSViewRepresentable {
             let clamped = min(max(contentHeight, parent.minHeight), parent.maxHeight)
             let maxHeight = self.parent.maxHeight
 
-            DispatchQueue.main.async {
-                self.parent.dynamicHeight = clamped
-                if let scrollView = textView.enclosingScrollView {
-                    scrollView.hasVerticalScroller = contentHeight > maxHeight
+            if self.parent.dynamicHeight != clamped {
+                DispatchQueue.main.async { [parent = self.parent] in
+                    parent.dynamicHeight = clamped
                 }
+            }
+
+            if let scrollView = textView.enclosingScrollView {
+                scrollView.hasVerticalScroller = contentHeight > maxHeight
             }
         }
     }

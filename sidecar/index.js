@@ -136,6 +136,53 @@ app.post("/prompt", async (req, res) => {
 });
 
 const port = 7878;
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`[CopilotForge] sidecar ready on :${port}`);
 });
+
+server.on("error", (error) => {
+  if (error?.code !== "EADDRINUSE") {
+    console.error("[CopilotForge][Sidecar] startup failed", String(error));
+    process.exit(1);
+    return;
+  }
+
+  (async () => {
+    const healthy = await isHealthySidecarAlreadyRunning(port);
+
+    if (healthy) {
+      console.log(`[CopilotForge][Sidecar] port :${port} already served by healthy sidecar; reusing existing instance`);
+      process.exit(0);
+      return;
+    }
+
+    console.error(`[CopilotForge][Sidecar] port :${port} is in use by another process`);
+    process.exit(1);
+  })();
+});
+
+async function isHealthySidecarAlreadyRunning(portNumber) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 800);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${portNumber}/health`, {
+      method: "GET",
+      signal: controller.signal,
+      headers: {
+        "Cache-Control": "no-cache",
+      },
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const body = await response.text();
+    return body.includes("copilotforge-sidecar");
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
