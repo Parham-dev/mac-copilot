@@ -12,6 +12,8 @@ final class CompanionStatusStore: ObservableObject {
 
     @Published private(set) var status: Status = .disconnected
     @Published private(set) var pairingCode: String = "------"
+    @Published private(set) var pairingQRCodePayload: String?
+    @Published private(set) var pairingExpiresAt: Date?
     @Published private(set) var isBusy = false
     @Published private(set) var lastErrorMessage: String?
 
@@ -68,14 +70,9 @@ final class CompanionStatusStore: ObservableObject {
         await runOperation {
             let session = try await service.startPairing()
             pairingCode = session.code
+            pairingQRCodePayload = session.qrPayload
+            pairingExpiresAt = session.expiresAt
             status = .pairing
-        }
-    }
-
-    func connect(deviceName: String) async {
-        await runOperation {
-            let snapshot = try await service.connect(deviceName: deviceName)
-            apply(snapshot)
         }
     }
 
@@ -84,6 +81,8 @@ final class CompanionStatusStore: ObservableObject {
             let snapshot = try await service.disconnect()
             apply(snapshot)
             pairingCode = "------"
+            pairingQRCodePayload = nil
+            pairingExpiresAt = nil
         }
     }
 

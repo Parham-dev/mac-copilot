@@ -11,11 +11,12 @@ struct CompanionConnectionSnapshot: Equatable {
 
 struct CompanionPairingSession: Equatable {
     let code: String
+    let qrPayload: String
+    let expiresAt: Date
 }
 
 protocol CompanionConnectionServicing {
     func fetchStatus() async throws -> CompanionConnectionSnapshot
     func startPairing() async throws -> CompanionPairingSession
-    func connect(deviceName: String) async throws -> CompanionConnectionSnapshot
     func disconnect() async throws -> CompanionConnectionSnapshot
 }

@@ -23,7 +23,10 @@ extension Container {
     }
 
     var companionConnectionService: Factory<any CompanionConnectionServicing> {
-        self { @MainActor in InMemoryCompanionConnectionService() }
+        self { @MainActor in
+            let client = SidecarCompanionClient(sidecarLifecycle: self.sidecarLifecycleManager())
+            return SidecarCompanionConnectionService(client: client)
+        }
             .singleton
     }
 

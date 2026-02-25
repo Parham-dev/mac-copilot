@@ -10,15 +10,12 @@ actor InMemoryCompanionConnectionService: CompanionConnectionServicing {
     func startPairing() async throws -> CompanionPairingSession {
         try await Task.sleep(nanoseconds: 200_000_000)
         let value = Int.random(in: 0 ... 999_999)
-        return CompanionPairingSession(code: String(format: "%06d", value))
-    }
-
-    func connect(deviceName: String) async throws -> CompanionConnectionSnapshot {
-        try await Task.sleep(nanoseconds: 250_000_000)
-        let trimmed = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedName = trimmed.isEmpty ? "iPhone" : trimmed
-        snapshot = CompanionConnectionSnapshot(connectedDeviceName: resolvedName, connectedAt: Date())
-        return snapshot
+        let code = String(format: "%06d", value)
+        return CompanionPairingSession(
+            code: code,
+            qrPayload: "{\"protocol\":\"copilotforge-pair-v1\",\"code\":\"\(code)\"}",
+            expiresAt: Date().addingTimeInterval(300)
+        )
     }
 
     func disconnect() async throws -> CompanionConnectionSnapshot {

@@ -3,7 +3,6 @@ import SwiftUI
 struct CompanionManagementSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject var companionStatusStore: CompanionStatusStore
-    @State private var deviceName = "Parham’s iPhone"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -96,25 +95,24 @@ struct CompanionManagementSheet: View {
                         }
                         .disabled(companionStatusStore.isBusy)
 
-                        TextField("Device name", text: $deviceName)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minWidth: 180)
-
-                        Button("Connect") {
+                        Button("Refresh Status") {
                             Task {
-                                await companionStatusStore.connect(deviceName: deviceName)
+                                await companionStatusStore.refreshStatus()
                             }
                         }
                         .disabled(companionStatusStore.isBusy)
                     }
+
+                    if let expiresAt = companionStatusStore.pairingExpiresAt {
+                        Text("Expires: \(expiresAt.formatted(date: .omitted, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 VStack(alignment: .center, spacing: 8) {
-                    Image(systemName: "qrcode")
-                        .font(.system(size: 72, weight: .regular))
-                        .frame(width: 120, height: 120)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Text("QR Placeholder")
+                    CompanionQRCodeView(payload: companionStatusStore.pairingQRCodePayload)
+                    Text("Scan with iPhone companion app")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
