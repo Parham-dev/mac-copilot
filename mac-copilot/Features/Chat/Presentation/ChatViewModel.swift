@@ -140,6 +140,7 @@ final class ChatViewModel: ObservableObject {
 
             for try await event in sendPromptUseCase.execute(
                 prompt: text,
+                chatID: chatID,
                 model: selectedModel,
                 projectPath: projectPath,
                 allowedTools: effectiveAllowedTools

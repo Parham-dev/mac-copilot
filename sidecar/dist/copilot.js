@@ -1,12 +1,10 @@
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import { mkdirSync } from "node:fs";
 let client = null;
-let session = null;
 let lastAuthError = null;
 let lastAuthAt = null;
-let activeModel = "gpt-5";
-let activeWorkingDirectory = null;
-let activeAvailableTools = null;
+const sessionByChatKey = new Map();
+let lastSessionState = null;
 function ensureCopilotShellPath() {
     const currentPath = String(process.env.PATH ?? "");
     const currentNodeDirectory = process.execPath
@@ -39,38 +37,39 @@ function ensureCopilotShellPath() {
     process.env.PATH = Array.from(existing).join(":");
 }
 export function isAuthenticated() {
-    return session !== null;
+    return client !== null;
 }
 export async function startClient(token) {
     try {
         process.env.GITHUB_TOKEN = token;
         ensureCopilotShellPath();
+        sessionByChatKey.clear();
+        lastSessionState = null;
         client = new CopilotClient();
         await client.start();
-        await createSessionForContext(activeModel, activeWorkingDirectory, activeAvailableTools);
         lastAuthError = null;
         lastAuthAt = new Date().toISOString();
     }
     catch (error) {
         lastAuthError = String(error);
         client = null;
-        session = null;
+        sessionByChatKey.clear();
+        lastSessionState = null;
         throw error;
     }
 }
 export function clearSession() {
     client = null;
-    session = null;
-    activeModel = "gpt-5";
-    activeWorkingDirectory = null;
-    activeAvailableTools = null;
+    sessionByChatKey.clear();
+    lastSessionState = null;
 }
 export function getCopilotReport() {
     return {
-        sessionReady: session !== null,
-        activeModel,
-        activeWorkingDirectory,
-        activeAvailableTools,
+        sessionReady: sessionByChatKey.size > 0,
+        activeModel: lastSessionState?.model ?? "gpt-5",
+        activeWorkingDirectory: lastSessionState?.workingDirectory ?? null,
+        activeAvailableTools: lastSessionState?.availableTools ?? null,
+        activeSessionCount: sessionByChatKey.size,
         lastAuthAt,
         lastAuthError,
         usingGitHubToken: Boolean(process.env.GITHUB_TOKEN),
@@ -98,7 +97,27 @@ function sameAllowedTools(lhs, rhs) {
     }
     return lhs.every((value, index) => value === rhs[index]);
 }
-async function createSessionForContext(model, workingDirectory, allowedTools) {
+function normalizeChatKey(chatID, projectPath) {
+    const normalizedID = typeof chatID === "string" ? chatID.trim() : "";
+    if (normalizedID.length > 0) {
+        return normalizedID;
+    }
+    const normalizedPath = typeof projectPath === "string" ? projectPath.trim() : "";
+    if (normalizedPath.length > 0) {
+        return `project:${normalizedPath}`;
+    }
+    return "default";
+}
+function buildSessionIdentifier(chatKey) {
+    const sanitized = chatKey
+        .replace(/[^a-zA-Z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 96);
+    const suffix = sanitized.length > 0 ? sanitized : "default";
+    return `copilotforge-${suffix}`;
+}
+async function createOrResumeSessionForContext(chatKey, model, workingDirectory, allowedTools) {
     if (!client) {
         throw new Error("Copilot client is not initialized.");
     }
@@ -106,33 +125,62 @@ async function createSessionForContext(model, workingDirectory, allowedTools) {
         mkdirSync(workingDirectory, { recursive: true });
     }
     const normalizedTools = normalizeAllowedTools(allowedTools);
-    session = await client.createSession({
+    const sessionId = buildSessionIdentifier(chatKey);
+    const config = {
+        sessionId,
         model,
         streaming: true,
         onPermissionRequest: approveAll,
+        infiniteSessions: {
+            enabled: true,
+        },
         ...(workingDirectory ? { workingDirectory } : {}),
         ...(normalizedTools ? { availableTools: normalizedTools } : {}),
-    });
-    activeModel = model;
-    activeWorkingDirectory = workingDirectory;
-    activeAvailableTools = normalizedTools;
+    };
+    let createdSession;
+    try {
+        createdSession = await client.resumeSession(sessionId, config);
+    }
+    catch {
+        createdSession = await client.createSession(config);
+    }
+    const state = {
+        chatKey,
+        sessionId,
+        session: createdSession,
+        model,
+        workingDirectory,
+        availableTools: normalizedTools,
+    };
+    sessionByChatKey.set(chatKey, state);
+    lastSessionState = state;
+    return state;
 }
-async function ensureSessionForContext(model, projectPath, allowedTools) {
+async function ensureSessionForContext(chatID, model, projectPath, allowedTools) {
     const requested = typeof model === "string" && model.trim().length > 0 ? model.trim() : "gpt-5";
     const requestedWorkingDirectory = typeof projectPath === "string" && projectPath.trim().length > 0
         ? projectPath.trim()
         : null;
     const requestedAvailableTools = normalizeAllowedTools(allowedTools);
-    if (session
-        && activeModel === requested
-        && activeWorkingDirectory === requestedWorkingDirectory
-        && sameAllowedTools(activeAvailableTools, requestedAvailableTools)) {
-        return;
+    const chatKey = normalizeChatKey(chatID, requestedWorkingDirectory ?? undefined);
+    const existing = sessionByChatKey.get(chatKey);
+    if (existing
+        && existing.model === requested
+        && existing.workingDirectory === requestedWorkingDirectory
+        && sameAllowedTools(existing.availableTools, requestedAvailableTools)) {
+        lastSessionState = existing;
+        return existing.session;
     }
-    if (!client) {
-        throw new Error("Copilot client is not initialized.");
+    if (existing?.session && typeof existing.session.destroy === "function") {
+        try {
+            await existing.session.destroy();
+        }
+        catch {
+            // no-op; recreate path handles stale sessions safely
+        }
     }
-    await createSessionForContext(requested, requestedWorkingDirectory, requestedAvailableTools);
+    const nextState = await createOrResumeSessionForContext(chatKey, requested, requestedWorkingDirectory, requestedAvailableTools);
+    return nextState.session;
 }
 export async function listAvailableModels() {
     if (!client || typeof client.listModels !== "function") {
@@ -242,8 +290,8 @@ export async function listAvailableModels() {
             }];
     }
 }
-export async function sendPrompt(prompt, model, projectPath, allowedTools, onEvent) {
-    if (!session) {
+export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, onEvent) {
+    if (!client) {
         onEvent({ type: "text", text: "Not authenticated yet. Please complete GitHub auth first." });
         return;
     }
@@ -252,7 +300,7 @@ export async function sendPrompt(prompt, model, projectPath, allowedTools, onEve
         onEvent({ type: "text", text: "Please enter a prompt." });
         return;
     }
-    await ensureSessionForContext(model, projectPath, allowedTools ?? null);
+    const activeSession = await ensureSessionForContext(chatID, model, projectPath, allowedTools ?? null);
     let sawAnyOutput = false;
     let sawDeltaOutput = false;
     let resolveDone;
@@ -267,10 +315,10 @@ export async function sendPrompt(prompt, model, projectPath, allowedTools, onEve
     }, timeoutMs);
     const toolNameByCallID = new Map();
     onEvent({ type: "status", label: "Analyzing request" });
-    const unsubscribeTurnStart = session.on("assistant.turn_start", () => {
+    const unsubscribeTurnStart = activeSession.on("assistant.turn_start", () => {
         onEvent({ type: "status", label: "Generating response" });
     });
-    const unsubscribeDelta = session.on("assistant.message_delta", (event) => {
+    const unsubscribeDelta = activeSession.on("assistant.message_delta", (event) => {
         const delta = event?.data?.deltaContent;
         if (typeof delta === "string" && delta.length > 0) {
             sawAnyOutput = true;
@@ -278,14 +326,14 @@ export async function sendPrompt(prompt, model, projectPath, allowedTools, onEve
             onEvent({ type: "text", text: delta });
         }
     });
-    const unsubscribeFinal = session.on("assistant.message", (event) => {
+    const unsubscribeFinal = activeSession.on("assistant.message", (event) => {
         const content = event?.data?.content;
         if (!sawDeltaOutput && typeof content === "string" && content.length > 0) {
             sawAnyOutput = true;
             onEvent({ type: "text", text: content });
         }
     });
-    const unsubscribeToolStart = session.on("tool.execution_start", (event) => {
+    const unsubscribeToolStart = activeSession.on("tool.execution_start", (event) => {
         const toolCallID = event?.data?.toolCallId;
         const toolName = event?.data?.toolName ?? event?.data?.mcpToolName ?? "Tool";
         if (typeof toolCallID === "string" && toolCallID.length > 0) {
@@ -296,7 +344,7 @@ export async function sendPrompt(prompt, model, projectPath, allowedTools, onEve
             toolName,
         });
     });
-    const unsubscribeToolComplete = session.on("tool.execution_complete", (event) => {
+    const unsubscribeToolComplete = activeSession.on("tool.execution_complete", (event) => {
         const toolCallID = event?.data?.toolCallId;
         const toolName = event?.data?.toolName
             ?? (typeof toolCallID === "string" ? toolNameByCallID.get(toolCallID) : null)
@@ -339,12 +387,12 @@ export async function sendPrompt(prompt, model, projectPath, allowedTools, onEve
             details: details.length > 0 ? details.slice(0, 280) : undefined,
         });
     });
-    const unsubscribeIdle = session.on("session.idle", () => {
+    const unsubscribeIdle = activeSession.on("session.idle", () => {
         onEvent({ type: "done" });
         resolveDone();
     });
     try {
-        await session.send({ prompt: trimmedPrompt, mode: "immediate" });
+        await activeSession.send({ prompt: trimmedPrompt, mode: "immediate" });
         await done;
         if (!sawAnyOutput) {
             onEvent({ type: "text", text: "Copilot returned no text output for this request." });

@@ -14,5 +14,5 @@ enum PromptStreamEvent: Equatable {
 }
 
 protocol PromptStreamingRepository {
-    func streamPrompt(_ prompt: String, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error>
+    func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error>
 }

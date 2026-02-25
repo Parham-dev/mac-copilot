@@ -13,7 +13,7 @@ final class CopilotPromptStreamClient {
         self.baseURL = baseURL
     }
 
-    func streamPrompt(_ prompt: String, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
+    func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -24,6 +24,7 @@ final class CopilotPromptStreamClient {
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     var payload: [String: Any] = [
                         "prompt": prompt,
+                        "chatID": chatID.uuidString,
                         "model": model ?? "gpt-5",
                         "projectPath": projectPath ?? "",
                     ]

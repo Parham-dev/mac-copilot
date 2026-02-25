@@ -111,6 +111,7 @@ open mac-copilot.xcodeproj
 ## Documentation
 
 - Operational and release docs: [docs/README.md](docs/README.md)
+- Chat/session history architecture: [docs/chat-session-history.md](docs/chat-session-history.md)
 - End-to-end release wrapper: `./scripts/release_dmg.sh --skip-notarize`
 - One-command local DMG build: `./scripts/build_dmg.sh`
 - One-command notarize + staple: `./scripts/notarize_dmg.sh --keychain-profile "<profile>"`

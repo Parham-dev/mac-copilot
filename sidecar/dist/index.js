@@ -103,7 +103,7 @@ app.post("/prompt", async (req, res) => {
         authenticated: isAuthenticated(),
     }));
     try {
-        await sendPrompt(promptText, req.body?.model, req.body?.projectPath, req.body?.allowedTools, (event) => {
+        await sendPrompt(promptText, req.body?.chatID, req.body?.model, req.body?.projectPath, req.body?.allowedTools, (event) => {
             const payload = typeof event === "object" && event !== null
                 ? event
                 : { type: "text", text: String(event ?? "") };
