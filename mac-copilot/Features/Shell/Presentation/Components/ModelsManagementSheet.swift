@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 struct ModelsManagementSheet: View {
     @Environment(\.openURL) private var openURL
@@ -140,16 +139,18 @@ struct ModelsManagementSheet: View {
 
                     Divider()
 
-                    detailsRow("Context Window", value: formatInteger(model.maxContextWindowTokens))
-                    detailsRow("Max Prompt Tokens", value: formatInteger(model.maxPromptTokens))
+                    detailsRow("Context Window", value: ModelsManagementSheetSupport.formatInteger(model.maxContextWindowTokens))
+                    detailsRow("Max Prompt Tokens", value: ModelsManagementSheetSupport.formatInteger(model.maxPromptTokens))
                     detailsRow("Vision", value: model.supportsVision ? "Supported" : "Not supported")
                     detailsRow("Reasoning Effort", value: model.supportsReasoningEffort ? "Supported" : "Not supported")
                     detailsRow("Policy", value: model.policyState?.capitalized ?? "Unknown")
-                    detailsRow("Billing Multiplier", value: formatMultiplier(model.billingMultiplier))
+                    detailsRow("Billing Multiplier", value: ModelsManagementSheetSupport.formatMultiplier(model.billingMultiplier))
 
-                    if needsEnableAction(model) {
+                    if ModelsManagementSheetSupport.needsEnableAction(model) {
                         Button("Enable in GitHub Copilot") {
-                            openEnableURL(for: model)
+                            if let url = ModelsManagementSheetSupport.enableURL(for: model) {
+                                openURL(url)
+                            }
                         }
                         Text("This app can read model policy from SDK, but enabling is currently managed in GitHub Copilot settings.")
                             .font(.caption)
@@ -196,102 +197,5 @@ struct ModelsManagementSheet: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(.quaternary, in: Capsule())
-    }
-
-    private func formatInteger(_ value: Int?) -> String {
-        guard let value, value > 0 else { return "Unknown" }
-        return NumberFormatter.localizedString(from: NSNumber(value: value), number: .decimal)
-    }
-
-    private func formatMultiplier(_ value: Double?) -> String {
-        guard let value else { return "Unknown" }
-        return String(format: "%.2fx", value)
-    }
-
-    private func needsEnableAction(_ model: CopilotModelCatalogItem) -> Bool {
-        guard let state = model.policyState?.lowercased() else { return false }
-        return state != "enabled"
-    }
-
-    private func openEnableURL(for model: CopilotModelCatalogItem) {
-        if let terms = model.policyTerms,
-           let termsURL = URL(string: terms),
-           let scheme = termsURL.scheme,
-           ["http", "https"].contains(scheme.lowercased()) {
-            openURL(termsURL)
-            return
-        }
-
-        if let defaultURL = URL(string: "https://github.com/settings/copilot") {
-            openURL(defaultURL)
-        }
-    }
-}
-
-@MainActor
-final class ModelsManagementViewModel: ObservableObject {
-    @Published private(set) var models: [CopilotModelCatalogItem] = []
-    @Published var selectedModelIDs: Set<String> = []
-    @Published var focusedModelID: String?
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-
-    private let apiService = CopilotAPIService()
-    private let modelSelectionStore: ModelSelectionStore
-
-    init(modelSelectionStore: ModelSelectionStore) {
-        self.modelSelectionStore = modelSelectionStore
-    }
-
-    var focusedModel: CopilotModelCatalogItem? {
-        guard let focusedModelID else { return models.first }
-        return models.first(where: { $0.id == focusedModelID })
-    }
-
-    func loadModels() async {
-        guard models.isEmpty else { return }
-
-        isLoading = true
-        errorMessage = nil
-
-        let fetched = await apiService.fetchModelCatalog()
-        models = fetched
-
-        let persisted = Set(modelSelectionStore.selectedModelIDs())
-        if persisted.isEmpty {
-            selectedModelIDs = Set(fetched.map(\.id))
-        } else {
-            let visible = Set(fetched.map(\.id).filter { persisted.contains($0) })
-            selectedModelIDs = visible.isEmpty ? Set(fetched.map(\.id)) : visible
-        }
-
-        if focusedModelID == nil {
-            focusedModelID = fetched.first?.id
-        }
-
-        isLoading = false
-        if fetched.isEmpty {
-            errorMessage = "No models are currently available."
-        }
-    }
-
-    func selectAll() {
-        selectedModelIDs = Set(models.map(\.id))
-    }
-
-    func clearSelection() {
-        selectedModelIDs.removeAll()
-    }
-
-    func setModel(_ modelID: String, isSelected: Bool) {
-        if isSelected {
-            selectedModelIDs.insert(modelID)
-        } else {
-            selectedModelIDs.remove(modelID)
-        }
-    }
-
-    func saveSelection() {
-        modelSelectionStore.setSelectedModelIDs(Array(selectedModelIDs))
     }
 }

@@ -23,15 +23,14 @@ final class SidecarManager: SidecarLifecycleManaging {
     private let startupTimeout: TimeInterval = 8
     private let preflight = SidecarPreflight(minimumNodeMajorVersion: 20)
     private let restartPolicy = SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
+    private let logger = SidecarLogger()
 
     private lazy var runtimeUtilities = SidecarRuntimeUtilities(port: sidecarPort)
+    private lazy var processController = SidecarProcessController(callbackQueue: queue)
 
-    private var process: Process?
-    private var outputPipe: Pipe?
     private var state: SidecarState = .stopped
     private var isStarting = false
     private var runID: String?
-    private var intentionallyTerminatedPIDs: Set<Int32> = []
 
     private init() {}
 
@@ -64,7 +63,7 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private func startIfNeededLocked(reason: StartReason) {
-        if let process, process.isRunning, state == .healthy {
+        if processController.isRunning, state == .healthy {
             return
         }
 
@@ -73,9 +72,9 @@ final class SidecarManager: SidecarLifecycleManaging {
             return
         }
 
-        if let process, !process.isRunning {
+        if processController.hasStaleProcessHandle() {
             log("Clearing stale process handle")
-            self.process = nil
+            processController.clearStaleProcessHandle()
         }
 
         do {
@@ -124,68 +123,17 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private func launchProcess(nodeExecutable: URL, scriptURL: URL) {
-        let process = Process()
-        process.executableURL = nodeExecutable
-        process.arguments = [scriptURL.path]
-        process.currentDirectoryURL = scriptURL.deletingLastPathComponent()
-        var environment = ProcessInfo.processInfo.environment
-        environment["NODE_NO_WARNINGS"] = "1"
-        process.environment = environment
-
-        let outputPipe = Pipe()
-        self.outputPipe = outputPipe
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        outputPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty,
-                  let text = String(data: data, encoding: .utf8)
-            else {
-                return
-            }
-
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                NSLog("[CopilotForge][Sidecar] %@", trimmed)
-            }
-        }
-
-        process.terminationHandler = { [weak self] process in
-            guard let self else { return }
-
-            self.queue.async {
-                self.log("Sidecar terminated (reason=\(process.terminationReason.rawValue), status=\(process.terminationStatus))")
-
-                if self.intentionallyTerminatedPIDs.remove(process.processIdentifier) != nil {
-                    self.log("Intentional sidecar termination acknowledged")
-                    self.outputPipe?.fileHandleForReading.readabilityHandler = nil
-                    self.outputPipe = nil
-                    if self.process?.processIdentifier == process.processIdentifier {
-                        self.process = nil
-                    }
-                    if case .restarting = self.state {
-                        self.transition(to: .stopped)
-                    }
-                    return
-                }
-
-                self.outputPipe?.fileHandleForReading.readabilityHandler = nil
-                self.outputPipe = nil
-                self.process = nil
-
-                if self.state == .healthy || self.state == .starting {
-                    self.transition(to: .degraded)
-                    self.scheduleRetryIfAllowed()
-                } else if case .restarting = self.state {
-                    self.transition(to: .stopped)
-                }
-            }
-        }
-
         do {
-            try process.run()
-            self.process = process
+            try processController.start(
+                nodeExecutable: nodeExecutable,
+                scriptURL: scriptURL,
+                outputHandler: { text in
+                    NSLog("[CopilotForge][Sidecar] %@", text)
+                },
+                terminationHandler: { [weak self] termination in
+                    self?.handleTermination(termination)
+                }
+            )
             log("Sidecar process launched")
         } catch {
             transition(to: .failed("Failed to start sidecar: \(error.localizedDescription)"))
@@ -193,14 +141,27 @@ final class SidecarManager: SidecarLifecycleManaging {
         }
     }
 
-    private func stopLocked() {
-        if let pid = process?.processIdentifier {
-            intentionallyTerminatedPIDs.insert(pid)
+    private func handleTermination(_ termination: SidecarProcessTermination) {
+        log("Sidecar terminated (reason=\(termination.reasonRawValue), status=\(termination.status))")
+
+        if termination.intentional {
+            log("Intentional sidecar termination acknowledged")
+            if case .restarting = state {
+                transition(to: .stopped)
+            }
+            return
         }
-        process?.terminate()
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        outputPipe = nil
-        process = nil
+
+        if state == .healthy || state == .starting {
+            transition(to: .degraded)
+            scheduleRetryIfAllowed()
+        } else if case .restarting = state {
+            transition(to: .stopped)
+        }
+    }
+
+    private func stopLocked() {
+        processController.stop()
         transition(to: .stopped)
     }
 
@@ -244,10 +205,6 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private func log(_ message: String) {
-        if let runID {
-            NSLog("[CopilotForge][Sidecar][run:%@] %@", runID, message)
-        } else {
-            NSLog("[CopilotForge][Sidecar] %@", message)
-        }
+        logger.log(message, runID: runID)
     }
 }
