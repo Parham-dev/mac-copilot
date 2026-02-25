@@ -79,7 +79,7 @@ mac-copilot/
 
 - macOS (Xcode-capable development machine)
 - Xcode 16+
-- Node.js 20+
+- Node.js 22+ (requires `node:sqlite` support)
 - npm
 - GitHub account with Copilot access
 
@@ -92,12 +92,13 @@ cd sidecar
 npm install
 ```
 
-2) Validate sidecar scripts
+2) Validate sidecar runtime and build
 
 ```bash
-node --check index.js
-node --check copilot.js
+npm run check
 ```
+
+For sidecar-specific details, see `sidecar/README.md`.
 
 3) Open the project
 

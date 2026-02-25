@@ -21,11 +21,16 @@ final class SidecarNodeRuntimeResolver {
             return bundled
         }
 
+        if let pathResolved = resolveNodeFromEnvironmentPATH() {
+            return pathResolved
+        }
+
         let fallbacks = [
             "/opt/homebrew/bin/node",
-            "/opt/homebrew/opt/node@20/bin/node",
+            "/opt/homebrew/opt/node@22/bin/node",
             "/opt/homebrew/opt/node/bin/node",
             "/usr/local/bin/node",
+            "/usr/bin/node",
             "/opt/local/bin/node",
         ]
 
@@ -36,7 +41,7 @@ final class SidecarNodeRuntimeResolver {
             }
         }
 
-        return resolveNodeFromEnvironmentPATH()
+        return nil
     }
 
     func nodeVersionString(executable: URL) -> String {

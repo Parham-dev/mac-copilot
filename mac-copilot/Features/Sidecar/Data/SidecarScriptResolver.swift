@@ -2,21 +2,22 @@ import Foundation
 
 final class SidecarScriptResolver {
     func resolveSidecarScriptURL() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "index", withExtension: "js", subdirectory: "sidecar") {
-            return bundled
+        if let bundledDist = Bundle.main.url(forResource: "index", withExtension: "js", subdirectory: "sidecar/dist") {
+            return bundledDist
         }
 
         let sourceFileURL = URL(fileURLWithPath: #filePath)
         var searchCursor = sourceFileURL.deletingLastPathComponent()
 
         for _ in 0 ..< 12 {
-            let candidate = searchCursor
+            let distCandidate = searchCursor
                 .appendingPathComponent("sidecar", isDirectory: true)
+                .appendingPathComponent("dist", isDirectory: true)
                 .appendingPathComponent("index.js", isDirectory: false)
 
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                NSLog("[CopilotForge] Using local sidecar source at %@", candidate.path)
-                return candidate
+            if FileManager.default.fileExists(atPath: distCandidate.path) {
+                NSLog("[CopilotForge] Using compiled sidecar source at %@", distCandidate.path)
+                return distCandidate
             }
 
             let parent = searchCursor.deletingLastPathComponent()
