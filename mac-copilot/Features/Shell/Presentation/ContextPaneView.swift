@@ -69,15 +69,14 @@ struct ContextPaneView: View {
 
     private var gitPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Git", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                .font(.headline)
+            panelTitle("Git", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
 
             if hasGitRepository {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("You have Git initialized for this project.")
-                        .fontWeight(.medium)
+                        .font(.body)
                     Text("Repository at \(project.localPath)")
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -86,7 +85,7 @@ struct ContextPaneView: View {
                 Spacer()
                 VStack(spacing: 10) {
                     Text("No Git repository found")
-                        .fontWeight(.medium)
+                        .font(.body)
 
                     Button {
                         Task {
@@ -109,6 +108,16 @@ struct ContextPaneView: View {
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.secondary.opacity(0.05))
+    }
+
+    private func panelTitle(_ title: String, systemImage: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.title3)
+            Text(title)
+                .font(.title3)
+                .fontWeight(.semibold)
+        }
     }
 
     private var gitErrorAlertBinding: Binding<Bool> {

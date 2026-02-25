@@ -8,8 +8,7 @@ struct PreviewContextView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Preview", systemImage: "play.rectangle")
-                .font(.headline)
+            panelTitle("Control Center", systemImage: "slider.horizontal.3")
 
             controlRow
             statusView
@@ -17,7 +16,7 @@ struct PreviewContextView: View {
             if let url = previewRuntimeManager.activeURL,
                previewRuntimeManager.activeProjectID == project.id {
                 Text(url.absoluteString)
-                    .font(.caption)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -75,13 +74,15 @@ struct PreviewContextView: View {
             case .ready(let launch):
                 VStack(alignment: .leading, spacing: 6) {
                     Text(launch.summary)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                     Text("Detected adapter: \(launch.adapterName)")
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                 }
             case .unavailable(let message):
                 Text(message)
+                    .font(.body)
                     .foregroundStyle(.secondary)
             }
         }
@@ -134,13 +135,23 @@ struct PreviewContextView: View {
 
         return HStack(spacing: 8) {
             Text(text)
-                .font(.caption)
+                .font(.body)
                 .foregroundStyle(.secondary)
             if let adapter = previewRuntimeManager.adapterName {
                 Text("• \(adapter)")
-                    .font(.caption)
+                    .font(.body)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func panelTitle(_ title: String, systemImage: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.title3)
+            Text(title)
+                .font(.title3)
+                .fontWeight(.semibold)
         }
     }
 

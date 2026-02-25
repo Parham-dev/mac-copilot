@@ -6,6 +6,20 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Image(systemName: "message")
+                    .font(.title3)
+                Text(viewModel.chatTitle)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+
+            Divider()
+
             ChatTranscriptView(
                 messages: viewModel.messages,
                 statusChipsByMessageID: viewModel.statusChipsByMessageID,
@@ -24,7 +38,6 @@ struct ChatView: View {
                 onSend: { Task { await viewModel.send() } }
             )
         }
-        .navigationTitle(viewModel.chatTitle)
         .task {
             await viewModel.loadModelsIfNeeded()
         }
