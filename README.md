@@ -85,91 +85,38 @@ CopilotForge/
 ├── CopilotForge.xcodeproj
 ├── CopilotForge/
 │   ├── App/
-│   │   ├── CopilotForgeApp.swift
-│   │   └── SidecarManager.swift
-│   ├── Views/
-│   │   ├── ContentView.swift
-│   │   ├── ChatView.swift
-│   │   └── AuthView.swift
-│   ├── Services/
-│   │   ├── GitHubAuthService.swift
-│   │   └── CopilotAPIService.swift
-│   └── Models/
-│       └── ChatMessage.swift
+│   │   ├── Bootstrap/
+│   │   │   └── mac_copilotApp.swift
+│   │   └── Environment/
+│   │       └── AppEnvironment.swift
+│   ├── Core/
+│   │   ├── Domain/
+│   │   │   ├── Auth/
+│   │   │   ├── Chat/
+│   │   │   └── Profile/
+│   │   ├── Application/
+│   │   │   ├── Auth/
+│   │   │   ├── Chat/
+│   │   │   └── Profile/
+│   │   ├── Data/
+│   │   │   └── Chat/
+│   │   └── Infrastructure/
+│   │       ├── Auth/
+│   │       ├── Chat/
+│   │       ├── Profile/
+│   │       └── Sidecar/
+│   ├── Features/
+│   │   ├── Auth/Presentation/
+│   │   ├── Chat/Presentation/
+│   │   ├── Profile/Presentation/
+│   │   └── Shell/Presentation/
+│   └── Shared/
+│       └── Support/
 └── sidecar/
     ├── package.json
     ├── index.js
     ├── copilot.js
     └── auth.js
-```
-
-#### Phase 1 Sidecar Example (`sidecar/copilot.js`)
-
-```js
-import { CopilotClient } from "@github/copilot-sdk";
-
-let client = null;
-let session = null;
-
-export async function startClient(token) {
-  process.env.GITHUB_TOKEN = token;
-  client = new CopilotClient();
-  await client.start();
-  session = await client.createSession({ model: "gpt-4o" });
-}
-
-export async function sendPrompt(prompt, onChunk) {
-  if (!session) throw new Error("Not authenticated");
-  await session.send({ prompt }, { onChunk });
-}
-```
-
-#### Phase 1 Sidecar Example (`sidecar/index.js`)
-
-```js
-import express from "express";
-import { startClient, sendPrompt } from "./copilot.js";
-
-const app = express();
-app.use(express.json());
-
-app.post("/auth", async (req, res) => {
-  await startClient(req.body.token);
-  res.json({ ok: true });
-});
-
-app.post("/prompt", async (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  await sendPrompt(req.body.prompt, (chunk) => {
-    res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-  });
-  res.write("data: [DONE]\n\n");
-  res.end();
-});
-
-app.listen(7878, () => console.log("Sidecar ready on :7878"));
-```
-
-#### Phase 1 Sidecar Launch Example (`SidecarManager.swift`)
-
-```swift
-class SidecarManager: ObservableObject {
-    private var process: Process?
-
-    func start() {
-        guard let nodePath = Bundle.main.path(forResource: "node", ofType: nil),
-              let sidecarDir = Bundle.main.resourcePath else { return }
-
-        process = Process()
-        process?.executableURL = URL(fileURLWithPath: nodePath)
-        process?.arguments = ["\(sidecarDir)/sidecar/index.js"]
-        process?.environment = ProcessInfo.processInfo.environment
-        try? process?.run()
-    }
-
-    func stop() { process?.terminate() }
-}
 ```
 
 #### Phase 1 Success Criteria

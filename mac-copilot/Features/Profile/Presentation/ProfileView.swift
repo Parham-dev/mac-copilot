@@ -1,8 +1,12 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @EnvironmentObject private var authService: GitHubAuthService
-    @StateObject private var profileService = GitHubProfileService()
+    @EnvironmentObject private var authViewModel: AuthViewModel
+    @ObservedObject var viewModel: ProfileViewModel
+
+    init(viewModel: ProfileViewModel) {
+        self.viewModel = viewModel
+    }
 
     private let copilotPricingURL = URL(string: "https://github.com/features/copilot")!
 
@@ -18,12 +22,12 @@ struct ProfileView: View {
                     Button("Refresh") {
                         Task { await refresh() }
                     }
-                    .disabled(profileService.isLoading)
+                    .disabled(viewModel.isLoading)
                 }
 
                 copilotStatusCard
 
-                if let profile = profileService.userProfile {
+                if let profile = viewModel.userProfile {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("@\(profile.login)")
                             .font(.headline)
@@ -54,20 +58,20 @@ struct ProfileView: View {
                     }
                 }
 
-                if profileService.isLoading {
+                if viewModel.isLoading {
                     ProgressView("Loading GitHub data…")
                 }
 
-                if let errorMessage = profileService.errorMessage {
+                if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .foregroundStyle(.red)
                 }
 
-                if !profileService.checks.isEmpty {
+                if !viewModel.checks.isEmpty {
                     Text("Available Options")
                         .font(.headline)
 
-                    ForEach(profileService.checks) { check in
+                    ForEach(viewModel.checks) { check in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Image(systemName: check.available ? "checkmark.circle.fill" : "xmark.circle")
@@ -90,11 +94,11 @@ struct ProfileView: View {
                     }
                 }
 
-                if !profileService.rawUserJSON.isEmpty {
+                if !viewModel.rawUserJSON.isEmpty {
                     Text("Raw /user Preview")
                         .font(.headline)
 
-                    Text(profileService.rawUserJSON)
+                    Text(viewModel.rawUserJSON)
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                         .padding(10)
@@ -111,12 +115,12 @@ struct ProfileView: View {
     }
 
     private func refresh() async {
-        guard let token = authService.currentAccessToken() else {
-            profileService.errorMessage = "No GitHub token found. Sign in again."
+        guard let token = authViewModel.currentAccessToken() else {
+            viewModel.setMissingTokenError()
             return
         }
 
-        await profileService.refresh(accessToken: token)
+        await viewModel.refresh(accessToken: token)
     }
 
     @ViewBuilder
@@ -125,7 +129,7 @@ struct ProfileView: View {
             Text("Copilot")
                 .font(.headline)
 
-            if let report = profileService.copilotReport {
+            if let report = viewModel.copilotReport {
                 HStack(spacing: 8) {
                     Image(systemName: report.sessionReady ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundStyle(report.sessionReady ? .green : .orange)
@@ -167,6 +171,7 @@ struct ProfileView: View {
 }
 
 #Preview {
-    ProfileView()
-        .environmentObject(GitHubAuthService())
+    let environment = AppEnvironment.preview()
+    ProfileView(viewModel: environment.sharedProfileViewModel())
+        .environmentObject(environment.authViewModel)
 }

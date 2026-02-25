@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct AuthView: View {
-    @EnvironmentObject private var authService: GitHubAuthService
+    @EnvironmentObject private var authViewModel: AuthViewModel
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -16,23 +16,23 @@ struct AuthView: View {
             HStack(spacing: 10) {
                 Button("Connect GitHub") {
                     Task {
-                        await authService.startDeviceFlow()
-                        if let verificationURI = authService.verificationURI,
+                        await authViewModel.startDeviceFlow()
+                        if let verificationURI = authViewModel.verificationURI,
                            let url = URL(string: verificationURI) {
                             openURL(url)
-                            await authService.pollForAuthorization()
+                            await authViewModel.pollForAuthorization()
                         }
                     }
                 }
-                .disabled(authService.isLoading)
+                .disabled(authViewModel.isLoading)
             }
 
-            if authService.isLoading {
+            if authViewModel.isLoading {
                 ProgressView()
                     .controlSize(.small)
             }
 
-            if let userCode = authService.userCode {
+            if let userCode = authViewModel.userCode {
                 HStack(spacing: 10) {
                     Text("Enter this code on GitHub: \(userCode)")
                         .font(.headline)
@@ -46,15 +46,15 @@ struct AuthView: View {
                 }
             }
 
-            if let verificationURI = authService.verificationURI,
+            if let verificationURI = authViewModel.verificationURI,
                let url = URL(string: verificationURI) {
                 Link("Open GitHub Verification Page", destination: url)
             }
 
-            Text(authService.statusMessage)
+            Text(authViewModel.statusMessage)
                 .foregroundStyle(.secondary)
 
-            if let errorMessage = authService.errorMessage {
+            if let errorMessage = authViewModel.errorMessage {
                 Text(errorMessage)
                     .foregroundStyle(.red)
                     .font(.callout)
@@ -67,5 +67,5 @@ struct AuthView: View {
 
 #Preview {
     AuthView()
-        .environmentObject(GitHubAuthService())
+    .environmentObject(AppEnvironment.preview().authViewModel)
 }

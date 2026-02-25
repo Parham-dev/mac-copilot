@@ -1,102 +1,51 @@
 import Foundation
-import Combine
 
-@MainActor
-final class GitHubProfileService: ObservableObject {
-    struct EndpointCheck: Identifiable {
-        let id = UUID()
-        let name: String
-        let path: String
-        let statusCode: Int
-        let available: Bool
-        let preview: String
-    }
-
-    struct UserProfile {
-        let login: String
-        let name: String?
-        let email: String?
-        let company: String?
-        let publicRepos: Int?
-        let followers: Int?
-        let plan: String?
-    }
-
-    struct CopilotReport {
-        let sessionReady: Bool
-        let usingGitHubToken: Bool
-        let oauthScope: String?
-        let lastAuthAt: String?
-        let lastAuthError: String?
-    }
-
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-    @Published var userProfile: UserProfile?
-    @Published var copilotReport: CopilotReport?
-    @Published var rawUserJSON = ""
-    @Published var checks: [EndpointCheck] = []
-
+final class GitHubProfileRepository: ProfileRepository {
     private let baseURL = URL(string: "https://api.github.com")!
     private let localBaseURL = URL(string: "http://localhost:7878")!
 
-    func refresh(accessToken: String) async {
-        isLoading = true
-        errorMessage = nil
-        checks = []
-        copilotReport = nil
-        NSLog("[CopilotForge][Profile] Refresh started")
+    func fetchProfile(accessToken: String) async throws -> ProfileSnapshot {
+        let userResult = try await request(path: "user", token: accessToken)
+        let rawUserJSON = prettyPrinted(userResult.data)
 
-        do {
-            let userResult = try await request(path: "user", token: accessToken)
-            rawUserJSON = prettyPrinted(userResult.data)
-            userProfile = parseUserProfile(from: userResult.data)
-            NSLog("[CopilotForge][Profile] /user status=%d", userResult.statusCode)
-            NSLog("[CopilotForge][Profile] /user payload=\n%@", rawUserJSON)
-
-            var builtChecks: [EndpointCheck] = [
-                EndpointCheck(
-                    name: "User Profile",
-                    path: "/user",
-                    statusCode: userResult.statusCode,
-                    available: (200 ... 299).contains(userResult.statusCode),
-                    preview: preview(from: userResult.data)
-                )
-            ]
-
-            let emailResult = try await request(path: "user/emails", token: accessToken)
-            NSLog("[CopilotForge][Profile] /user/emails status=%d body=%@", emailResult.statusCode, preview(from: emailResult.data))
-            builtChecks.append(
-                EndpointCheck(
-                    name: "User Emails (scope: user:email)",
-                    path: "/user/emails",
-                    statusCode: emailResult.statusCode,
-                    available: (200 ... 299).contains(emailResult.statusCode),
-                    preview: preview(from: emailResult.data)
-                )
+        var builtChecks: [EndpointCheck] = [
+            EndpointCheck(
+                name: "User Profile",
+                path: "/user",
+                statusCode: userResult.statusCode,
+                available: (200 ... 299).contains(userResult.statusCode),
+                preview: preview(from: userResult.data)
             )
+        ]
 
-            let copilotResult = try await requestLocal(path: "copilot/report")
-            NSLog("[CopilotForge][Profile] local:/copilot/report status=%d body=%@", copilotResult.statusCode, preview(from: copilotResult.data))
-            copilotReport = parseCopilotReport(from: copilotResult.data)
-            builtChecks.append(
-                EndpointCheck(
-                    name: "Copilot SDK Session Report",
-                    path: "local:/copilot/report",
-                    statusCode: copilotResult.statusCode,
-                    available: (200 ... 299).contains(copilotResult.statusCode),
-                    preview: preview(from: copilotResult.data)
-                )
+        let emailResult = try await request(path: "user/emails", token: accessToken)
+        builtChecks.append(
+            EndpointCheck(
+                name: "User Emails (scope: user:email)",
+                path: "/user/emails",
+                statusCode: emailResult.statusCode,
+                available: (200 ... 299).contains(emailResult.statusCode),
+                preview: preview(from: emailResult.data)
             )
+        )
 
-            checks = builtChecks
-            NSLog("[CopilotForge][Profile] Refresh completed with %d checks", checks.count)
-        } catch {
-            errorMessage = error.localizedDescription
-            NSLog("[CopilotForge][Profile] Refresh failed: %@", error.localizedDescription)
-        }
+        let copilotResult = try await requestLocal(path: "copilot/report")
+        builtChecks.append(
+            EndpointCheck(
+                name: "Copilot SDK Session Report",
+                path: "local:/copilot/report",
+                statusCode: copilotResult.statusCode,
+                available: (200 ... 299).contains(copilotResult.statusCode),
+                preview: preview(from: copilotResult.data)
+            )
+        )
 
-        isLoading = false
+        return ProfileSnapshot(
+            userProfile: parseUserProfile(from: userResult.data),
+            copilotReport: parseCopilotReport(from: copilotResult.data),
+            rawUserJSON: rawUserJSON,
+            checks: builtChecks
+        )
     }
 
     private func request(path: String, token: String) async throws -> (statusCode: Int, data: Data) {

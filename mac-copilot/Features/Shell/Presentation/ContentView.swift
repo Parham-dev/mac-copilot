@@ -7,35 +7,34 @@
 
 import SwiftUI
 
-private enum SidebarItem: Hashable {
-    case profile
-    case chat(String)
-}
-
 struct ContentView: View {
-    @EnvironmentObject private var authService: GitHubAuthService
-    @State private var chats: [String] = ["New Project", "Landing Page", "CRM Dashboard"]
-    @State private var selectedItem: SidebarItem? = .chat("New Project")
+    @EnvironmentObject private var authViewModel: AuthViewModel
+    @EnvironmentObject private var appEnvironment: AppEnvironment
+    @ObservedObject var shellViewModel: ShellViewModel
+
+    init(shellViewModel: ShellViewModel) {
+        self.shellViewModel = shellViewModel
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedItem) {
+            List(selection: $shellViewModel.selectedItem) {
                 Section("Workspace") {
                     Label("Profile", systemImage: "person.crop.circle")
-                        .tag(SidebarItem.profile)
+                        .tag(ShellViewModel.SidebarItem.profile)
                 }
 
                 Section("Chats") {
-                    ForEach(chats, id: \.self) { chat in
+                    ForEach(shellViewModel.chats, id: \.self) { chat in
                         Label(chat, systemImage: "bubble.left.and.bubble.right")
-                            .tag(SidebarItem.chat(chat))
+                            .tag(ShellViewModel.SidebarItem.chat(chat))
                     }
                 }
 
-                if authService.isAuthenticated {
+                if authViewModel.isAuthenticated {
                     Section {
                         Button {
-                            authService.signOut()
+                            authViewModel.signOut()
                         } label: {
                             Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
@@ -46,35 +45,32 @@ struct ContentView: View {
             .navigationTitle("CopilotForge")
             .toolbar {
                 ToolbarItem {
-                    Button(action: createChat) {
+                    Button(action: shellViewModel.createChat) {
                         Label("New Chat", systemImage: "plus")
                     }
-                    .disabled(!authService.isAuthenticated)
+                    .disabled(!authViewModel.isAuthenticated)
                 }
             }
         } detail: {
-            if !authService.isAuthenticated {
+            if !authViewModel.isAuthenticated {
                 AuthView()
-            } else if let selectedItem {
+            } else if let selectedItem = shellViewModel.selectedItem {
                 switch selectedItem {
                 case .profile:
-                    ProfileView()
+                    ProfileView(viewModel: appEnvironment.sharedProfileViewModel())
                 case .chat(let selectedChat):
-                    ChatView(chatTitle: selectedChat)
+                    ChatView(viewModel: appEnvironment.chatViewModel(for: selectedChat))
                 }
             } else {
                 ContentUnavailableView("Select a chat", systemImage: "message")
             }
         }
     }
-
-    private func createChat() {
-        let title = "Chat \(chats.count + 1)"
-        chats.append(title)
-        selectedItem = .chat(title)
-    }
 }
 
 #Preview {
-    ContentView()
+    let environment = AppEnvironment.preview()
+    ContentView(shellViewModel: environment.shellViewModel)
+        .environmentObject(environment)
+        .environmentObject(environment.authViewModel)
 }
