@@ -6,12 +6,13 @@ struct ChatMessage: Identifiable, Hashable {
         case assistant
     }
 
-    let id = UUID()
+    let id: UUID
     let role: Role
     var text: String
     let createdAt: Date
 
-    init(role: Role, text: String, createdAt: Date = .now) {
+    init(id: UUID = UUID(), role: Role, text: String, createdAt: Date = .now) {
+        self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt

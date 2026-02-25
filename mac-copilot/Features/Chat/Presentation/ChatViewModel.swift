@@ -9,25 +9,37 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var availableModels: [String] = ["gpt-5"]
     @Published var selectedModel = "gpt-5"
 
+    let chatID: UUID
     let chatTitle: String
     let projectPath: String
 
     private let sendPromptUseCase: SendPromptUseCase
     private let fetchModelsUseCase: FetchModelsUseCase
+    private let chatRepository: ChatRepository
 
     init(
+        chatID: UUID,
         chatTitle: String,
         projectPath: String,
         sendPromptUseCase: SendPromptUseCase,
-        fetchModelsUseCase: FetchModelsUseCase
+        fetchModelsUseCase: FetchModelsUseCase,
+        chatRepository: ChatRepository
     ) {
+        self.chatID = chatID
         self.chatTitle = chatTitle
         self.projectPath = projectPath
         self.sendPromptUseCase = sendPromptUseCase
         self.fetchModelsUseCase = fetchModelsUseCase
-        self.messages = [
-            ChatMessage(role: .assistant, text: "Hi! Describe the app you want to build."),
-        ]
+        self.chatRepository = chatRepository
+
+        let existingMessages = chatRepository.loadMessages(chatID: chatID)
+        if existingMessages.isEmpty {
+            let welcome = ChatMessage(role: .assistant, text: "Hi! Describe the app you want to build.")
+            self.messages = [welcome]
+            chatRepository.saveMessage(chatID: chatID, message: welcome)
+        } else {
+            self.messages = existingMessages
+        }
     }
 
     func loadModelsIfNeeded() async {
@@ -55,9 +67,14 @@ final class ChatViewModel: ObservableObject {
         guard !isSending else { return }
 
         isSending = true
-        messages.append(ChatMessage(role: .user, text: text))
+        let userMessage = ChatMessage(role: .user, text: text)
+        messages.append(userMessage)
+        chatRepository.saveMessage(chatID: chatID, message: userMessage)
+
         let assistantIndex = messages.count
-        messages.append(ChatMessage(role: .assistant, text: ""))
+        let assistantMessage = ChatMessage(role: .assistant, text: "")
+        messages.append(assistantMessage)
+        chatRepository.saveMessage(chatID: chatID, message: assistantMessage)
         draftPrompt = ""
 
         do {
@@ -77,6 +94,12 @@ final class ChatViewModel: ObservableObject {
         } catch {
             messages[assistantIndex].text = "Error: \(error.localizedDescription)"
         }
+
+        chatRepository.updateMessage(
+            chatID: chatID,
+            messageID: assistantMessage.id,
+            text: messages[assistantIndex].text
+        )
 
         isSending = false
     }

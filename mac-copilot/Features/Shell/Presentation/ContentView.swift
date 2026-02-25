@@ -20,82 +20,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $shellViewModel.selectedItem) {
-                Section("Workspace") {
-                    Label("Profile", systemImage: "person.crop.circle")
-                        .tag(ShellViewModel.SidebarItem.profile)
-                }
-
-                Section {
-                    ForEach(shellViewModel.projects) { project in
-                        DisclosureGroup(
-                            isExpanded: Binding(
-                                get: { shellViewModel.isProjectExpanded(project.id) },
-                                set: { shellViewModel.setProjectExpanded(project.id, isExpanded: $0) }
-                            )
-                        ) {
-                            ForEach(shellViewModel.chats(for: project.id), id: \.self) { chat in
-                                Label(chat, systemImage: "bubble.left.and.bubble.right")
-                                    .tag(ShellViewModel.SidebarItem.chat(project.id, chat))
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Label(project.name, systemImage: "folder")
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        shellViewModel.selectProject(project.id)
-                                    }
-
-                                Spacer()
-
-                                Menu {
-                                    Button {
-                                        shellViewModel.createChat(in: project.id)
-                                    } label: {
-                                        Label("New Chat", systemImage: "plus.bubble")
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis")
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 18, alignment: .center)
-                                }
-                                .menuIndicator(.hidden)
-                                .menuStyle(.borderlessButton)
-
-                                if shellViewModel.activeProjectID == project.id {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    HStack {
-                        Text("Projects")
-                        Spacer()
-                        Button {
-                            createProjectWithFolderBrowser()
-                        } label: {
-                            Image(systemName: "folder.badge.plus")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 18, alignment: .center)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 4)
-                        .help("Add New Project")
-                    }
-                }
-
-                if authViewModel.isAuthenticated {
-                    Section {
-                        Button {
-                            authViewModel.signOut()
-                        } label: {
-                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
-                    }
-                }
-            }
+            sidebarList
             .navigationSplitViewColumnWidth(min: 160, ideal: 210)
             .navigationTitle("CopilotForge")
             .toolbar {
@@ -107,57 +32,12 @@ struct ContentView: View {
                 }
             }
         } detail: {
-            if !authViewModel.isAuthenticated {
-                AuthView()
-            } else if let selectedItem = shellViewModel.selectedItem {
-                switch selectedItem {
-                case .profile:
-                    ProfileView(viewModel: appEnvironment.sharedProfileViewModel())
-                case .chat(let projectID, let selectedChat):
-                    if let activeProject = shellViewModel.project(for: projectID) {
-                        let chatViewModel = appEnvironment.chatViewModel(for: selectedChat, project: activeProject)
-
-                        VStack(spacing: 0) {
-                            activeProjectHeader(activeProject)
-                            Divider()
-
-                            HSplitView {
-                                ChatView(viewModel: chatViewModel)
-                                    .frame(minWidth: 300, idealWidth: 470)
-
-                                ContextPaneView(
-                                    shellViewModel: shellViewModel,
-                                    project: activeProject,
-                                    previewResolver: appEnvironment.sharedPreviewResolver(),
-                                    previewRuntimeManager: appEnvironment.sharedPreviewRuntimeManager(),
-                                    onFixLogsRequest: { prompt in
-                                        Task {
-                                            await chatViewModel.send(prompt: prompt)
-                                        }
-                                    }
-                                )
-                                    .frame(minWidth: 300, idealWidth: 470)
-                            }
-                        }
-                    } else {
-                        ContentUnavailableView("Select a project", systemImage: "folder")
-                    }
-                }
-            } else {
-                ContentUnavailableView("Select a chat", systemImage: "message")
-            }
+            detailContent
         }
         .onChange(of: shellViewModel.selectedItem) { _, newValue in
             shellViewModel.didSelectSidebarItem(newValue)
         }
-        .alert("Could not create project", isPresented: Binding(
-            get: { projectCreationError != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    projectCreationError = nil
-                }
-            }
-        )) {
+        .alert("Could not create project", isPresented: projectCreationAlertBinding) {
             Button("OK", role: .cancel) {
                 projectCreationError = nil
             }
@@ -166,25 +46,165 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
-    private func activeProjectHeader(_ project: ProjectRef) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "folder")
-                .foregroundStyle(.secondary)
+    private var sidebarList: some View {
+        List(selection: $shellViewModel.selectedItem) {
+            workspaceSection
+            projectsSection
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
-                    .font(.headline)
-                Text(project.localPath)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            if authViewModel.isAuthenticated {
+                signOutSection
             }
+        }
+    }
+
+    private var workspaceSection: some View {
+        Section("Workspace") {
+            Label("Profile", systemImage: "person.crop.circle")
+                .tag(ShellViewModel.SidebarItem.profile)
+        }
+    }
+
+    private var projectsSection: some View {
+        Section {
+            ForEach(shellViewModel.projects) { project in
+                projectDisclosure(project)
+            }
+        } header: {
+            projectsHeader
+        }
+    }
+
+    private var signOutSection: some View {
+        Section {
+            Button {
+                authViewModel.signOut()
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        }
+    }
+
+    private var projectsHeader: some View {
+        HStack {
+            Text("Projects")
+            Spacer()
+            Button {
+                createProjectWithFolderBrowser()
+            } label: {
+                Image(systemName: "folder.badge.plus")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, alignment: .center)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 4)
+            .help("Add New Project")
+        }
+    }
+
+    private func projectDisclosure(_ project: ProjectRef) -> some View {
+        DisclosureGroup(isExpanded: projectExpandedBinding(for: project.id)) {
+            ForEach(shellViewModel.chats(for: project.id)) { chat in
+                Label(chat.title, systemImage: "bubble.left.and.bubble.right")
+                    .tag(ShellViewModel.SidebarItem.chat(project.id, chat.id))
+            }
+        } label: {
+            projectLabelRow(project)
+        }
+    }
+
+    private func projectLabelRow(_ project: ProjectRef) -> some View {
+        HStack(spacing: 8) {
+            Label(project.name, systemImage: "folder")
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    shellViewModel.selectProject(project.id)
+                }
 
             Spacer()
+
+            Menu {
+                Button {
+                    shellViewModel.createChat(in: project.id)
+                } label: {
+                    Label("New Chat", systemImage: "plus.bubble")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, alignment: .center)
+            }
+            .menuIndicator(.hidden)
+            .menuStyle(.borderlessButton)
+
+            if shellViewModel.activeProjectID == project.id {
+                Image(systemName: "checkmark")
+                    .foregroundStyle(.secondary)
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        if !authViewModel.isAuthenticated {
+            AuthView()
+        } else if let selectedItem = shellViewModel.selectedItem {
+            switch selectedItem {
+            case .profile:
+                ProfileView(viewModel: appEnvironment.sharedProfileViewModel())
+            case .chat(let projectID, let selectedChatID):
+                chatDetailContent(projectID: projectID, selectedChatID: selectedChatID)
+            }
+        } else {
+            ContentUnavailableView("Select a chat", systemImage: "message")
+        }
+    }
+
+    @ViewBuilder
+    private func chatDetailContent(projectID: UUID, selectedChatID: UUID) -> some View {
+        if let activeProject = shellViewModel.project(for: projectID),
+           let selectedChat = shellViewModel.chat(for: selectedChatID, in: projectID) {
+            let chatViewModel = appEnvironment.chatViewModel(for: selectedChat, project: activeProject)
+
+            HSplitView {
+                ChatView(viewModel: chatViewModel)
+                    .frame(minWidth: 300, idealWidth: 470)
+
+                ContextPaneView(
+                    shellViewModel: shellViewModel,
+                    project: activeProject,
+                    previewResolver: appEnvironment.sharedPreviewResolver(),
+                    previewRuntimeManager: appEnvironment.sharedPreviewRuntimeManager(),
+                    onFixLogsRequest: { prompt in
+                        Task {
+                            await chatViewModel.send(prompt: prompt)
+                        }
+                    }
+                )
+                .frame(minWidth: 300, idealWidth: 470)
+            }
+        } else if shellViewModel.project(for: projectID) == nil {
+            ContentUnavailableView("Select a project", systemImage: "folder")
+        } else {
+            ContentUnavailableView("Select a chat", systemImage: "message")
+        }
+    }
+
+    private func projectExpandedBinding(for projectID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { shellViewModel.isProjectExpanded(projectID) },
+            set: { shellViewModel.setProjectExpanded(projectID, isExpanded: $0) }
+        )
+    }
+
+    private var projectCreationAlertBinding: Binding<Bool> {
+        Binding(
+            get: { projectCreationError != nil },
+            set: { shouldShow in
+                if !shouldShow {
+                    projectCreationError = nil
+                }
+            }
+        )
     }
 
     private func createProjectWithFolderBrowser() {

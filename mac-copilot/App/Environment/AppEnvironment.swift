@@ -9,6 +9,7 @@ final class AppEnvironment: ObservableObject {
     private let promptRepository: PromptStreamingRepository
     private let modelRepository: ModelListingRepository
     private let profileRepository: ProfileRepository
+    private let chatRepository: ChatRepository
     private let previewResolver: ProjectPreviewResolver
     private let previewRuntimeManager: PreviewRuntimeManager
     private var chatViewModels: [String: ChatViewModel] = [:]
@@ -22,8 +23,11 @@ final class AppEnvironment: ObservableObject {
         let repository = GitHubAuthRepository(service: service)
         self.authViewModel = AuthViewModel(repository: repository)
 
-        let projectStore = UserDefaultsProjectStore()
-        self.shellViewModel = ShellViewModel(projectStore: projectStore)
+        let dataStack = SwiftDataStack.shared
+        let projectRepository = SwiftDataProjectRepository(context: dataStack.context)
+        let chatRepository = SwiftDataChatRepository(context: dataStack.context)
+        self.chatRepository = chatRepository
+        self.shellViewModel = ShellViewModel(projectRepository: projectRepository, chatRepository: chatRepository)
 
         let copilotAPIService = CopilotAPIService()
         let copilotRepository = CopilotPromptRepository(apiService: copilotAPIService)
@@ -40,8 +44,8 @@ final class AppEnvironment: ObservableObject {
         ])
     }
 
-    func chatViewModel(for chatTitle: String, project: ProjectRef) -> ChatViewModel {
-        let cacheKey = "\(project.id.uuidString)|\(chatTitle)"
+    func chatViewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
+        let cacheKey = "\(project.id.uuidString)|\(chat.id.uuidString)"
 
         if let existing = chatViewModels[cacheKey] {
             return existing
@@ -50,10 +54,12 @@ final class AppEnvironment: ObservableObject {
         let sendUseCase = SendPromptUseCase(repository: promptRepository)
         let fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
         let created = ChatViewModel(
-            chatTitle: chatTitle,
+            chatID: chat.id,
+            chatTitle: chat.title,
             projectPath: project.localPath,
             sendPromptUseCase: sendUseCase,
-            fetchModelsUseCase: fetchModelsUseCase
+            fetchModelsUseCase: fetchModelsUseCase,
+            chatRepository: chatRepository
         )
         chatViewModels[cacheKey] = created
         return created
