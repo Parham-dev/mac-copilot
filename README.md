@@ -127,20 +127,44 @@ CopilotForge/
 
 ---
 
-### 🔜 Phase 2 — App Generation (File Writing + Preview)
+### 🔜 Phase 2 — Workspace UX Shell (Codex-style 3-pane)
+**Goal:** Establish the production UX foundation before deeper generation/deploy features.
+
+**Layout target (desktop-first):**
+- Left sidebar: admin/workspace/project management
+- Center pane: primary chat workflow (resizable)
+- Right pane: switchable context panel (`Preview` / `Git`) (resizable)
+
+**Build now (this phase):**
+- App shell with draggable split panes
+- Project-first navigation and project switching
+- Local project root setup per user (workspace + project folders)
+- Right pane tab switch (`Preview`, `Git`) with placeholders + empty states
+- Persist selected project + pane layout state
+
+**After this phase (same UX track):**
+- Keyboard shortcuts and command palette actions
+- Better onboarding and first-project flow
+- Non-blocking status strip (sidecar/auth/session health)
+
+---
+
+### 🔜 Phase 3 — App Generation (File Writing + Preview)
 **Goal:** User describes an app, Copilot writes real files to a project folder, and live preview renders.
 
-- Project folder picker / creator
-- File explorer sidebar (NSOutlineView-backed SwiftUI)
+**Build now (immediately after Phase 2):**
 - Copilot SDK file-writing tools enabled (read, write, create, delete)
-- WKWebView preview pane with hot reload on file change
+- Connect active chat to active local project scope
+- Preview pane wired to project runtime in WKWebView
+
+**After initial implementation:**
 - Monaco Editor embedded in WKWebView for manual edits
 - “Plan → Build → Review” agent flow (Copilot plan mode)
 - Project state persistence (SwiftData)
 
 ---
 
-### 🔜 Phase 3 — Deployment + MCP Integrations
+### 🔜 Phase 4 — Deployment + MCP Integrations
 **Goal:** One-click deploy. Connect to Supabase, GitHub repo, and Vercel.
 
 - Supabase MCP server integration (tables, auth, storage via chat)
@@ -151,7 +175,7 @@ CopilotForge/
 
 ---
 
-### 🔜 Phase 4 — SaaS Layer + iOS Companion
+### 🔜 Phase 5 — SaaS Layer + iOS Companion
 **Goal:** Monetize the workflow layer (not AI token resale).
 
 - iCloud-backed project sync across user devices
@@ -211,10 +235,11 @@ Commercial use may be allowed depending on current terms; review the SDK and pla
 
 | Phase | Status |
 |---|---|
-| Phase 1 — Auth + First Prompt | 🔨 In Progress |
-| Phase 2 — File Generation + Preview | 📋 Planned |
-| Phase 3 — Deploy + MCP | 📋 Planned |
-| Phase 4 — SaaS + iOS | 📋 Planned |
+| Phase 1 — Auth + First Prompt | ✅ Completed |
+| Phase 2 — Workspace UX Shell (3-pane) | 🔨 Next Up |
+| Phase 3 — File Generation + Preview | 📋 Planned |
+| Phase 4 — Deploy + MCP | 📋 Planned |
+| Phase 5 — SaaS + iOS | 📋 Planned |
 
 ---
 

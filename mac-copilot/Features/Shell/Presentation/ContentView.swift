@@ -59,7 +59,14 @@ struct ContentView: View {
                 case .profile:
                     ProfileView(viewModel: appEnvironment.sharedProfileViewModel())
                 case .chat(let selectedChat):
-                    ChatView(viewModel: appEnvironment.chatViewModel(for: selectedChat))
+                    HSplitView {
+                        ChatView(viewModel: appEnvironment.chatViewModel(for: selectedChat))
+                            .frame(idealWidth: 760)
+                            .layoutPriority(1)
+
+                        ContextPaneView(shellViewModel: shellViewModel, projectName: selectedChat)
+                            .frame(idealWidth: 420)
+                    }
                 }
             } else {
                 ContentUnavailableView("Select a chat", systemImage: "message")

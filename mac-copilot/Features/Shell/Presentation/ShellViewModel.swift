@@ -8,8 +8,16 @@ final class ShellViewModel: ObservableObject {
         case chat(String)
     }
 
+    enum ContextTab: String, CaseIterable, Identifiable {
+        case preview
+        case git
+
+        var id: String { rawValue }
+    }
+
     @Published private(set) var chats: [String]
     @Published var selectedItem: SidebarItem?
+    @Published var selectedContextTab: ContextTab = .preview
 
     private let chatListStore: ChatListStore
 

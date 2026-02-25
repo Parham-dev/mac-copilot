@@ -21,5 +21,6 @@ struct mac_copilotApp: App {
                     await appEnvironment.authViewModel.restoreSessionIfNeeded()
                 }
         }
+        .defaultSize(width: 1360, height: 860)
     }
 }
