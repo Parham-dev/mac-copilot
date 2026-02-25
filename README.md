@@ -108,6 +108,13 @@ open mac-copilot.xcodeproj
 
 4) Run the macOS app target from Xcode
 
+## Documentation
+
+- Operational and release docs: [docs/README.md](docs/README.md)
+- End-to-end release wrapper: `./scripts/release_dmg.sh --skip-notarize`
+- One-command local DMG build: `./scripts/build_dmg.sh`
+- One-command notarize + staple: `./scripts/notarize_dmg.sh --keychain-profile "<profile>"`
+
 ## Notes for Contributors
 
 - Keep feature boundaries strict: avoid cross-feature concrete dependencies where possible.
