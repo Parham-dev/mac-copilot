@@ -6,6 +6,8 @@ final class ChatViewModel: ObservableObject {
     @Published var draftPrompt = ""
     @Published private(set) var isSending = false
     @Published private(set) var messages: [ChatMessage]
+    @Published private(set) var statusChipsByMessageID: [UUID: [String]] = [:]
+    @Published private(set) var streamingAssistantMessageID: UUID?
     @Published private(set) var availableModels: [String] = ["gpt-5"]
     @Published var selectedModel = "gpt-5"
 
@@ -65,23 +67,33 @@ final class ChatViewModel: ObservableObject {
         let assistantIndex = messages.count
         let assistantMessage = sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)
         messages.append(assistantMessage)
+        statusChipsByMessageID[assistantMessage.id] = ["Queued"]
+        streamingAssistantMessageID = assistantMessage.id
         draftPrompt = ""
 
         do {
             var hasContent = false
-            for try await chunk in sendPromptUseCase.execute(
+            for try await event in sendPromptUseCase.execute(
                 prompt: text,
                 model: selectedModel,
                 projectPath: projectPath
             ) {
-                hasContent = true
-                messages[assistantIndex].text += chunk
+                switch event {
+                case .textDelta(let chunk):
+                    hasContent = true
+                    messages[assistantIndex].text += chunk
+                case .status(let label):
+                    appendStatus(label, for: assistantMessage.id)
+                case .completed:
+                    appendStatus("Completed", for: assistantMessage.id)
+                }
             }
 
             if !hasContent {
                 messages[assistantIndex].text = "No response from Copilot."
             }
         } catch {
+            appendStatus("Failed", for: assistantMessage.id)
             messages[assistantIndex].text = "Error: \(error.localizedDescription)"
         }
 
@@ -91,6 +103,13 @@ final class ChatViewModel: ObservableObject {
             text: messages[assistantIndex].text
         )
 
+        streamingAssistantMessageID = nil
         isSending = false
+    }
+
+    private func appendStatus(_ label: String, for messageID: UUID) {
+        let current = statusChipsByMessageID[messageID] ?? []
+        guard current.last != label else { return }
+        statusChipsByMessageID[messageID] = current + [label]
     }
 }

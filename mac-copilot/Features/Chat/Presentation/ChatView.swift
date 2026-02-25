@@ -9,7 +9,11 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatTranscriptView(messages: viewModel.messages)
+            ChatTranscriptView(
+                messages: viewModel.messages,
+                statusChipsByMessageID: viewModel.statusChipsByMessageID,
+                streamingAssistantMessageID: viewModel.streamingAssistantMessageID
+            )
 
             Divider()
 

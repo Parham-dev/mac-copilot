@@ -114,15 +114,15 @@ export async function listAvailableModels() {
   }
 }
 
-export async function sendPrompt(prompt, model, projectPath, onChunk) {
+export async function sendPrompt(prompt, model, projectPath, onEvent) {
   if (!session) {
-    onChunk("Not authenticated yet. Please complete GitHub auth first.");
+    onEvent({ type: "text", text: "Not authenticated yet. Please complete GitHub auth first." });
     return;
   }
 
   const trimmedPrompt = String(prompt ?? "").trim();
   if (!trimmedPrompt) {
-    onChunk("Please enter a prompt.");
+    onEvent({ type: "text", text: "Please enter a prompt." });
     return;
   }
 
@@ -143,12 +143,18 @@ export async function sendPrompt(prompt, model, projectPath, onChunk) {
     rejectDone(new Error(`Copilot response timed out after ${timeoutMs}ms`));
   }, timeoutMs);
 
+  onEvent({ type: "status", label: "Analyzing request" });
+
+  const unsubscribeTurnStart = session.on("assistant.turn_start", () => {
+    onEvent({ type: "status", label: "Generating response" });
+  });
+
   const unsubscribeDelta = session.on("assistant.message_delta", (event) => {
     const delta = event?.data?.deltaContent;
     if (typeof delta === "string" && delta.length > 0) {
       sawAnyOutput = true;
       sawDeltaOutput = true;
-      onChunk(delta);
+      onEvent({ type: "text", text: delta });
     }
   });
 
@@ -156,11 +162,27 @@ export async function sendPrompt(prompt, model, projectPath, onChunk) {
     const content = event?.data?.content;
     if (!sawDeltaOutput && typeof content === "string" && content.length > 0) {
       sawAnyOutput = true;
-      onChunk(content);
+      onEvent({ type: "text", text: content });
     }
   });
 
+  const unsubscribeToolStart = session.on("tool.execution_start", (event) => {
+    onEvent({
+      type: "tool_start",
+      toolName: event?.data?.toolName ?? "Tool",
+    });
+  });
+
+  const unsubscribeToolComplete = session.on("tool.execution_complete", (event) => {
+    onEvent({
+      type: "tool_complete",
+      toolName: event?.data?.toolName ?? "Tool",
+      success: event?.data?.success !== false,
+    });
+  });
+
   const unsubscribeIdle = session.on("session.idle", () => {
+    onEvent({ type: "done" });
     resolveDone();
   });
 
@@ -169,12 +191,15 @@ export async function sendPrompt(prompt, model, projectPath, onChunk) {
     await done;
 
     if (!sawAnyOutput) {
-      onChunk("Copilot returned no text output for this request.");
+      onEvent({ type: "text", text: "Copilot returned no text output for this request." });
     }
   } finally {
     clearTimeout(timeoutId);
+    unsubscribeTurnStart();
     unsubscribeDelta();
     unsubscribeFinal();
+    unsubscribeToolStart();
+    unsubscribeToolComplete();
     unsubscribeIdle();
   }
 }

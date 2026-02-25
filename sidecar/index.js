@@ -105,11 +105,14 @@ app.post("/prompt", async (req, res) => {
   }));
 
   try {
-    await sendPrompt(promptText, req.body?.model, req.body?.projectPath, (chunk) => {
-      const text = typeof chunk === "string" ? chunk : JSON.stringify(chunk);
+    await sendPrompt(promptText, req.body?.model, req.body?.projectPath, (event) => {
+      const payload = typeof event === "object" && event !== null
+        ? event
+        : { type: "text", text: String(event ?? "") };
+      const text = JSON.stringify(payload);
       chunkCount += 1;
       totalChars += text.length;
-      res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      res.write(`data: ${text}\n\n`);
     });
 
     console.log("[CopilotForge][Prompt] done", JSON.stringify({

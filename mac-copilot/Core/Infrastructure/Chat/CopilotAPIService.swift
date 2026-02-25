@@ -10,7 +10,11 @@ final class CopilotAPIService {
     }
 
     private struct SSEPayload: Decodable {
+        let type: String?
         let text: String?
+        let label: String?
+        let toolName: String?
+        let success: Bool?
         let error: String?
     }
 
@@ -40,7 +44,7 @@ final class CopilotAPIService {
         }
     }
 
-    func streamPrompt(_ prompt: String, model: String?, projectPath: String?) -> AsyncThrowingStream<String, Error> {
+    func streamPrompt(_ prompt: String, model: String?, projectPath: String?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -85,10 +89,32 @@ final class CopilotAPIService {
                             throw PromptStreamError(message: error)
                         }
 
+                        if let kind = decoded.type {
+                            switch kind {
+                            case "status":
+                                if let label = decoded.label, !label.isEmpty {
+                                    continuation.yield(.status(label))
+                                }
+                            case "tool_start":
+                                if let name = decoded.toolName, !name.isEmpty {
+                                    continuation.yield(.status("Tool started: \(name)"))
+                                }
+                            case "tool_complete":
+                                if let name = decoded.toolName, !name.isEmpty {
+                                    let suffix = (decoded.success == false) ? "failed" : "done"
+                                    continuation.yield(.status("Tool \(suffix): \(name)"))
+                                }
+                            case "done":
+                                continuation.yield(.completed)
+                            default:
+                                break
+                            }
+                        }
+
                         if let text = decoded.text, !text.isEmpty {
                             receivedChunks += 1
                             receivedChars += text.count
-                            continuation.yield(text)
+                            continuation.yield(.textDelta(text))
                         }
                     }
 

@@ -3,12 +3,42 @@ import AppKit
 
 struct ChatMessageRow: View {
     let message: ChatMessage
+    let statusChips: [String]
+    let isStreaming: Bool
 
     var body: some View {
         HStack {
             if message.role == .assistant {
                 VStack(alignment: .leading, spacing: 6) {
                     bubble(color: .gray.opacity(0.18), alignment: .leading)
+
+                    if isStreaming {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Text("Working…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.leading, 6)
+                    }
+
+                    if !statusChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(statusChips, id: \.self) { chip in
+                                    Text(chip)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(.gray.opacity(0.14))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.leading, 6)
+                    }
 
                     if !message.text.isEmpty {
                         Button {
