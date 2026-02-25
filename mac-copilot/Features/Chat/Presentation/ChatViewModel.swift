@@ -15,7 +15,7 @@ final class ChatViewModel: ObservableObject {
 
     private let sendPromptUseCase: SendPromptUseCase
     private let fetchModelsUseCase: FetchModelsUseCase
-    private let chatRepository: ChatRepository
+    private let sessionCoordinator: ChatSessionCoordinator
 
     init(
         chatID: UUID,
@@ -30,16 +30,8 @@ final class ChatViewModel: ObservableObject {
         self.projectPath = projectPath
         self.sendPromptUseCase = sendPromptUseCase
         self.fetchModelsUseCase = fetchModelsUseCase
-        self.chatRepository = chatRepository
-
-        let existingMessages = chatRepository.loadMessages(chatID: chatID)
-        if existingMessages.isEmpty {
-            let welcome = ChatMessage(role: .assistant, text: "Hi! Describe the app you want to build.")
-            self.messages = [welcome]
-            chatRepository.saveMessage(chatID: chatID, message: welcome)
-        } else {
-            self.messages = existingMessages
-        }
+        self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
+        self.messages = sessionCoordinator.bootstrapMessages(chatID: chatID)
     }
 
     func loadModelsIfNeeded() async {
@@ -67,14 +59,12 @@ final class ChatViewModel: ObservableObject {
         guard !isSending else { return }
 
         isSending = true
-        let userMessage = ChatMessage(role: .user, text: text)
+        let userMessage = sessionCoordinator.appendUserMessage(chatID: chatID, text: text)
         messages.append(userMessage)
-        chatRepository.saveMessage(chatID: chatID, message: userMessage)
 
         let assistantIndex = messages.count
-        let assistantMessage = ChatMessage(role: .assistant, text: "")
+        let assistantMessage = sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)
         messages.append(assistantMessage)
-        chatRepository.saveMessage(chatID: chatID, message: assistantMessage)
         draftPrompt = ""
 
         do {
@@ -95,7 +85,7 @@ final class ChatViewModel: ObservableObject {
             messages[assistantIndex].text = "Error: \(error.localizedDescription)"
         }
 
-        chatRepository.updateMessage(
+        sessionCoordinator.persistAssistantContent(
             chatID: chatID,
             messageID: assistantMessage.id,
             text: messages[assistantIndex].text

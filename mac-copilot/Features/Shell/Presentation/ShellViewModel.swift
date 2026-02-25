@@ -22,33 +22,18 @@ final class ShellViewModel: ObservableObject {
     @Published var selectedContextTab: ContextTab = .preview
     @Published var activeProjectID: ProjectRef.ID?
 
-    private let projectRepository: ProjectRepository
-    private let chatRepository: ChatRepository
+    private let workspaceCoordinator: ShellWorkspaceCoordinator
 
     init(projectRepository: ProjectRepository, chatRepository: ChatRepository) {
-        let loadedProjects = projectRepository.fetchProjects()
-        var seededChats: [ProjectRef.ID: [ChatThreadRef]] = [:]
-        for project in loadedProjects {
-            var chats = chatRepository.fetchChats(projectID: project.id)
-            if chats.isEmpty {
-                chats = [chatRepository.createChat(projectID: project.id, title: "General")]
-            }
-            seededChats[project.id] = chats
-        }
+        let coordinator = ShellWorkspaceCoordinator(projectRepository: projectRepository, chatRepository: chatRepository)
+        let bootstrap = coordinator.makeBootstrapState()
 
-        self.projectRepository = projectRepository
-        self.chatRepository = chatRepository
-        self.projects = loadedProjects
-        self.projectChats = seededChats
-        self.expandedProjectIDs = Set(loadedProjects.map(\.id))
-        self.activeProjectID = loadedProjects.first?.id
-
-        if let firstProject = loadedProjects.first,
-           let firstChat = seededChats[firstProject.id]?.first {
-            self.selectedItem = .chat(firstProject.id, firstChat.id)
-        } else {
-            self.selectedItem = nil
-        }
+        self.workspaceCoordinator = coordinator
+        self.projects = bootstrap.projects
+        self.projectChats = bootstrap.projectChats
+        self.expandedProjectIDs = bootstrap.expandedProjectIDs
+        self.activeProjectID = bootstrap.activeProjectID
+        self.selectedItem = bootstrap.selectedItem
     }
 
     var activeProject: ProjectRef? {
@@ -92,8 +77,7 @@ final class ShellViewModel: ObservableObject {
 
     func createChat(in projectID: ProjectRef.ID) {
         let existing = projectChats[projectID] ?? []
-        let title = "Chat \(existing.count + 1)"
-        let created = chatRepository.createChat(projectID: projectID, title: title)
+        let created = workspaceCoordinator.createChat(projectID: projectID, existingCount: existing.count)
         projectChats[projectID, default: []].append(created)
         expandedProjectIDs.insert(projectID)
         activeProjectID = projectID
@@ -102,10 +86,11 @@ final class ShellViewModel: ObservableObject {
 
     @discardableResult
     func addProject(name: String, localPath: String) -> ProjectRef {
-        let project = projectRepository.createProject(name: name, localPath: localPath)
+        let created = workspaceCoordinator.createProjectWithDefaultChat(name: name, localPath: localPath)
+        let project = created.project
         projects.append(project)
 
-        let defaultChat = chatRepository.createChat(projectID: project.id, title: "General")
+        let defaultChat = created.defaultChat
         projectChats[project.id] = [defaultChat]
         expandedProjectIDs.insert(project.id)
         activeProjectID = project.id

@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct AuthView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
@@ -33,17 +32,7 @@ struct AuthView: View {
             }
 
             if let userCode = authViewModel.userCode {
-                HStack(spacing: 10) {
-                    Text("Enter this code on GitHub: \(userCode)")
-                        .font(.headline)
-
-                    Button("Copy Code") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(userCode, forType: .string)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+                AuthCodeRowView(userCode: userCode)
             }
 
             if let verificationURI = authViewModel.verificationURI,
@@ -51,14 +40,10 @@ struct AuthView: View {
                 Link("Open GitHub Verification Page", destination: url)
             }
 
-            Text(authViewModel.statusMessage)
-                .foregroundStyle(.secondary)
-
-            if let errorMessage = authViewModel.errorMessage {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .font(.callout)
-            }
+            AuthStatusBlockView(
+                statusMessage: authViewModel.statusMessage,
+                errorMessage: authViewModel.errorMessage
+            )
         }
         .padding(24)
         .frame(maxWidth: 520, alignment: .leading)
