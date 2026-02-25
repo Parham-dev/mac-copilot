@@ -10,13 +10,7 @@ final class ChatSessionCoordinator {
 
     func bootstrapMessages(chatID: UUID) -> [ChatMessage] {
         let existingMessages = chatRepository.loadMessages(chatID: chatID)
-        if !existingMessages.isEmpty {
-            return existingMessages
-        }
-
-        let welcome = ChatMessage(role: .assistant, text: "Hi! Describe the app you want to build.")
-        chatRepository.saveMessage(chatID: chatID, message: welcome)
-        return [welcome]
+        return existingMessages
     }
 
     @discardableResult

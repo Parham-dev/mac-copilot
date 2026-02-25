@@ -3,6 +3,38 @@ import SwiftData
 
 @MainActor
 final class SwiftDataChatRepository: ChatRepository {
+    private enum RepositoryError: LocalizedError {
+        case fetchChatsFailed(String)
+        case createChatSaveFailed(String)
+        case fetchMessagesFailed(String)
+        case saveMessageFailed(String)
+        case updateMessageFetchFailed(String)
+        case updateMessageSaveFailed(String)
+        case findProjectFailed(String)
+        case findChatFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .fetchChatsFailed(let details):
+                return "Fetch chats failed: \(details)"
+            case .createChatSaveFailed(let details):
+                return "Create chat save failed: \(details)"
+            case .fetchMessagesFailed(let details):
+                return "Fetch messages failed: \(details)"
+            case .saveMessageFailed(let details):
+                return "Save message failed: \(details)"
+            case .updateMessageFetchFailed(let details):
+                return "Update message fetch failed: \(details)"
+            case .updateMessageSaveFailed(let details):
+                return "Update message save failed: \(details)"
+            case .findProjectFailed(let details):
+                return "Find project failed: \(details)"
+            case .findChatFailed(let details):
+                return "Find chat failed: \(details)"
+            }
+        }
+    }
+
     private let context: ModelContext
 
     init(context: ModelContext) {
@@ -16,7 +48,11 @@ final class SwiftDataChatRepository: ChatRepository {
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
 
-        guard let entities = try? context.fetch(descriptor) else {
+        let entities: [ChatThreadEntity]
+        do {
+            entities = try context.fetch(descriptor)
+        } catch {
+            log(.fetchChatsFailed(error.localizedDescription))
             return []
         }
 
@@ -30,7 +66,13 @@ final class SwiftDataChatRepository: ChatRepository {
         let ref = ChatThreadRef(projectID: projectID, title: title)
         let entity = ChatThreadEntity(id: ref.id, projectID: ref.projectID, title: ref.title, createdAt: ref.createdAt, project: findProjectEntity(id: projectID))
         context.insert(entity)
-        try? context.save()
+
+        do {
+            try context.save()
+        } catch {
+            log(.createChatSaveFailed(error.localizedDescription))
+        }
+
         return ref
     }
 
@@ -41,7 +83,11 @@ final class SwiftDataChatRepository: ChatRepository {
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
 
-        guard let entities = try? context.fetch(descriptor) else {
+        let entities: [ChatMessageEntity]
+        do {
+            entities = try context.fetch(descriptor)
+        } catch {
+            log(.fetchMessagesFailed(error.localizedDescription))
             return []
         }
 
@@ -63,7 +109,12 @@ final class SwiftDataChatRepository: ChatRepository {
             chat: findChatEntity(id: chatID)
         )
         context.insert(entity)
-        try? context.save()
+
+        do {
+            try context.save()
+        } catch {
+            log(.saveMessageFailed(error.localizedDescription))
+        }
     }
 
     func updateMessage(chatID: UUID, messageID: UUID, text: String) {
@@ -72,13 +123,25 @@ final class SwiftDataChatRepository: ChatRepository {
             predicate: #Predicate { $0.id == predicateMessageID }
         )
 
-        guard let entity = (try? context.fetch(descriptor))?.first else {
+        let entity: ChatMessageEntity?
+        do {
+            entity = try context.fetch(descriptor).first
+        } catch {
+            log(.updateMessageFetchFailed(error.localizedDescription))
+            return
+        }
+
+        guard let entity else {
             return
         }
 
         entity.chatID = chatID
         entity.text = text
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            log(.updateMessageSaveFailed(error.localizedDescription))
+        }
     }
 
     private func findProjectEntity(id: UUID) -> ProjectEntity? {
@@ -87,7 +150,12 @@ final class SwiftDataChatRepository: ChatRepository {
             predicate: #Predicate { $0.id == predicateProjectID }
         )
 
-        return try? context.fetch(descriptor).first
+        do {
+            return try context.fetch(descriptor).first
+        } catch {
+            log(.findProjectFailed(error.localizedDescription))
+            return nil
+        }
     }
 
     private func findChatEntity(id: UUID) -> ChatThreadEntity? {
@@ -96,6 +164,15 @@ final class SwiftDataChatRepository: ChatRepository {
             predicate: #Predicate { $0.id == predicateChatID }
         )
 
-        return try? context.fetch(descriptor).first
+        do {
+            return try context.fetch(descriptor).first
+        } catch {
+            log(.findChatFailed(error.localizedDescription))
+            return nil
+        }
+    }
+
+    private func log(_ error: RepositoryError) {
+        NSLog("[CopilotForge][ChatRepo] %@", error.localizedDescription)
     }
 }

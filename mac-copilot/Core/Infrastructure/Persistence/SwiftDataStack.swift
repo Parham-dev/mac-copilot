@@ -15,15 +15,26 @@ final class SwiftDataStack {
             ChatMessageEntity.self,
         ])
 
-        do {
-            let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            container = try ModelContainer(for: schema, configurations: [configuration])
-        } catch {
-            NSLog("[CopilotForge][SwiftData] Falling back to in-memory container: %@", error.localizedDescription)
-            let fallback = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            container = try! ModelContainer(for: schema, configurations: [fallback])
-        }
+        container = Self.makeContainer(schema: schema)
 
         context = ModelContext(container)
+    }
+
+    private static func makeContainer(schema: Schema) -> ModelContainer {
+        do {
+            let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            return try ModelContainer(for: schema, configurations: [configuration])
+        } catch {
+            NSLog("[CopilotForge][SwiftData] Falling back to in-memory container: %@", error.localizedDescription)
+
+            do {
+                let fallback = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                return try ModelContainer(for: schema, configurations: [fallback])
+            } catch {
+                let message = "SwiftData initialization failed for both persistent and in-memory modes: \(error.localizedDescription)"
+                NSLog("[CopilotForge][SwiftData] %@", message)
+                fatalError(message)
+            }
+        }
     }
 }

@@ -3,6 +3,20 @@ import SwiftData
 
 @MainActor
 final class SwiftDataProjectRepository: ProjectRepository {
+    private enum RepositoryError: LocalizedError {
+        case fetchFailed(String)
+        case saveFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .fetchFailed(let details):
+                return "Project fetch failed: \(details)"
+            case .saveFailed(let details):
+                return "Project save failed: \(details)"
+            }
+        }
+    }
+
     private let context: ModelContext
 
     init(context: ModelContext) {
@@ -14,7 +28,11 @@ final class SwiftDataProjectRepository: ProjectRepository {
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
 
-        guard let entities = try? context.fetch(descriptor) else {
+        let entities: [ProjectEntity]
+        do {
+            entities = try context.fetch(descriptor)
+        } catch {
+            log(.fetchFailed(error.localizedDescription))
             return []
         }
 
@@ -28,7 +46,17 @@ final class SwiftDataProjectRepository: ProjectRepository {
         let ref = ProjectRef(name: name, localPath: localPath)
         let entity = ProjectEntity(id: ref.id, name: ref.name, localPath: ref.localPath)
         context.insert(entity)
-        try? context.save()
+
+        do {
+            try context.save()
+        } catch {
+            log(.saveFailed(error.localizedDescription))
+        }
+
         return ref
+    }
+
+    private func log(_ error: RepositoryError) {
+        NSLog("[CopilotForge][ProjectRepo] %@", error.localizedDescription)
     }
 }

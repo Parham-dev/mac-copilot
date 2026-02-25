@@ -14,9 +14,7 @@ final class GitHubAuthRepository: AuthRepository {
         service.objectWillChange
             .sink { [weak self] _ in
                 guard let self else { return }
-                DispatchQueue.main.async {
-                    self.publishState()
-                }
+                self.publishState()
             }
             .store(in: &cancellables)
     }

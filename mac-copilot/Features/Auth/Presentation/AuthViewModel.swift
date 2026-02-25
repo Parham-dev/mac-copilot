@@ -21,7 +21,6 @@ final class AuthViewModel: ObservableObject {
         self.signOutUseCase = SignOutUseCase(repository: repository)
 
         repository.statePublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.state = state
             }
