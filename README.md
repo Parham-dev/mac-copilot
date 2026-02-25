@@ -71,9 +71,9 @@ Every prompt goes directly from the local Copilot CLI to GitHub’s API using th
 #### Scope
 - [x] SwiftUI app skeleton (window, sidebar, chat pane)
 - [x] Node.js sidecar bundled inside the `.app` package
-- [ ] Sidecar launches on app start, exposes `localhost:7878`
-- [ ] GitHub Device Flow OAuth
-- [ ] Token stored securely in macOS Keychain
+- [x] Sidecar launches on app start, exposes `localhost:7878`
+- [x] GitHub Device Flow OAuth
+- [x] Token stored securely in macOS Keychain
 - [ ] `POST /prompt` endpoint calls `@github/copilot-sdk`
 - [ ] Streaming response piped back to SwiftUI via SSE or chunked HTTP
 - [ ] Chat bubble UI renders streamed Copilot output

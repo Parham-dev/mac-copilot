@@ -9,11 +9,15 @@ import SwiftUI
 
 @main
 struct mac_copilotApp: App {
+    @StateObject private var authService = GitHubAuthService()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(authService)
                 .task {
                     SidecarManager.shared.startIfNeeded()
+                    await authService.restoreSessionIfNeeded()
                 }
                 .onDisappear {
                     SidecarManager.shared.stop()

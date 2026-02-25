@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var authService: GitHubAuthService
     @State private var chats: [String] = ["New Project", "Landing Page", "CRM Dashboard"]
     @State private var selectedChat: String? = "New Project"
 
@@ -26,10 +27,21 @@ struct ContentView: View {
                     Button(action: createChat) {
                         Label("New Chat", systemImage: "plus")
                     }
+                    .disabled(!authService.isAuthenticated)
+                }
+
+                ToolbarItem {
+                    if authService.isAuthenticated {
+                        Button("Sign Out") {
+                            authService.signOut()
+                        }
+                    }
                 }
             }
         } detail: {
-            if let selectedChat {
+            if !authService.isAuthenticated {
+                AuthView()
+            } else if let selectedChat {
                 ChatView(chatTitle: selectedChat)
             } else {
                 ContentUnavailableView("Select a chat", systemImage: "message")

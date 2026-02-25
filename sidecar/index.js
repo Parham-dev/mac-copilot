@@ -1,5 +1,6 @@
 import express from "express";
-import { sendPrompt, startClient } from "./copilot.js";
+import { sendPrompt, startClient, isAuthenticated, clearSession } from "./copilot.js";
+import { pollDeviceFlow, startDeviceFlow } from "./auth.js";
 
 const app = express();
 app.use(express.json());
@@ -8,11 +9,48 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "copilotforge-sidecar" });
 });
 
+app.get("/auth/status", (_req, res) => {
+  res.json({ ok: true, authenticated: isAuthenticated() });
+});
+
+app.post("/auth/start", async (req, res) => {
+  try {
+    const result = await startDeviceFlow(req.body?.clientId);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: String(error) });
+  }
+});
+
+app.post("/auth/poll", async (req, res) => {
+  try {
+    const pollResult = await pollDeviceFlow(req.body?.clientId, req.body?.deviceCode);
+
+    if (!pollResult.ok) {
+      res.json({ ok: true, ...pollResult });
+      return;
+    }
+
+    await startClient(pollResult.access_token);
+    res.json({
+      ok: true,
+      status: "authorized",
+      access_token: pollResult.access_token,
+      token_type: pollResult.token_type,
+      scope: pollResult.scope,
+    });
+  } catch (error) {
+    clearSession();
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
 app.post("/auth", async (req, res) => {
   try {
     await startClient(req.body?.token);
-    res.json({ ok: true });
+    res.json({ ok: true, authenticated: true });
   } catch (error) {
+    clearSession();
     res.status(500).json({ ok: false, error: String(error) });
   }
 });
