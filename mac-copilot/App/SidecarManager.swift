@@ -3,20 +3,27 @@ import Foundation
 final class SidecarManager {
     static let shared = SidecarManager()
 
+    private let sidecarPort = 7878
     private var process: Process?
     private var outputPipe: Pipe?
 
     private init() {}
 
     func startIfNeeded() {
-        guard process == nil else { return }
+        if let process, process.isRunning {
+            return
+        }
+        if let process, !process.isRunning {
+            NSLog("[CopilotForge] Clearing stale process handle")
+            self.process = nil
+        }
 
         guard let scriptURL = resolveSidecarScriptURL() else {
             NSLog("[CopilotForge] sidecar/index.js not found in app bundle resources or local source tree")
             return
         }
 
-        if isHealthySidecarAlreadyRunning() {
+        if isHealthySidecarAlreadyRunning(requiredSuccesses: 2) {
             NSLog("[CopilotForge] Existing sidecar detected on :7878, reusing it")
             return
         }
@@ -72,6 +79,12 @@ final class SidecarManager {
         } catch {
             NSLog("[CopilotForge] Failed to start sidecar: %@", error.localizedDescription)
         }
+    }
+
+    func restart() {
+        NSLog("[CopilotForge] Restarting sidecar")
+        stop()
+        startIfNeeded()
     }
 
     private func resolveSidecarScriptURL() -> URL? {
@@ -159,40 +172,53 @@ final class SidecarManager {
         return nil
     }
 
-    private func isHealthySidecarAlreadyRunning() -> Bool {
-        guard let url = URL(string: "http://localhost:7878/health") else {
+    private func isHealthySidecarAlreadyRunning(requiredSuccesses: Int) -> Bool {
+        guard let url = URL(string: "http://localhost:\(sidecarPort)/health") else {
             return false
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 1.0
+        let attempts = max(requiredSuccesses, 1)
+        var successes = 0
 
-        let semaphore = DispatchSemaphore(value: 0)
-        var isHealthy = false
+        for _ in 0 ..< attempts {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 0.8
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-            defer { semaphore.signal() }
+            let semaphore = DispatchSemaphore(value: 0)
+            var isHealthy = false
 
-            guard let http = response as? HTTPURLResponse,
-                  (200 ... 299).contains(http.statusCode),
-                  let data,
-                  let body = String(data: data, encoding: .utf8),
-                  body.contains("copilotforge-sidecar")
-            else {
-                return
+            let task = URLSession.shared.dataTask(with: request) { data, response, _ in
+                defer { semaphore.signal() }
+
+                guard let http = response as? HTTPURLResponse,
+                      (200 ... 299).contains(http.statusCode),
+                      let data,
+                      let body = String(data: data, encoding: .utf8),
+                      body.contains("copilotforge-sidecar")
+                else {
+                    return
+                }
+
+                isHealthy = true
             }
 
-            isHealthy = true
+            task.resume()
+            _ = semaphore.wait(timeout: .now() + 1.0)
+
+            if isHealthy {
+                successes += 1
+                Thread.sleep(forTimeInterval: 0.12)
+            } else {
+                return false
+            }
         }
 
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 1.2)
-        return isHealthy
+        return successes == attempts
     }
 
     private func terminateStaleSidecarProcesses(matching scriptPath: String) {
-        let pidsOutput = runCommand(executable: "/usr/sbin/lsof", arguments: ["-nP", "-iTCP:7878", "-sTCP:LISTEN", "-t"])
+        let pidsOutput = runCommand(executable: "/usr/sbin/lsof", arguments: ["-nP", "-iTCP:\(sidecarPort)", "-sTCP:LISTEN", "-t"])
         let pids = pidsOutput
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

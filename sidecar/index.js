@@ -1,6 +1,6 @@
 import express from "express";
 import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotReport } from "./copilot.js";
-import { pollDeviceFlow, startDeviceFlow } from "./auth.js";
+import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
 
 const app = express();
 app.use(express.json());
@@ -45,7 +45,7 @@ app.post("/auth/poll", async (req, res) => {
     }
 
     await startClient(pollResult.access_token);
-    lastOAuthScope = pollResult.scope ?? null;
+    lastOAuthScope = pollResult.scope ?? (await fetchTokenScopes(pollResult.access_token));
     console.log("[CopilotForge][Sidecar] Copilot auth ready", JSON.stringify({
       authenticated: isAuthenticated(),
       scope: lastOAuthScope,
@@ -67,6 +67,7 @@ app.post("/auth/poll", async (req, res) => {
 app.post("/auth", async (req, res) => {
   try {
     await startClient(req.body?.token);
+    lastOAuthScope = await fetchTokenScopes(req.body?.token);
     res.json({ ok: true, authenticated: true });
   } catch (error) {
     clearSession();

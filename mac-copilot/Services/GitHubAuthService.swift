@@ -194,6 +194,32 @@ final class GitHubAuthService: ObservableObject {
         body: RequestBody,
         as type: ResponseBody.Type
     ) async throws -> ResponseBody {
+        SidecarManager.shared.startIfNeeded()
+
+        var lastError: Error?
+        for attempt in 0 ... 1 {
+            do {
+                return try await performPost(path: path, body: body, as: type)
+            } catch {
+                lastError = error
+                if isRecoverableConnectionError(error), attempt == 0 {
+                    NSLog("[CopilotForge][Auth] Recoverable connection error. Restarting sidecar and retrying %@", path)
+                    SidecarManager.shared.restart()
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    continue
+                }
+                throw error
+            }
+        }
+
+        throw lastError ?? AuthError.server("Unknown auth request failure")
+    }
+
+    private func performPost<RequestBody: Encodable, ResponseBody: Decodable>(
+        path: String,
+        body: RequestBody,
+        as type: ResponseBody.Type
+    ) async throws -> ResponseBody {
         let endpoint = baseURL.appendingPathComponent(path)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"

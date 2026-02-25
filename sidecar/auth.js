@@ -1,5 +1,6 @@
 const GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code";
 const GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
+const GITHUB_USER_URL = "https://api.github.com/user";
 
 export async function startDeviceFlow(clientId) {
   const resolvedClientId = normalizeClientId(clientId);
@@ -80,6 +81,28 @@ export async function pollDeviceFlow(clientId, deviceCode) {
     token_type: payload.token_type,
     scope: payload.scope,
   };
+}
+
+export async function fetchTokenScopes(token) {
+  if (!token) {
+    return null;
+  }
+
+  const response = await fetch(GITHUB_USER_URL, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+
+  const scopesHeader = response.headers.get("x-oauth-scopes");
+  if (!scopesHeader) {
+    return null;
+  }
+
+  return scopesHeader.trim() || null;
 }
 
 function normalizeClientId(clientId) {
