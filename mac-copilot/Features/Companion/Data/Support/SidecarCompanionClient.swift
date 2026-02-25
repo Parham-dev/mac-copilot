@@ -2,15 +2,13 @@ import Foundation
 
 @MainActor
 final class SidecarCompanionClient {
-    private let baseURL: URL
-    private let sidecarLifecycle: SidecarLifecycleManaging
+    private let transport: SidecarHTTPClient
 
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
         sidecarLifecycle: SidecarLifecycleManaging
     ) {
-        self.baseURL = baseURL
-        self.sidecarLifecycle = sidecarLifecycle
+        self.transport = SidecarHTTPClient(baseURL: baseURL, sidecarLifecycle: sidecarLifecycle)
     }
 
     func fetchStatus() async throws -> SidecarCompanionStatusResponse {
@@ -25,113 +23,30 @@ final class SidecarCompanionClient {
         try await post(path: "companion/disconnect", body: EmptyBody(), as: SidecarCompanionStatusResponse.self)
     }
 
-    private func waitForSidecarReady(maxAttempts: Int, delaySeconds: TimeInterval) async -> Bool {
-        for attempt in 1 ... maxAttempts {
-            if await pingHealth() {
-                return true
-            }
-
-            if attempt < maxAttempts {
-                let nanos = UInt64(max(delaySeconds, 0.1) * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
-            }
-        }
-
-        return false
-    }
-
-    private func isRecoverableConnectionError(_ error: Error) -> Bool {
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .networkConnectionLost, .cannotConnectToHost, .timedOut, .notConnectedToInternet, .cannotFindHost:
-                return true
-            default:
-                break
-            }
-        }
-
-        let nsError = error as NSError
-        return nsError.domain == NSURLErrorDomain && nsError.code == URLError.networkConnectionLost.rawValue
-    }
-
     private func get<ResponseBody: Decodable>(path: String, as type: ResponseBody.Type) async throws -> ResponseBody {
-        sidecarLifecycle.startIfNeeded()
-        let endpoint = baseURL.appendingPathComponent(path)
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "GET"
-        return try await send(request: request, as: type)
+        let response = try await transport.get(path: path)
+        return try decode(response: response, as: type)
     }
 
     private func post<RequestBody: Encodable, ResponseBody: Decodable>(path: String, body: RequestBody, as type: ResponseBody.Type) async throws -> ResponseBody {
-        sidecarLifecycle.startIfNeeded()
-        let endpoint = baseURL.appendingPathComponent(path)
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
-        return try await send(request: request, as: type)
+        let response = try await transport.post(path: path, body: body)
+        return try decode(response: response, as: type)
     }
 
-    private func send<ResponseBody: Decodable>(request: URLRequest, as type: ResponseBody.Type) async throws -> ResponseBody {
-        _ = await waitForSidecarReady(maxAttempts: 3, delaySeconds: 0.25)
-
-        var lastError: Error?
-        for attempt in 0 ... 1 {
-            do {
-                var bounded = request
-                bounded.timeoutInterval = 10
-
-                let (data, response) = try await URLSession.shared.data(for: bounded)
-                guard let http = response as? HTTPURLResponse else {
-                    throw CompanionClientError.invalidResponse
-                }
-
-                let decoder = JSONDecoder()
-                if (200 ... 299).contains(http.statusCode) {
-                    do {
-                        return try decoder.decode(ResponseBody.self, from: data)
-                    } catch {
-                        throw CompanionClientError.invalidPayload
-                    }
-                }
-
-                if let apiError = try? decoder.decode(SidecarCompanionErrorResponse.self, from: data) {
-                    throw CompanionClientError.server(apiError.error)
-                }
-
-                throw CompanionClientError.server("HTTP \(http.statusCode)")
-            } catch {
-                lastError = error
-                if isRecoverableConnectionError(error), attempt == 0 {
-                    sidecarLifecycle.startIfNeeded()
-                    let ready = await waitForSidecarReady(maxAttempts: 8, delaySeconds: 0.30)
-                    if !ready {
-                        throw CompanionClientError.server("Local sidecar is still starting. Please retry in a moment.")
-                    }
-                    continue
-                }
-
-                throw error
+    private func decode<ResponseBody: Decodable>(response: SidecarHTTPResponse, as type: ResponseBody.Type) throws -> ResponseBody {
+        let decoder = JSONDecoder()
+        if (200 ... 299).contains(response.statusCode) {
+            guard let decoded = try? decoder.decode(ResponseBody.self, from: response.data) else {
+                throw CompanionClientError.invalidPayload
             }
+            return decoded
         }
 
-        throw lastError ?? CompanionClientError.server("Unknown companion request failure")
-    }
-
-    private func pingHealth() async -> Bool {
-        let endpoint = baseURL.appendingPathComponent("health")
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "GET"
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                return false
-            }
-            return (200 ... 299).contains(http.statusCode)
-        } catch {
-            return false
+        if let apiError = try? decoder.decode(SidecarCompanionErrorResponse.self, from: response.data) {
+            throw CompanionClientError.server(apiError.error)
         }
+
+        throw CompanionClientError.server("HTTP \(response.statusCode)")
     }
 }
 
