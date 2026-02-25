@@ -1,5 +1,8 @@
 import SwiftUI
 import AppKit
+#if canImport(Textual)
+import Textual
+#endif
 
 struct ChatMessageRow: View {
     let message: ChatMessage
@@ -86,7 +89,7 @@ struct ChatMessageRow: View {
     private func assistantBubble(color: Color, alignment: Alignment) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty {
-                Text(message.text)
+                assistantContent
             }
 
             if isStreaming {
@@ -104,6 +107,18 @@ struct ChatMessageRow: View {
         .background(color)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .frame(maxWidth: 700, alignment: alignment)
+    }
+
+    @ViewBuilder
+    private var assistantContent: some View {
+        #if canImport(Textual)
+        StructuredText(markdown: message.text)
+            .textual.structuredTextStyle(.gitHub)
+            .textual.textSelection(.enabled)
+        #else
+        Text(message.text)
+            .textSelection(.enabled)
+        #endif
     }
 
     private func bubble(color: Color, alignment: Alignment) -> some View {

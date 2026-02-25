@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D0F04FA12F4F565F00DAB6A7 /* FactoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA02F4F565F00DAB6A7 /* FactoryKit */; };
 		D0F04FA32F4F565F00DAB6A7 /* FactoryTesting in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA22F4F565F00DAB6A7 /* FactoryTesting */; };
+		D0F04FAA2F4F626600DAB6A7 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA92F4F626600DAB6A7 /* Textual */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0F04FAA2F4F626600DAB6A7 /* Textual in Frameworks */,
 				D0F04FA12F4F565F00DAB6A7 /* FactoryKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -120,6 +122,7 @@
 			name = "mac-copilot";
 			packageProductDependencies = (
 				D0F04FA02F4F565F00DAB6A7 /* FactoryKit */,
+				D0F04FA92F4F626600DAB6A7 /* Textual */,
 			);
 			productName = "mac-copilot";
 			productReference = D0F043992F4F1F1B00DAB6A7 /* mac-copilot.app */;
@@ -206,6 +209,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */,
+				D0F04FA82F4F626600DAB6A7 /* XCRemoteSwiftPackageReference "textual" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0F0439A2F4F1F1B00DAB6A7 /* Products */;
@@ -605,6 +609,14 @@
 				minimumVersion = 2.5.3;
 			};
 		};
+		D0F04FA82F4F626600DAB6A7 /* XCRemoteSwiftPackageReference "textual" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/textual";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -617,6 +629,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */;
 			productName = FactoryTesting;
+		};
+		D0F04FA92F4F626600DAB6A7 /* Textual */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0F04FA82F4F626600DAB6A7 /* XCRemoteSwiftPackageReference "textual" */;
+			productName = Textual;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
