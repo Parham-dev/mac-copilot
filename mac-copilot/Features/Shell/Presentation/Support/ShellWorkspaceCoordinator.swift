@@ -76,4 +76,9 @@ final class ShellWorkspaceCoordinator {
         let defaultChat = chatRepository.createChat(projectID: project.id, title: "General")
         return (project, defaultChat)
     }
+
+    func deleteChat(projectID: UUID, chatID: UUID) -> [ChatThreadRef] {
+        chatRepository.deleteChat(chatID: chatID)
+        return chatRepository.fetchChats(projectID: projectID)
+    }
 }

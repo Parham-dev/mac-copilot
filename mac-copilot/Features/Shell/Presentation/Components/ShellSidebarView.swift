@@ -10,6 +10,7 @@ struct ShellSidebarView: View {
 
     @State private var showsUpdatePlaceholder = false
     @State private var showsProfileMenu = false
+    @State private var hoveredChatID: ChatThreadRef.ID?
 
     var body: some View {
         GeometryReader { geometry in
@@ -160,7 +161,7 @@ struct ShellSidebarView: View {
     private func projectDisclosure(_ project: ProjectRef) -> some View {
         DisclosureGroup(isExpanded: projectExpandedBinding(for: project.id)) {
             ForEach(shellViewModel.chats(for: project.id)) { chat in
-                Label(chat.title, systemImage: "bubble.left.and.bubble.right")
+                chatRow(chat, in: project.id)
                     .tag(ShellViewModel.SidebarItem.chat(project.id, chat.id))
             }
         } label: {
@@ -188,6 +189,43 @@ struct ShellSidebarView: View {
                 }
                 .menuIndicator(.hidden)
                 .menuStyle(.borderlessButton)
+            }
+        }
+    }
+
+    private func chatRow(_ chat: ChatThreadRef, in projectID: ProjectRef.ID) -> some View {
+        let isActive = shellViewModel.selectedItem == .chat(projectID, chat.id)
+        let showMenu = isActive || hoveredChatID == chat.id
+
+        return HStack(spacing: 8) {
+            Label(chat.title, systemImage: "bubble.left.and.bubble.right")
+
+            Spacer(minLength: 4)
+
+            if showMenu {
+                Menu {
+                    Button(role: .destructive) {
+                        shellViewModel.deleteChat(chatID: chat.id, in: projectID)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundColor(Color(nsColor: .secondaryLabelColor))
+                        .frame(width: 18, alignment: .center)
+                        .tint(.primary)
+                }
+                .menuIndicator(.hidden)
+                .menuStyle(.borderlessButton)
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovering in
+            if isHovering {
+                hoveredChatID = chat.id
+            } else if hoveredChatID == chat.id {
+                hoveredChatID = nil
             }
         }
     }

@@ -94,6 +94,19 @@ final class ShellViewModel: ObservableObject {
         }
     }
 
+    func deleteChat(chatID: ChatThreadRef.ID, in projectID: ProjectRef.ID) {
+        let updatedChats = workspaceCoordinator.deleteChat(projectID: projectID, chatID: chatID)
+        projectChats[projectID] = updatedChats
+
+        if selectedItem == .chat(projectID, chatID) {
+            if let replacement = updatedChats.first {
+                selectedItem = .chat(projectID, replacement.id)
+            } else {
+                selectedItem = nil
+            }
+        }
+    }
+
     func clearChatCreationError() {
         chatCreationError = nil
     }

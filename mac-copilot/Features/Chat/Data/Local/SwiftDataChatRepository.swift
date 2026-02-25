@@ -6,6 +6,8 @@ final class SwiftDataChatRepository: ChatRepository {
     private enum RepositoryError: LocalizedError {
         case fetchChatsFailed(String)
         case createChatSaveFailed(String)
+        case deleteChatFetchFailed(String)
+        case deleteChatSaveFailed(String)
         case fetchMessagesFailed(String)
         case saveMessageFailed(String)
         case updateMessageFetchFailed(String)
@@ -21,6 +23,10 @@ final class SwiftDataChatRepository: ChatRepository {
                 return "Fetch chats failed: \(details)"
             case .createChatSaveFailed(let details):
                 return "Create chat save failed: \(details)"
+            case .deleteChatFetchFailed(let details):
+                return "Delete chat fetch failed: \(details)"
+            case .deleteChatSaveFailed(let details):
+                return "Delete chat save failed: \(details)"
             case .fetchMessagesFailed(let details):
                 return "Fetch messages failed: \(details)"
             case .saveMessageFailed(let details):
@@ -80,6 +86,33 @@ final class SwiftDataChatRepository: ChatRepository {
         }
 
         return ref
+    }
+
+    func deleteChat(chatID: UUID) {
+        let predicateChatID = chatID
+        let descriptor = FetchDescriptor<ChatThreadEntity>(
+            predicate: #Predicate { $0.id == predicateChatID }
+        )
+
+        let entity: ChatThreadEntity?
+        do {
+            entity = try context.fetch(descriptor).first
+        } catch {
+            log(.deleteChatFetchFailed(error.localizedDescription))
+            return
+        }
+
+        guard let entity else {
+            return
+        }
+
+        context.delete(entity)
+
+        do {
+            try context.save()
+        } catch {
+            log(.deleteChatSaveFailed(error.localizedDescription))
+        }
     }
 
     func loadMessages(chatID: UUID) -> [ChatMessage] {
