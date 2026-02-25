@@ -228,5 +228,16 @@ async function supportsNodeSqlite() {
 function resolveSDKPath() {
   const currentFile = fileURLToPath(import.meta.url);
   const currentDir = dirname(currentFile);
-  return join(currentDir, "node_modules", "@github", "copilot-sdk");
+  const candidates = [
+    join(currentDir, "node_modules", "@github", "copilot-sdk"),
+    join(currentDir, "..", "node_modules", "@github", "copilot-sdk"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
 }

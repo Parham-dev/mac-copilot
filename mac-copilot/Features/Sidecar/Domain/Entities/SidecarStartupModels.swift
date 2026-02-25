@@ -16,9 +16,9 @@ enum SidecarPreflightError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingSidecarScript:
-            return "sidecar/index.js not found in app bundle resources or local source tree"
+            return "sidecar/dist/index.js not found in app bundle resources or local source tree"
         case .missingNode:
-            return "Compatible Node executable not found (requires node:sqlite support; typically Node 22+)"
+            return "Compatible Node executable not found (requires node:sqlite support; Node 22+). Release builds require bundled Node in app resources."
         case .unsupportedNodeVersion(let found):
             return "Node version \(found) is unsupported. Node 22+ is required"
         case .unsupportedNodeRuntime(let executable):

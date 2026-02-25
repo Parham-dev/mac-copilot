@@ -33,16 +33,8 @@ final class SidecarPreflight {
             throw SidecarPreflightError.unsupportedNodeRuntime(executable: nodeExecutable.path)
         }
 
-        if !isBundledSidecar(scriptURL) {
-            let sidecarDirectory = scriptURL.deletingLastPathComponent()
-            let sdkPackagePath = sidecarDirectory
-                .appendingPathComponent("node_modules", isDirectory: true)
-                .appendingPathComponent("@github", isDirectory: true)
-                .appendingPathComponent("copilot-sdk", isDirectory: true)
-                .path
-            if !FileManager.default.fileExists(atPath: sdkPackagePath) {
-                throw SidecarPreflightError.missingDependencies(path: sdkPackagePath)
-            }
+        if let missingPath = firstMissingSDKSearchPath(scriptURL) {
+            throw SidecarPreflightError.missingDependencies(path: missingPath)
         }
 
         return SidecarStartupConfig(scriptURL: scriptURL, nodeExecutable: nodeExecutable, nodeVersion: nodeVersion)
@@ -61,9 +53,27 @@ final class SidecarPreflight {
         return major >= minimumNodeMajorVersion
     }
 
-    private func isBundledSidecar(_ scriptURL: URL) -> Bool {
-        let resourcesPath = Bundle.main.resourceURL?.path ?? ""
-        guard !resourcesPath.isEmpty else { return false }
-        return scriptURL.path.hasPrefix(resourcesPath)
+    private func firstMissingSDKSearchPath(_ scriptURL: URL) -> String? {
+        let fileManager = FileManager.default
+        let sidecarDirectory = scriptURL.deletingLastPathComponent()
+        let searchRoots = [
+            sidecarDirectory,
+            sidecarDirectory.deletingLastPathComponent(),
+        ]
+
+        var checkedPaths: [String] = []
+        for root in searchRoots {
+            let sdkPath = root
+                .appendingPathComponent("node_modules", isDirectory: true)
+                .appendingPathComponent("@github", isDirectory: true)
+                .appendingPathComponent("copilot-sdk", isDirectory: true)
+                .path
+            checkedPaths.append(sdkPath)
+            if fileManager.fileExists(atPath: sdkPath) {
+                return nil
+            }
+        }
+
+        return checkedPaths.first
     }
 }

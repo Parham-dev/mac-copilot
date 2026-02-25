@@ -110,6 +110,7 @@
 			buildPhases = (
 				D0F043952F4F1F1B00DAB6A7 /* Sources */,
 				D0F043962F4F1F1B00DAB6A7 /* Frameworks */,
+				D0F060012F4F1F1B00DAB6A7 /* Bundle Sidecar Runtime */,
 				D0F043972F4F1F1B00DAB6A7 /* Resources */,
 			);
 			buildRules = (
@@ -246,6 +247,32 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D0F060012F4F1F1B00DAB6A7 /* Bundle Sidecar Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/sidecar/dist/index.js",
+				"$(SRCROOT)/sidecar/package.json",
+				"$(SRCROOT)/scripts/copy_sidecar_runtime.sh",
+			);
+			name = "Bundle Sidecar Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/node",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/sidecar/dist/index.js",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ -f \"$SRCROOT/scripts/copy_sidecar_runtime.sh\" ]; then\n  /bin/sh \"$SRCROOT/scripts/copy_sidecar_runtime.sh\"\nelse\n  echo \"error: Missing build script at $SRCROOT/scripts/copy_sidecar_runtime.sh\"\n  exit 1\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D0F043952F4F1F1B00DAB6A7 /* Sources */ = {
@@ -439,6 +466,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 			};
 			name = Debug;
 		};
@@ -476,6 +504,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 			};
 			name = Release;
 		};

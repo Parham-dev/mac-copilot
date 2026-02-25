@@ -8,6 +8,7 @@ final class SidecarNodeRuntimeResolver {
     }
 
     func resolveNodeExecutable() -> URL? {
+#if DEBUG
         if let override = ProcessInfo.processInfo.environment["COPILOTFORGE_NODE_PATH"],
            FileManager.default.isExecutableFile(atPath: override) {
             let executable = URL(fileURLWithPath: override)
@@ -15,12 +16,15 @@ final class SidecarNodeRuntimeResolver {
                 return executable
             }
         }
+#endif
 
         if let bundled = Bundle.main.url(forResource: "node", withExtension: nil),
-           FileManager.default.isExecutableFile(atPath: bundled.path) {
+           FileManager.default.isExecutableFile(atPath: bundled.path),
+           supportsRequiredBuiltins(executable: bundled) {
             return bundled
         }
 
+#if DEBUG
         if let pathResolved = resolveNodeFromEnvironmentPATH() {
             return pathResolved
         }
@@ -40,6 +44,7 @@ final class SidecarNodeRuntimeResolver {
                 return executable
             }
         }
+#endif
 
         return nil
     }
