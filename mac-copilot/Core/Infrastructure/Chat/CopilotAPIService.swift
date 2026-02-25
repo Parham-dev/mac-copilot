@@ -14,7 +14,33 @@ final class CopilotAPIService {
         let error: String?
     }
 
-    func streamPrompt(_ prompt: String) -> AsyncThrowingStream<String, Error> {
+    private struct ModelsResponse: Decodable {
+        let ok: Bool
+        let models: [String]
+    }
+
+    func fetchModels() async -> [String] {
+        var request = URLRequest(url: baseURL.appendingPathComponent("models"))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200 ... 299).contains(http.statusCode)
+            else {
+                return ["gpt-5"]
+            }
+
+            let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
+            let unique = Array(Set(decoded.models)).sorted()
+            return unique.isEmpty ? ["gpt-5"] : unique
+        } catch {
+            return ["gpt-5"]
+        }
+    }
+
+    func streamPrompt(_ prompt: String, model: String?) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -23,7 +49,10 @@ final class CopilotAPIService {
                     request.httpMethod = "POST"
                     request.timeoutInterval = 120
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONEncoder().encode(["prompt": prompt])
+                    request.httpBody = try JSONEncoder().encode([
+                        "prompt": prompt,
+                        "model": model ?? "gpt-5",
+                    ])
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {

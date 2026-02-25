@@ -6,17 +6,39 @@ final class ChatViewModel: ObservableObject {
     @Published var draftPrompt = ""
     @Published private(set) var isSending = false
     @Published private(set) var messages: [ChatMessage]
+    @Published private(set) var availableModels: [String] = ["gpt-5"]
+    @Published var selectedModel = "gpt-5"
 
     let chatTitle: String
 
     private let sendPromptUseCase: SendPromptUseCase
+    private let fetchModelsUseCase: FetchModelsUseCase
 
-    init(chatTitle: String, sendPromptUseCase: SendPromptUseCase) {
+    init(
+        chatTitle: String,
+        sendPromptUseCase: SendPromptUseCase,
+        fetchModelsUseCase: FetchModelsUseCase
+    ) {
         self.chatTitle = chatTitle
         self.sendPromptUseCase = sendPromptUseCase
+        self.fetchModelsUseCase = fetchModelsUseCase
         self.messages = [
             ChatMessage(role: .assistant, text: "Hi! Describe the app you want to build."),
         ]
+    }
+
+    func loadModelsIfNeeded() async {
+        if availableModels.count > 1 {
+            return
+        }
+
+        let models = await fetchModelsUseCase.execute()
+        if !models.isEmpty {
+            availableModels = models
+            if !models.contains(selectedModel) {
+                selectedModel = models[0]
+            }
+        }
     }
 
     func send() async {
@@ -32,7 +54,7 @@ final class ChatViewModel: ObservableObject {
 
         do {
             var hasContent = false
-            for try await chunk in sendPromptUseCase.execute(prompt: text) {
+            for try await chunk in sendPromptUseCase.execute(prompt: text, model: selectedModel) {
                 hasContent = true
                 messages[assistantIndex].text += chunk
             }

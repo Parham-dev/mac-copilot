@@ -9,49 +9,22 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(viewModel.messages) { message in
-                        HStack {
-                            if message.role == .assistant {
-                                bubble(for: message, color: .gray.opacity(0.2), alignment: .leading)
-                                Spacer(minLength: 40)
-                            } else {
-                                Spacer(minLength: 40)
-                                bubble(for: message, color: .accentColor.opacity(0.2), alignment: .trailing)
-                            }
-                        }
-                    }
-                }
-                .padding()
-            }
+            ChatTranscriptView(messages: viewModel.messages)
 
             Divider()
 
-            HStack(spacing: 10) {
-                TextField("Ask CopilotForge to build something…", text: $viewModel.draftPrompt, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
-
-                Button("Send") {
-                    Task { await viewModel.send() }
-                }
-                .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(viewModel.draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isSending)
-            }
-            .padding()
+            ChatComposerView(
+                draftPrompt: $viewModel.draftPrompt,
+                selectedModel: $viewModel.selectedModel,
+                availableModels: viewModel.availableModels,
+                isSending: viewModel.isSending,
+                onSend: { Task { await viewModel.send() } }
+            )
         }
         .navigationTitle(viewModel.chatTitle)
-    }
-
-    @ViewBuilder
-    private func bubble(for message: ChatMessage, color: Color, alignment: Alignment) -> some View {
-        Text(message.text)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(color)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .frame(maxWidth: 600, alignment: alignment)
+        .task {
+            await viewModel.loadModelsIfNeeded()
+        }
     }
 }
 

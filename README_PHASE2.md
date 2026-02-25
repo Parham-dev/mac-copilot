@@ -62,7 +62,24 @@ Done when:
 
 ---
 
-## Step 4 — Right Pane Integrations
+## Step 4 — Chat UX Refresh + View Refactor ✅
+**Goal:** Modernize chat experience to match Codex-style workflow and keep views modular.
+
+Scope:
+- Refactor chat UI into smaller components (`Transcript`, `MessageRow`, `Composer`, `ToolbarControls`)
+- Add improved prompt composer (multiline input + clear send affordance)
+- Add model picker in composer (backed by Copilot model list endpoint)
+- Add lightweight run metadata row (selected model, project scope)
+- Keep style aligned with current dark/light theme primitives
+
+Done when:
+- Chat is visually closer to target UX in screenshot
+- Prompt entry feels faster/clearer for iterative work
+- No single chat view file grows into monolithic structure
+
+---
+
+## Step 5 — Right Pane Integrations
 **Goal:** Replace placeholders with functional panels.
 
 Scope:
@@ -75,7 +92,7 @@ Done when:
 
 ---
 
-## Step 5 — Persistence + UX Polish
+## Step 6 — Persistence + UX Polish
 **Goal:** Make shell production-usable.
 
 Scope:

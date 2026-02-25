@@ -4,6 +4,7 @@ let client = null;
 let session = null;
 let lastAuthError = null;
 let lastAuthAt = null;
+let activeModel = "gpt-5";
 
 export function isAuthenticated() {
   return session !== null;
@@ -14,7 +15,7 @@ export async function startClient(token) {
     process.env.GITHUB_TOKEN = token;
     client = new CopilotClient();
     await client.start();
-    session = await client.createSession({ model: "gpt-5", streaming: true });
+    session = await client.createSession({ model: activeModel, streaming: true });
     lastAuthError = null;
     lastAuthAt = new Date().toISOString();
   } catch (error) {
@@ -28,18 +29,69 @@ export async function startClient(token) {
 export function clearSession() {
   client = null;
   session = null;
+  activeModel = "gpt-5";
 }
 
 export function getCopilotReport() {
   return {
     sessionReady: session !== null,
+    activeModel,
     lastAuthAt,
     lastAuthError,
     usingGitHubToken: Boolean(process.env.GITHUB_TOKEN),
   };
 }
 
-export async function sendPrompt(prompt, onChunk) {
+async function ensureSessionForModel(model) {
+  const requested = typeof model === "string" && model.trim().length > 0 ? model.trim() : "gpt-5";
+  if (session && activeModel === requested) {
+    return;
+  }
+
+  if (!client) {
+    throw new Error("Copilot client is not initialized.");
+  }
+
+  session = await client.createSession({ model: requested, streaming: true });
+  activeModel = requested;
+}
+
+export async function listAvailableModels() {
+  if (!client || typeof client.listModels !== "function") {
+    return ["gpt-5"];
+  }
+
+  try {
+    const raw = await client.listModels();
+    if (!Array.isArray(raw)) {
+      return ["gpt-5"];
+    }
+
+    const ids = raw
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (item && typeof item === "object") {
+          if (typeof item.id === "string") {
+            return item.id;
+          }
+          if (typeof item.model === "string") {
+            return item.model;
+          }
+        }
+        return null;
+      })
+      .filter((value) => typeof value === "string" && value.length > 0);
+
+    const unique = Array.from(new Set(ids));
+    return unique.length > 0 ? unique : ["gpt-5"];
+  } catch {
+    return ["gpt-5"];
+  }
+}
+
+export async function sendPrompt(prompt, model, onChunk) {
   if (!session) {
     onChunk("Not authenticated yet. Please complete GitHub auth first.");
     return;
@@ -50,6 +102,8 @@ export async function sendPrompt(prompt, onChunk) {
     onChunk("Please enter a prompt.");
     return;
   }
+
+  await ensureSessionForModel(model);
 
   let sawAnyOutput = false;
   let sawDeltaOutput = false;

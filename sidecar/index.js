@@ -1,5 +1,5 @@
 import express from "express";
-import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotReport } from "./copilot.js";
+import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot.js";
 import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
 
 const app = express();
@@ -24,6 +24,15 @@ app.get("/copilot/report", (_req, res) => {
 
   console.log("[CopilotForge][Sidecar] /copilot/report", JSON.stringify(report));
   res.json(report);
+});
+
+app.get("/models", async (_req, res) => {
+  try {
+    const models = await listAvailableModels();
+    res.json({ ok: true, models });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error), models: ["gpt-5"] });
+  }
 });
 
 app.post("/auth/start", async (req, res) => {
@@ -96,7 +105,7 @@ app.post("/prompt", async (req, res) => {
   }));
 
   try {
-    await sendPrompt(promptText, (chunk) => {
+    await sendPrompt(promptText, req.body?.model, (chunk) => {
       const text = typeof chunk === "string" ? chunk : JSON.stringify(chunk);
       chunkCount += 1;
       totalChars += text.length;

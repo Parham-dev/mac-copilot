@@ -7,6 +7,7 @@ final class AppEnvironment: ObservableObject {
     let shellViewModel: ShellViewModel
 
     private let promptRepository: PromptStreamingRepository
+    private let modelRepository: ModelListingRepository
     private let profileRepository: ProfileRepository
     private var chatViewModels: [String: ChatViewModel] = [:]
     private lazy var profileViewModel: ProfileViewModel = {
@@ -23,7 +24,9 @@ final class AppEnvironment: ObservableObject {
         self.shellViewModel = ShellViewModel(projectStore: projectStore)
 
         let copilotAPIService = CopilotAPIService()
-        self.promptRepository = CopilotPromptRepository(apiService: copilotAPIService)
+        let copilotRepository = CopilotPromptRepository(apiService: copilotAPIService)
+        self.promptRepository = copilotRepository
+        self.modelRepository = copilotRepository
         self.profileRepository = GitHubProfileRepository()
     }
 
@@ -34,8 +37,13 @@ final class AppEnvironment: ObservableObject {
             return existing
         }
 
-        let useCase = SendPromptUseCase(repository: promptRepository)
-        let created = ChatViewModel(chatTitle: chatTitle, sendPromptUseCase: useCase)
+        let sendUseCase = SendPromptUseCase(repository: promptRepository)
+        let fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
+        let created = ChatViewModel(
+            chatTitle: chatTitle,
+            sendPromptUseCase: sendUseCase,
+            fetchModelsUseCase: fetchModelsUseCase
+        )
         chatViewModels[cacheKey] = created
         return created
     }
