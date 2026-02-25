@@ -21,6 +21,7 @@ final class ShellViewModel: ObservableObject {
     @Published var selectedItem: SidebarItem?
     @Published var selectedContextTab: ContextTab = .preview
     @Published var activeProjectID: ProjectRef.ID?
+    @Published private(set) var chatCreationError: String?
 
     private let workspaceCoordinator: ShellWorkspaceCoordinator
 
@@ -71,17 +72,30 @@ final class ShellViewModel: ObservableObject {
     }
 
     func createChatInActiveProject() {
-        guard let activeProjectID else { return }
+        guard let activeProjectID else {
+            chatCreationError = "Select a project before creating a new chat."
+            return
+        }
         createChat(in: activeProjectID)
     }
 
     func createChat(in projectID: ProjectRef.ID) {
         let existing = projectChats[projectID] ?? []
-        let created = workspaceCoordinator.createChat(projectID: projectID, existingCount: existing.count)
-        projectChats[projectID, default: []].append(created)
-        expandedProjectIDs.insert(projectID)
-        activeProjectID = projectID
-        selectedItem = .chat(projectID, created.id)
+
+        do {
+            let created = try workspaceCoordinator.createChat(projectID: projectID, existingCount: existing.count)
+            projectChats[projectID, default: []].append(created)
+            expandedProjectIDs.insert(projectID)
+            activeProjectID = projectID
+            selectedItem = .chat(projectID, created.id)
+            chatCreationError = nil
+        } catch {
+            chatCreationError = error.localizedDescription
+        }
+    }
+
+    func clearChatCreationError() {
+        chatCreationError = nil
     }
 
     @discardableResult

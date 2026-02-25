@@ -2,6 +2,17 @@ import Foundation
 
 @MainActor
 final class ShellWorkspaceCoordinator {
+    enum CoordinatorError: LocalizedError {
+        case chatCreationFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .chatCreationFailed:
+                return "Could not create chat thread. Please try again."
+            }
+        }
+    }
+
     struct BootstrapState {
         let projects: [ProjectRef]
         let projectChats: [ProjectRef.ID: [ChatThreadRef]]
@@ -48,9 +59,16 @@ final class ShellWorkspaceCoordinator {
         )
     }
 
-    func createChat(projectID: UUID, existingCount: Int) -> ChatThreadRef {
+    func createChat(projectID: UUID, existingCount: Int) throws -> ChatThreadRef {
         let title = "Chat \(existingCount + 1)"
-        return chatRepository.createChat(projectID: projectID, title: title)
+        let created = chatRepository.createChat(projectID: projectID, title: title)
+        let persisted = chatRepository.fetchChats(projectID: projectID)
+
+        guard persisted.contains(where: { $0.id == created.id }) else {
+            throw CoordinatorError.chatCreationFailed
+        }
+
+        return created
     }
 
     func createProjectWithDefaultChat(name: String, localPath: String) -> (project: ProjectRef, defaultChat: ChatThreadRef) {

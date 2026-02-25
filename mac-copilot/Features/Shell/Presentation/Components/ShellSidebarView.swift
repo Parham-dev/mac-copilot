@@ -37,7 +37,25 @@ struct ShellSidebarView: View {
             } message: {
                 Text("Settings placeholder. I’ll wire this after you define the flow.")
             }
+            .alert("Could not create chat", isPresented: chatCreationErrorAlertBinding) {
+                Button("OK", role: .cancel) {
+                    shellViewModel.clearChatCreationError()
+                }
+            } message: {
+                Text(shellViewModel.chatCreationError ?? "Unknown error")
+            }
         }
+    }
+
+    private var chatCreationErrorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { shellViewModel.chatCreationError != nil },
+            set: { shouldShow in
+                if !shouldShow {
+                    shellViewModel.clearChatCreationError()
+                }
+            }
+        )
     }
 
     private func bottomProfileBar(sidebarWidth: CGFloat) -> some View {
@@ -161,6 +179,7 @@ struct ShellSidebarView: View {
                         .symbolRenderingMode(.monochrome)
                         .foregroundColor(Color(nsColor: .secondaryLabelColor))
                         .frame(width: 18, alignment: .center)
+                        .tint(.primary)
                 }
                 .menuIndicator(.hidden)
                 .menuStyle(.borderlessButton)
