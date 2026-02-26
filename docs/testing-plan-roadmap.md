@@ -101,6 +101,11 @@ Cases:
 Exit criteria:
 - High confidence in start/reuse/retry state transitions.
 
+Current progress (2026-02-26):
+- Implemented `mac-copilotTests/SidecarLifecyclePhase1Tests.swift` for `SidecarRestartPolicy`, `SidecarStateMachine`, and `SidecarManager` core flows.
+- Added deterministic coverage for healthy reuse, stale handle clear/start, readiness failure retry scheduling, retry guard trip, and crash vs intentional termination behavior.
+- Focused run passed: `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS' -only-testing:mac-copilotTests/SidecarLifecyclePhase1Tests`.
+
 ### Phase 2: Chat model and send flow unit tests
 
 Targets:

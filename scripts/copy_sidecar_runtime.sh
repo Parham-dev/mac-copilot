@@ -59,6 +59,11 @@ if ! "$NODE_SOURCE" --input-type=module -e "await import('node:sqlite');" >/dev/
   exit 0
 fi
 
+if [ -e "$RESOURCES_DIR/node" ]; then
+  chmod u+w "$RESOURCES_DIR/node" 2>/dev/null || true
+  rm -f "$RESOURCES_DIR/node"
+fi
+
 cp "$NODE_SOURCE" "$RESOURCES_DIR/node"
-chmod +x "$RESOURCES_DIR/node"
+chmod 755 "$RESOURCES_DIR/node"
 log "Bundled Node from $NODE_SOURCE"
