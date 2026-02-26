@@ -194,6 +194,8 @@ private extension CopilotPromptStreamClient {
         return nsError.code == NSURLErrorCannotConnectToHost
             || nsError.code == NSURLErrorNetworkConnectionLost
             || nsError.code == NSURLErrorTimedOut
+            || nsError.code == NSURLErrorCannotParseResponse
+            || nsError.code == NSURLErrorBadServerResponse
     }
 }
 

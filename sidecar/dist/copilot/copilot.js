@@ -40,6 +40,24 @@ function ensureCopilotShellPath() {
 export function isAuthenticated() {
     return client !== null;
 }
+async function ensureAuthenticatedClient(reason) {
+    if (client) {
+        return;
+    }
+    const token = String(process.env.GITHUB_TOKEN ?? "").trim();
+    if (!token) {
+        return;
+    }
+    try {
+        console.log("[CopilotForge][Sidecar] attempting lazy auth restore", JSON.stringify({ reason }));
+        await startClient(token);
+        console.log("[CopilotForge][Sidecar] lazy auth restore succeeded", JSON.stringify({ reason }));
+    }
+    catch (error) {
+        lastAuthError = String(error);
+        console.error("[CopilotForge][Sidecar] lazy auth restore failed", JSON.stringify({ reason, error: String(error) }));
+    }
+}
 export async function startClient(token) {
     try {
         process.env.GITHUB_TOKEN = token;
@@ -61,10 +79,11 @@ export function clearSession() {
     client = null;
     sessionManager.reset();
 }
-export function getCopilotReport() {
+export async function getCopilotReport() {
+    await ensureAuthenticatedClient("copilot_report");
     const snapshot = sessionManager.activeSnapshot();
     return {
-        sessionReady: sessionManager.hasActiveSessions(),
+        sessionReady: isAuthenticated(),
         activeModel: snapshot.model,
         activeWorkingDirectory: snapshot.workingDirectory,
         activeAvailableTools: snapshot.availableTools,
@@ -75,9 +94,11 @@ export function getCopilotReport() {
     };
 }
 export async function listAvailableModels() {
+    await ensureAuthenticatedClient("models");
     return listModelCatalog(client);
 }
 export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, requestId, onEvent) {
+    await ensureAuthenticatedClient("prompt");
     if (!client) {
         onEvent({ type: "text", text: "Not authenticated yet. Please complete GitHub auth first." });
         return;

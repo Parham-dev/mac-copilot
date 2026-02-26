@@ -59,8 +59,10 @@ struct ChatView: View {
 #if DEBUG
             NSLog("[CopilotForge][ChatView] modelSelection changeToken triggered chatID=%@", viewModel.chatID.uuidString)
 #endif
-            Task {
-                await viewModel.loadModelsIfNeeded(forceReload: true)
+            DispatchQueue.main.async {
+                Task {
+                    await viewModel.loadModelsIfNeeded(forceReload: true)
+                }
             }
         }
     }

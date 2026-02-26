@@ -16,7 +16,6 @@ struct ChatComposerView: View {
     let onSend: () -> Void
 
     @State private var composerHeight: CGFloat
-    @State private var isComposerTextEmpty = true
 
     init(
         draftPrompt: Binding<String>,
@@ -56,7 +55,7 @@ struct ChatComposerView: View {
         VStack(spacing: 8) {
             HStack(alignment: .bottom, spacing: 10) {
                 ZStack(alignment: .topLeading) {
-                    if isComposerTextEmpty {
+                    if draftPrompt.isEmpty {
                         Text("Ask CopilotForge to build something…")
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 12)
@@ -66,7 +65,6 @@ struct ChatComposerView: View {
 
                     ComposerTextView(
                         text: $draftPrompt,
-                        isTextEmpty: $isComposerTextEmpty,
                         dynamicHeight: $composerHeight,
                         minHeight: minComposerHeight,
                         maxHeight: maxComposerHeight,
@@ -118,8 +116,5 @@ struct ChatComposerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .onAppear {
-            isComposerTextEmpty = draftPrompt.isEmpty
-        }
     }
 }

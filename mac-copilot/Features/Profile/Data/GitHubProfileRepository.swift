@@ -46,9 +46,15 @@ final class GitHubProfileRepository: ProfileRepository {
                 (copilotReport?.usingGitHubToken == true) ? "true" : "false"
             )
             do {
-                _ = try await client.authorize(token: accessToken)
-                copilotResult = try await requestLocal(path: "copilot/report")
-                copilotReport = parseCopilotReport(from: copilotResult.data)
+                let refreshed = try await reauthorizeAndRefreshCopilotReport(client: client, accessToken: accessToken)
+                copilotResult = refreshed.report
+                copilotReport = refreshed.parsed
+
+                NSLog(
+                    "[CopilotForge][Profile] reauth outcome (sessionReady=%@ usingGitHubToken=%@)",
+                    (copilotReport?.sessionReady == true) ? "true" : "false",
+                    (copilotReport?.usingGitHubToken == true) ? "true" : "false"
+                )
             } catch {
                 NSLog("[CopilotForge][Profile] sidecar reauth failed: %@", error.localizedDescription)
                 SentryMonitoring.captureError(
@@ -83,6 +89,44 @@ final class GitHubProfileRepository: ProfileRepository {
         }
 
         return !report.sessionReady || !report.usingGitHubToken
+    }
+
+    private func reauthorizeAndRefreshCopilotReport(
+        client: SidecarAuthClient,
+        accessToken: String
+    ) async throws -> (report: (statusCode: Int, data: Data), parsed: CopilotReport?) {
+        var latestReport: (statusCode: Int, data: Data)?
+        var latestParsed: CopilotReport?
+        var lastError: Error?
+
+        for attempt in 1 ... 3 {
+            do {
+                _ = try await client.authorize(token: accessToken)
+
+                let authStatusResponse = try await requestLocal(path: "auth/status")
+                let sidecarAuthenticated = parseAuthStatus(from: authStatusResponse.data) ?? false
+
+                let report = try await requestLocal(path: "copilot/report")
+                latestReport = report
+                latestParsed = parseCopilotReport(from: report.data)
+
+                if sidecarAuthenticated, latestParsed?.sessionReady == true {
+                    return (report, latestParsed)
+                }
+            } catch {
+                lastError = error
+            }
+
+            if attempt < 3 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 250_000_000)
+            }
+        }
+
+        if let latestReport {
+            return (latestReport, latestParsed)
+        }
+
+        throw lastError ?? ProfileError.invalidResponse
     }
 
     private func request(path: String, token: String) async throws -> (statusCode: Int, data: Data) {
@@ -144,6 +188,14 @@ final class GitHubProfileRepository: ProfileRepository {
             lastAuthAt: object["lastAuthAt"] as? String,
             lastAuthError: object["lastAuthError"] as? String
         )
+    }
+
+    private func parseAuthStatus(from data: Data) -> Bool? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        return object["authenticated"] as? Bool
     }
 
     private func preview(from data: Data) -> String {

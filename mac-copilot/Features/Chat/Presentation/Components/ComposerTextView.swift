@@ -3,7 +3,6 @@ import AppKit
 
 struct ComposerTextView: NSViewRepresentable {
     @Binding var text: String
-    @Binding var isTextEmpty: Bool
     @Binding var dynamicHeight: CGFloat
 
     let minHeight: CGFloat
@@ -37,7 +36,6 @@ struct ComposerTextView: NSViewRepresentable {
         textView.string = text
         textView.isEditable = isEditable
         context.coordinator.stageTextValue(textView.string)
-        context.coordinator.updateEmptyState(textView.string)
 
         if let container = textView.textContainer {
             container.widthTracksTextView = true
@@ -63,7 +61,6 @@ struct ComposerTextView: NSViewRepresentable {
         if textView.string != text {
             textView.string = text
             context.coordinator.stageTextValue(textView.string)
-            context.coordinator.updateEmptyState(textView.string)
             context.coordinator.scheduleMetricsRefresh(for: textView)
             context.coordinator.enqueueBindingFlush()
         }
@@ -73,9 +70,10 @@ struct ComposerTextView: NSViewRepresentable {
         private var parent: ComposerTextView
         private var pendingBindingFlush = false
         private var pendingMetricsRefresh = false
+        private var pendingScrollerRefresh = false
         private var latestPendingTextValue = ""
-        private var latestPendingEmptyState = true
         private var latestPendingHeightValue: CGFloat = 0
+        private var latestShouldShowScroller = false
 
         init(parent: ComposerTextView) {
             self.parent = parent
@@ -88,18 +86,12 @@ struct ComposerTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             stageTextValue(textView.string)
-            updateEmptyState(textView.string)
             scheduleMetricsRefresh(for: textView)
             enqueueBindingFlush()
         }
 
         func stageTextValue(_ value: String) {
             latestPendingTextValue = value
-            latestPendingEmptyState = value.isEmpty
-        }
-
-        func updateEmptyState(_ value: String) {
-            latestPendingEmptyState = value.isEmpty
         }
 
         func shouldDeferBindingToTextViewSync(boundText: String) -> Bool {
@@ -119,10 +111,8 @@ struct ComposerTextView: NSViewRepresentable {
             enqueueHeightBindingUpdate(clamped)
 
             if let scrollView = textView.enclosingScrollView {
-                let shouldShowScroller = contentHeight > maxHeight
-                if scrollView.hasVerticalScroller != shouldShowScroller {
-                    scrollView.hasVerticalScroller = shouldShowScroller
-                }
+                latestShouldShowScroller = contentHeight > maxHeight
+                scheduleScrollerRefresh(for: scrollView)
             }
         }
 
@@ -130,12 +120,28 @@ struct ComposerTextView: NSViewRepresentable {
             guard !pendingMetricsRefresh else { return }
             pendingMetricsRefresh = true
 
-            DispatchQueue.main.async { [weak self, weak textView] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self, weak textView] in
                 guard let self else { return }
                 self.pendingMetricsRefresh = false
                 guard let textView else { return }
                 self.updateHeight(for: textView)
                 self.enqueueBindingFlush()
+            }
+        }
+
+        private func scheduleScrollerRefresh(for scrollView: NSScrollView) {
+            guard !pendingScrollerRefresh else { return }
+            pendingScrollerRefresh = true
+
+            DispatchQueue.main.async { [weak self, weak scrollView] in
+                guard let self else { return }
+                self.pendingScrollerRefresh = false
+                guard let scrollView else { return }
+
+                let shouldShowScroller = self.latestShouldShowScroller
+                if scrollView.hasVerticalScroller != shouldShowScroller {
+                    scrollView.hasVerticalScroller = shouldShowScroller
+                }
             }
         }
 
@@ -156,13 +162,8 @@ struct ComposerTextView: NSViewRepresentable {
                     self.parent.text = text
                 }
 
-                let latestEmpty = self.latestPendingEmptyState
-                if self.parent.isTextEmpty != latestEmpty {
-                    self.parent.isTextEmpty = latestEmpty
-                }
-
                 let rounded = (self.latestPendingHeightValue * 2).rounded() / 2
-                if abs(self.parent.dynamicHeight - rounded) > 0.25 {
+                if abs(self.parent.dynamicHeight - rounded) > 1.0 {
                     self.parent.dynamicHeight = rounded
                 }
             }

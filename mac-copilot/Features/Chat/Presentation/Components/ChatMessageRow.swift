@@ -67,7 +67,7 @@ struct ChatMessageRow: View {
         #if canImport(Textual)
         StructuredText(markdown: message.text)
             .textual.structuredTextStyle(.gitHub)
-            .textual.textSelection(.enabled)
+            .textual.textSelection(.disabled)
         #else
         Text(message.text)
             .textSelection(.enabled)
@@ -83,7 +83,7 @@ struct ChatMessageRow: View {
                         #if canImport(Textual)
                         StructuredText(markdown: text)
                             .textual.structuredTextStyle(.gitHub)
-                            .textual.textSelection(.enabled)
+                            .textual.textSelection(.disabled)
                         #else
                         Text(text)
                             .textSelection(.enabled)
