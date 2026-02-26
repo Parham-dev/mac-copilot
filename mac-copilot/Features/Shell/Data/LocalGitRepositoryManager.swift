@@ -43,6 +43,130 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         throw GitRepositoryError(message: message.isEmpty ? "Could not initialize Git repository." : message)
     }
 
+    func repositoryStatus(at path: String) async throws -> GitRepositoryStatus {
+        let result = await runInBackground {
+            self.runGit(arguments: ["-C", path, "status", "--porcelain", "--branch"])
+        }
+
+        guard result.terminationStatus == 0 else {
+            let message = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GitRepositoryError(message: message.isEmpty ? "Could not read Git repository status." : message)
+        }
+
+        let lines = result.output
+            .components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+
+        guard let headerLine = lines.first, headerLine.hasPrefix("##") else {
+            throw GitRepositoryError(message: "Could not determine current Git branch.")
+        }
+
+        let branchName = parseBranchName(from: headerLine)
+        let changedFilesCount = max(lines.count - 1, 0)
+
+        return GitRepositoryStatus(
+            branchName: branchName,
+            changedFilesCount: changedFilesCount,
+            repositoryPath: path
+        )
+    }
+
+    func fileChanges(at path: String) async throws -> [GitFileChange] {
+        let statusResult = await runInBackground {
+            self.runGit(arguments: ["-C", path, "status", "--porcelain"])
+        }
+
+        guard statusResult.terminationStatus == 0 else {
+            let message = statusResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GitRepositoryError(message: message.isEmpty ? "Could not read Git file changes." : message)
+        }
+
+        let unstagedNumStatResult = await runInBackground {
+            self.runGit(arguments: ["-C", path, "diff", "--numstat"])
+        }
+        let stagedNumStatResult = await runInBackground {
+            self.runGit(arguments: ["-C", path, "diff", "--cached", "--numstat"])
+        }
+
+        let unstagedLineCounts = parseNumStatMap(from: unstagedNumStatResult.output)
+        let stagedLineCounts = parseNumStatMap(from: stagedNumStatResult.output)
+
+        let lines = statusResult.output
+            .components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+
+        return lines.compactMap { line in
+            parseGitFileChange(
+                from: line,
+                repositoryPath: path,
+                stagedLineCounts: stagedLineCounts,
+                unstagedLineCounts: unstagedLineCounts
+            )
+        }
+    }
+
+    func recentCommits(at path: String, limit: Int) async throws -> [GitRecentCommit] {
+        let result = await runInBackground {
+            self.runGit(arguments: [
+                "-C", path,
+                "log",
+                "-n", String(max(limit, 1)),
+                "--pretty=format:%h%x09%an%x09%ar%x09%s"
+            ])
+        }
+
+        if result.terminationStatus != 0 {
+            let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if output.localizedCaseInsensitiveContains("does not have any commits yet") {
+                return []
+            }
+
+            throw GitRepositoryError(message: output.isEmpty ? "Could not read recent commits." : output)
+        }
+
+        let lines = result.output
+            .components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+
+        return lines.compactMap { line in
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 4 else { return nil }
+
+            return GitRecentCommit(
+                shortHash: parts[0],
+                author: parts[1],
+                relativeTime: parts[2],
+                message: parts[3]
+            )
+        }
+    }
+
+    func commit(at path: String, message: String) async throws {
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedMessage.isEmpty else {
+            throw GitRepositoryError(message: "Commit message cannot be empty.")
+        }
+
+        let stageResult = await runInBackground {
+            self.runGit(arguments: ["-C", path, "add", "-A"])
+        }
+
+        guard stageResult.terminationStatus == 0 else {
+            let message = stageResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GitRepositoryError(message: message.isEmpty ? "Could not stage Git changes." : message)
+        }
+
+        let result = await runInBackground {
+            self.runGit(arguments: ["-C", path, "commit", "-m", trimmedMessage])
+        }
+
+        guard result.terminationStatus == 0 else {
+            let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fallback = output.isEmpty ? "Could not commit Git changes." : output
+            throw GitRepositoryError(message: fallback)
+        }
+    }
+
     private func runGit(arguments: [String]) -> GitCommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -69,5 +193,144 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
                 continuation.resume(returning: operation())
             }
         }
+    }
+
+    private func parseBranchName(from statusHeaderLine: String) -> String {
+        let header = statusHeaderLine
+            .replacingOccurrences(of: "##", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if header.hasPrefix("No commits yet on ") {
+            return String(header.dropFirst("No commits yet on ".count))
+        }
+
+        if header.hasPrefix("HEAD (no branch)") {
+            return "Detached HEAD"
+        }
+
+        let branchPart = header
+            .components(separatedBy: "...")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let branchPart, !branchPart.isEmpty else {
+            return "Unknown"
+        }
+
+        return branchPart
+    }
+
+    private func parseGitFileChange(
+        from line: String,
+        repositoryPath: String,
+        stagedLineCounts: [String: (added: Int, deleted: Int)],
+        unstagedLineCounts: [String: (added: Int, deleted: Int)]
+    ) -> GitFileChange? {
+        guard line.count >= 3 else { return nil }
+
+        let chars = Array(line)
+        let stagedStatus = chars[0]
+        let unstagedStatus = chars[1]
+
+        let rawPath = String(chars.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        let path = normalizePath(rawPath)
+        guard !path.isEmpty else { return nil }
+
+        let stagedStats = stagedLineCounts[path] ?? (0, 0)
+        let unstagedStats = unstagedLineCounts[path] ?? (0, 0)
+        let state = mapFileState(stagedStatus: stagedStatus, unstagedStatus: unstagedStatus)
+
+        var addedLines = stagedStats.added + unstagedStats.added
+        let deletedLines = stagedStats.deleted + unstagedStats.deleted
+
+        if state == .added,
+           addedLines == 0,
+           deletedLines == 0,
+           let textLineCount = countTextFileLinesIfPossible(repositoryPath: repositoryPath, relativePath: path) {
+            addedLines = textLineCount
+        }
+
+        return GitFileChange(
+            path: path,
+            state: state,
+            addedLines: addedLines,
+            deletedLines: deletedLines,
+            isStaged: stagedStatus != " ",
+            isUnstaged: unstagedStatus != " "
+        )
+    }
+
+    private func mapFileState(stagedStatus: Character, unstagedStatus: Character) -> GitFileChangeState {
+        let statuses = [stagedStatus, unstagedStatus]
+
+        if statuses.contains("A") || statuses.contains("?") {
+            return .added
+        }
+
+        if statuses.contains("D") {
+            return .deleted
+        }
+
+        return .modified
+    }
+
+    private func parseNumStatMap(from output: String) -> [String: (added: Int, deleted: Int)] {
+        let lines = output
+            .components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+
+        var map: [String: (added: Int, deleted: Int)] = [:]
+
+        for line in lines {
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 3 else { continue }
+
+            let addedLines = Int(parts[0]) ?? 0
+            let deletedLines = Int(parts[1]) ?? 0
+            let path = normalizePath(parts[2])
+            guard !path.isEmpty else { continue }
+
+            let existing = map[path] ?? (0, 0)
+            map[path] = (existing.added + addedLines, existing.deleted + deletedLines)
+        }
+
+        return map
+    }
+
+    private func normalizePath(_ rawPath: String) -> String {
+        let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let arrowRange = trimmed.range(of: " -> ", options: .backwards) {
+            return String(trimmed[arrowRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+        }
+
+        return trimmed
+    }
+
+    private func countTextFileLinesIfPossible(repositoryPath: String, relativePath: String) -> Int? {
+        let fileURL = URL(fileURLWithPath: repositoryPath).appendingPathComponent(relativePath)
+
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+
+        guard let data = try? Data(contentsOf: fileURL) else {
+            return nil
+        }
+
+        if data.contains(0) {
+            return nil
+        }
+
+        guard let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+
+        var lineCount = 0
+        text.enumerateLines { _, _ in
+            lineCount += 1
+        }
+
+        return lineCount
     }
 }

@@ -1,6 +1,10 @@
 import Foundation
 import Combine
 
+extension Notification.Name {
+    static let chatResponseDidFinish = Notification.Name("chatResponseDidFinish")
+}
+
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var draftPrompt = ""

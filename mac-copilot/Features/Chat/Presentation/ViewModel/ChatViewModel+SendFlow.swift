@@ -96,5 +96,11 @@ extension ChatViewModel {
 
         streamingAssistantMessageID = nil
         isSending = false
+
+        NotificationCenter.default.post(
+            name: .chatResponseDidFinish,
+            object: nil,
+            userInfo: ["projectPath": projectPath]
+        )
     }
 }

@@ -1,18 +1,14 @@
 import SwiftUI
 import Foundation
+import Combine
 
 struct ContextPaneView: View {
     @ObservedObject var shellViewModel: ShellViewModel
     let project: ProjectRef
     let controlCenterResolver: ProjectControlCenterResolver
     @ObservedObject var controlCenterRuntimeManager: ControlCenterRuntimeManager
-    private let checkGitRepositoryUseCase: CheckGitRepositoryUseCase
-    private let initializeGitRepositoryUseCase: InitializeGitRepositoryUseCase
+    @StateObject private var viewModel: ContextPaneViewModel
     let onFixLogsRequest: ((String) -> Void)?
-
-    @State private var hasGitRepository = false
-    @State private var isInitializingGit = false
-    @State private var gitErrorMessage: String?
 
     init(
         shellViewModel: ShellViewModel,
@@ -27,8 +23,7 @@ struct ContextPaneView: View {
         self.controlCenterResolver = controlCenterResolver
         self.controlCenterRuntimeManager = controlCenterRuntimeManager
         self.onFixLogsRequest = onFixLogsRequest
-        self.checkGitRepositoryUseCase = CheckGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
-        self.initializeGitRepositoryUseCase = InitializeGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
+        _viewModel = StateObject(wrappedValue: ContextPaneViewModel(gitRepositoryManager: gitRepositoryManager))
     }
 
     var body: some View {
@@ -41,20 +36,30 @@ struct ContextPaneView: View {
         }
         .onAppear {
             Task {
-                await refreshGitStatus()
+                await viewModel.refreshGitStatus(projectPath: project.localPath)
             }
         }
         .onChange(of: project.id) { _, _ in
             Task {
-                await refreshGitStatus()
+                await viewModel.refreshGitStatus(projectPath: project.localPath)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .chatResponseDidFinish)) { notification in
+            guard let projectPath = notification.userInfo?["projectPath"] as? String,
+                  projectPath == project.localPath else {
+                return
+            }
+
+            Task {
+                await viewModel.refreshGitStatus(projectPath: project.localPath)
             }
         }
         .alert("Git", isPresented: gitErrorAlertBinding) {
             Button("OK", role: .cancel) {
-                gitErrorMessage = nil
+                viewModel.clearGitError()
             }
         } message: {
-            Text(gitErrorMessage ?? "Unknown error")
+            Text(viewModel.gitErrorMessage ?? "Unknown error")
         }
     }
 
@@ -69,16 +74,134 @@ struct ContextPaneView: View {
 
     private var gitPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            panelTitle("Git", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-
-            if hasGitRepository {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("You have Git initialized for this project.")
-                        .font(.body)
-                    Text("Repository at \(project.localPath)")
-                        .font(.body)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                panelTitle("Git", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                Spacer()
+                HStack(spacing: 4) {
+                    Text("+\(viewModel.totalAddedLines)")
+                        .foregroundStyle(.green)
+                    Text("/")
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    Text("-\(viewModel.totalDeletedLines)")
+                        .foregroundStyle(.red)
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            }
+
+            if viewModel.hasGitRepository {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let status = viewModel.gitRepositoryStatus {
+                        Text("Branch: \(status.branchName)")
+                            .font(.body)
+                        Text(status.statusText)
+                            .font(.body)
+                            .foregroundStyle(status.isClean ? .secondary : .primary)
+
+                        if viewModel.hasChanges {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    ForEach(GitFileChangeState.allCases, id: \.self) { state in
+                                        let sectionChanges = viewModel.changes(for: state)
+                                        if !sectionChanges.isEmpty {
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text(state.title)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+
+                                                ForEach(sectionChanges) { change in
+                                                    GitChangeRowView(change: change)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                        } else {
+                            Text("No changes")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Divider()
+                            .padding(.vertical, 4)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            ZStack(alignment: .topLeading) {
+                                TextEditor(text: $viewModel.commitMessage)
+                                    .font(.body)
+                                    .scrollContentBackground(.hidden)
+                                    .padding(8)
+                                    .frame(minHeight: 19)
+
+                                if viewModel.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("If left empty, message will be generated by AI")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 14)
+                                        .padding(.leading, 14)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.secondary.opacity(0.08))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+                            )
+
+                            HStack {
+                                Spacer()
+                                Button {
+                                    Task {
+                                        await viewModel.commit(projectPath: project.localPath)
+                                    }
+                                } label: {
+                                    if viewModel.isPerformingGitAction {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    } else {
+                                        Text("Commit")
+                                    }
+                                }
+                                .disabled(!viewModel.canCommit)
+                            }
+
+                            if !viewModel.recentCommits.isEmpty {
+                                Divider()
+                                    .padding(.top, 2)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Recent Commits")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
+                                    ForEach(viewModel.recentCommits) { commit in
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(commit.message)
+                                                .font(.caption)
+                                                .lineLimit(1)
+
+                                            Text("\(commit.shortHash) • \(commit.author) • \(commit.relativeTime)")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading Git status…")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 Spacer()
             } else {
@@ -89,17 +212,17 @@ struct ContextPaneView: View {
 
                     Button {
                         Task {
-                            await initializeGitRepository()
+                            await viewModel.initializeGitRepository(projectPath: project.localPath)
                         }
                     } label: {
-                        if isInitializingGit {
+                        if viewModel.isInitializingGit {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
                             Label("Init Git", systemImage: "plus.square.on.square")
                         }
                     }
-                    .disabled(isInitializingGit)
+                    .disabled(viewModel.isInitializingGit)
                 }
                 .frame(maxWidth: .infinity)
                 Spacer()
@@ -122,30 +245,41 @@ struct ContextPaneView: View {
 
     private var gitErrorAlertBinding: Binding<Bool> {
         Binding(
-            get: { gitErrorMessage != nil },
+            get: { viewModel.gitErrorMessage != nil },
             set: { shouldShow in
                 if !shouldShow {
-                    gitErrorMessage = nil
+                    viewModel.clearGitError()
                 }
             }
         )
     }
+}
 
-    private func refreshGitStatus() async {
-        hasGitRepository = await checkGitRepositoryUseCase.execute(path: project.localPath)
-    }
+private struct GitChangeRowView: View {
+    let change: GitFileChange
 
-    private func initializeGitRepository() async {
-        guard !isInitializingGit else { return }
-        isInitializingGit = true
-        defer { isInitializingGit = false }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(change.state.rawValue)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 18, alignment: .leading)
 
-        do {
-            try await initializeGitRepositoryUseCase.execute(path: project.localPath)
-            await refreshGitStatus()
-        } catch {
-            let message = error.localizedDescription
-            gitErrorMessage = message.isEmpty ? "Could not initialize Git repository." : message
+            Text(change.path)
+                .font(.body)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 4) {
+                Text("+\(change.addedLines)")
+                    .foregroundStyle(.green)
+                Text("/")
+                    .foregroundStyle(.secondary)
+                Text("-\(change.deletedLines)")
+                    .foregroundStyle(.red)
+            }
+            .font(.caption)
         }
     }
 }
