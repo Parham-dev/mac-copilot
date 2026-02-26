@@ -48,7 +48,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
     }
 
     @discardableResult
-    func createProject(name: String, localPath: String) -> ProjectRef {
+    func createProject(name: String, localPath: String) throws -> ProjectRef {
         let ref = ProjectRef(name: name, localPath: localPath)
         let entity = ProjectEntity(id: ref.id, name: ref.name, localPath: ref.localPath)
         context.insert(entity)
@@ -56,7 +56,9 @@ final class SwiftDataProjectRepository: ProjectRepository {
         do {
             try context.save()
         } catch {
-            log(.saveFailed(error.localizedDescription))
+            let wrapped = RepositoryError.saveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         return ref

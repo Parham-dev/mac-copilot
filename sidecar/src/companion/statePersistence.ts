@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,7 +24,27 @@ export function readStateFile<T>(fileName: string, fallback: T): T {
 
   try {
     return JSON.parse(readFileSync(stateFilePath, "utf8")) as T;
-  } catch {
+  } catch (error) {
+    const backupPath = `${stateFilePath}.corrupt.${Date.now()}`;
+
+    try {
+      copyFileSync(stateFilePath, backupPath);
+      unlinkSync(stateFilePath);
+      console.error("[CopilotForge][Companion] state file was corrupt; backed up and reset", JSON.stringify({
+        fileName,
+        path: stateFilePath,
+        backupPath,
+        error: String(error),
+      }));
+    } catch (backupError) {
+      console.error("[CopilotForge][Companion] failed to back up corrupt state file", JSON.stringify({
+        fileName,
+        path: stateFilePath,
+        backupPath,
+        error: String(backupError),
+      }));
+    }
+
     return fallback;
   }
 }

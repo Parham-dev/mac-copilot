@@ -5,7 +5,7 @@ protocol ChatRepository {
     func fetchChats(projectID: UUID) -> [ChatThreadRef]
 
     @discardableResult
-    func createChat(projectID: UUID, title: String) -> ChatThreadRef
+    func createChat(projectID: UUID, title: String) throws -> ChatThreadRef
 
     func deleteChat(chatID: UUID)
     func updateChatTitle(chatID: UUID, title: String)

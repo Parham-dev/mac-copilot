@@ -6,20 +6,51 @@ struct OnboardingRootView: View {
 
     var body: some View {
         Group {
-            if appEnvironment.launchPhase == .checking {
+            switch appEnvironment.launchPhase {
+            case .checking:
                 loadingView
-            } else if authViewModel.isAuthenticated {
-                ContentView(
-                    shellViewModel: appEnvironment.shellEnvironment.shellViewModel,
-                    projectCreationService: appEnvironment.shellEnvironment.projectCreationService
-                )
-            } else {
-                onboardingView
+            case .failed(let message):
+                launchFailureView(message: message)
+            case .ready:
+                if authViewModel.isAuthenticated {
+                    ContentView(
+                        shellViewModel: appEnvironment.shellEnvironment.shellViewModel,
+                        projectCreationService: appEnvironment.shellEnvironment.projectCreationService
+                    )
+                } else {
+                    onboardingView
+                }
             }
         }
         .task {
             await appEnvironment.bootstrapIfNeeded()
         }
+    }
+
+    private func launchFailureView(message: String) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+                .font(.system(size: 36))
+
+            Text("Startup failed")
+                .font(.title3.weight(.semibold))
+
+            Text("CopilotForge could not initialize local storage.")
+                .foregroundStyle(.secondary)
+
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Text("Quit the app and relaunch. If this continues, check disk permissions and free space.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
     }
 
     private var loadingView: some View {

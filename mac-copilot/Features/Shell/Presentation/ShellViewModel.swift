@@ -121,8 +121,8 @@ final class ShellViewModel: ObservableObject {
     }
 
     @discardableResult
-    func addProject(name: String, localPath: String) -> ProjectRef {
-        let created = workspaceCoordinator.createProjectWithDefaultChat(name: name, localPath: localPath)
+    func addProject(name: String, localPath: String) throws -> ProjectRef {
+        let created = try workspaceCoordinator.createProjectWithDefaultChat(name: name, localPath: localPath)
         let project = created.project
         projects.append(project)
 

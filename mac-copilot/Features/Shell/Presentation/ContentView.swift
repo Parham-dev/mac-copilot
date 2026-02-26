@@ -116,7 +116,7 @@ struct ContentView: View {
                 return
             }
 
-            shellViewModel.addProject(name: created.name, localPath: created.localPath)
+            try shellViewModel.addProject(name: created.name, localPath: created.localPath)
         } catch {
             projectCreationError = error.localizedDescription
         }
@@ -128,7 +128,7 @@ struct ContentView: View {
                 return
             }
 
-            shellViewModel.addProject(name: opened.name, localPath: opened.localPath)
+            try shellViewModel.addProject(name: opened.name, localPath: opened.localPath)
         } catch {
             projectCreationError = error.localizedDescription
         }

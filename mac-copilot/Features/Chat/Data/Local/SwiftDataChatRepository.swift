@@ -80,7 +80,7 @@ final class SwiftDataChatRepository: ChatRepository {
     }
 
     @discardableResult
-    func createChat(projectID: UUID, title: String) -> ChatThreadRef {
+    func createChat(projectID: UUID, title: String) throws -> ChatThreadRef {
         let ref = ChatThreadRef(projectID: projectID, title: title)
         let entity = ChatThreadEntity(id: ref.id, projectID: ref.projectID, title: ref.title, createdAt: ref.createdAt, project: findProjectEntity(id: projectID))
         context.insert(entity)
@@ -88,7 +88,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             try context.save()
         } catch {
-            log(.createChatSaveFailed(error.localizedDescription))
+            let wrapped = RepositoryError.createChatSaveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         return ref

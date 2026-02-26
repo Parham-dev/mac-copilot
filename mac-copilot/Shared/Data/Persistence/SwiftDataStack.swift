@@ -6,6 +6,7 @@ final class SwiftDataStack: SwiftDataStoreProviding {
 
     let container: ModelContainer
     let context: ModelContext
+    let startupError: String?
 
     init() {
         let schema = Schema([
@@ -14,26 +15,24 @@ final class SwiftDataStack: SwiftDataStoreProviding {
             ChatMessageEntity.self,
         ])
 
-        container = Self.makeContainer(schema: schema)
+        let bootstrap = Self.makeContainer(schema: schema)
+        container = bootstrap.container
+        startupError = bootstrap.startupError
 
         context = ModelContext(container)
     }
 
-    private static func makeContainer(schema: Schema) -> ModelContainer {
+    private static func makeContainer(schema: Schema) -> (container: ModelContainer, startupError: String?) {
         do {
             let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            return try ModelContainer(for: schema, configurations: [configuration])
+            return (try ModelContainer(for: schema, configurations: [configuration]), nil)
         } catch {
-            NSLog("[CopilotForge][SwiftData] Falling back to in-memory container: %@", error.localizedDescription)
+            let message = "Persistent database initialization failed: \(error.localizedDescription)"
+            NSLog("[CopilotForge][SwiftData] %@", message)
 
-            do {
-                let fallback = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-                return try ModelContainer(for: schema, configurations: [fallback])
-            } catch {
-                let message = "SwiftData initialization failed for both persistent and in-memory modes: \(error.localizedDescription)"
-                NSLog("[CopilotForge][SwiftData] %@", message)
-                fatalError(message)
-            }
+            let inMemory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let container = try! ModelContainer(for: schema, configurations: [inMemory])
+            return (container, message)
         }
     }
 }

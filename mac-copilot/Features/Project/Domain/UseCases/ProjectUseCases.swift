@@ -22,8 +22,8 @@ struct CreateProjectUseCase {
     }
 
     @discardableResult
-    func execute(name: String, localPath: String) -> ProjectRef {
-        repository.createProject(name: name, localPath: localPath)
+    func execute(name: String, localPath: String) throws -> ProjectRef {
+        try repository.createProject(name: name, localPath: localPath)
     }
 }
 

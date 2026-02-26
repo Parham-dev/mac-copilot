@@ -7,6 +7,7 @@ final class AppEnvironment: ObservableObject {
     enum LaunchPhase {
         case checking
         case ready
+        case failed(String)
     }
 
     @Published private(set) var launchPhase: LaunchPhase = .checking
@@ -16,8 +17,10 @@ final class AppEnvironment: ObservableObject {
     let companionEnvironment: CompanionEnvironment
 
     private let bootstrapService: AppBootstrapService
+    private let swiftDataStore: any SwiftDataStoreProviding
 
     init(container: Container = .shared) {
+        let swiftDataStore = container.swiftDataStack()
         let authViewModel = container.authViewModel()
         let chatRepository = container.chatRepository()
         let shellViewModel = ShellViewModel(
@@ -52,10 +55,17 @@ final class AppEnvironment: ObservableObject {
         )
         self.companionEnvironment = CompanionEnvironment(companionStatusStore: companionStatusStore)
         self.bootstrapService = container.appBootstrapService()
+        self.swiftDataStore = swiftDataStore
     }
 
     func bootstrapIfNeeded() async {
         launchPhase = .checking
+
+        if let startupError = swiftDataStore.startupError {
+            launchPhase = .failed(startupError)
+            return
+        }
+
         await bootstrapService.bootstrapIfNeeded()
         launchPhase = .ready
     }

@@ -4,11 +4,14 @@ import Foundation
 final class ShellWorkspaceCoordinator {
     enum CoordinatorError: LocalizedError {
         case chatCreationFailed
+        case projectCreationFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .chatCreationFailed:
                 return "Could not create chat thread. Please try again."
+            case .projectCreationFailed(let message):
+                return message
             }
         }
     }
@@ -36,7 +39,12 @@ final class ShellWorkspaceCoordinator {
         for project in projects {
             var chats = chatRepository.fetchChats(projectID: project.id)
             if chats.isEmpty {
-                chats = [chatRepository.createChat(projectID: project.id, title: "General")]
+                do {
+                    chats = [try chatRepository.createChat(projectID: project.id, title: "General")]
+                } catch {
+                    NSLog("[CopilotForge][Workspace] bootstrap default chat create failed: %@", error.localizedDescription)
+                    chats = []
+                }
             }
             projectChats[project.id] = chats
         }
@@ -61,7 +69,7 @@ final class ShellWorkspaceCoordinator {
 
     func createChat(projectID: UUID, existingCount: Int) throws -> ChatThreadRef {
         let title = "Chat \(existingCount + 1)"
-        let created = chatRepository.createChat(projectID: projectID, title: title)
+        let created = try chatRepository.createChat(projectID: projectID, title: title)
         let persisted = chatRepository.fetchChats(projectID: projectID)
 
         guard persisted.contains(where: { $0.id == created.id }) else {
@@ -71,9 +79,15 @@ final class ShellWorkspaceCoordinator {
         return created
     }
 
-    func createProjectWithDefaultChat(name: String, localPath: String) -> (project: ProjectRef, defaultChat: ChatThreadRef) {
-        let project = projectRepository.createProject(name: name, localPath: localPath)
-        let defaultChat = chatRepository.createChat(projectID: project.id, title: "General")
+    func createProjectWithDefaultChat(name: String, localPath: String) throws -> (project: ProjectRef, defaultChat: ChatThreadRef) {
+        let project: ProjectRef
+        do {
+            project = try projectRepository.createProject(name: name, localPath: localPath)
+        } catch {
+            throw CoordinatorError.projectCreationFailed(error.localizedDescription)
+        }
+
+        let defaultChat = try chatRepository.createChat(projectID: project.id, title: "General")
         return (project, defaultChat)
     }
 
