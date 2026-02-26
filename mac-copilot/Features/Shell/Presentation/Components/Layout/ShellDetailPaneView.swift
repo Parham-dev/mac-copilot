@@ -31,7 +31,8 @@ struct ShellDetailPaneView: View {
                     viewModel: chatViewModel,
                     modelSelectionStore: shellEnvironment.modelSelectionStore
                 )
-                    .frame(minWidth: 300, idealWidth: 470)
+                    .frame(minWidth: 510, idealWidth: 720)
+                    .layoutPriority(2)
 
                 ContextPaneView(
                     shellViewModel: shellViewModel,
@@ -48,7 +49,8 @@ struct ShellDetailPaneView: View {
                         }
                     }
                 )
-                .frame(minWidth: 300, idealWidth: 470)
+                .frame(minWidth: 340, idealWidth: 480, maxWidth: 560)
+                .layoutPriority(1)
             }
         } else if shellViewModel.project(for: projectID) == nil {
             ContentUnavailableView("Select a project", systemImage: "folder")

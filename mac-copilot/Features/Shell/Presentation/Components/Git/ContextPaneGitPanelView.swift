@@ -193,6 +193,17 @@ private struct GitCommitComposerSectionView: View {
 private struct GitRecentCommitsSectionView: View {
     let recentCommits: [GitRecentCommit]
 
+    private var maxVisibleRows: Int { 3 }
+    private var rowHeight: CGFloat { 34 }
+
+    private var visibleRowCount: Int {
+        min(recentCommits.count, maxVisibleRows)
+    }
+
+    private var listHeight: CGFloat {
+        CGFloat(visibleRowCount) * rowHeight
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
@@ -202,17 +213,24 @@ private struct GitRecentCommitsSectionView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            ForEach(recentCommits) { commit in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(commit.message)
-                        .font(.caption)
-                        .lineLimit(1)
+            ScrollView(.vertical, showsIndicators: recentCommits.count > maxVisibleRows) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(recentCommits) { commit in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(commit.message)
+                                .font(.caption)
+                                .lineLimit(1)
 
-                    Text("\(commit.shortHash) • \(commit.author) • \(commit.relativeTime)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                            Text("\(commit.shortHash) • \(commit.author) • \(commit.relativeTime)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+                .padding(.trailing, recentCommits.count > maxVisibleRows ? 4 : 0)
             }
+            .frame(height: listHeight)
         }
     }
 }
