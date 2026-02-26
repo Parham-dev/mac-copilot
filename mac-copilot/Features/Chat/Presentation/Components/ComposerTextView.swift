@@ -3,6 +3,7 @@ import AppKit
 
 struct ComposerTextView: NSViewRepresentable {
     @Binding var text: String
+    @Binding var isTextEmpty: Bool
     @Binding var dynamicHeight: CGFloat
 
     let minHeight: CGFloat
@@ -35,6 +36,7 @@ struct ComposerTextView: NSViewRepresentable {
         textView.font = .preferredFont(forTextStyle: .body)
         textView.string = text
         textView.isEditable = isEditable
+        context.coordinator.updateEmptyState(textView.string)
 
         if let container = textView.textContainer {
             container.widthTracksTextView = true
@@ -49,19 +51,29 @@ struct ComposerTextView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? SubmitAwareTextView else { return }
 
+        context.coordinator.updateParent(self)
+
         textView.onShiftEnter = onShiftEnter
         textView.isEditable = isEditable
+
+        if context.coordinator.shouldDeferBindingToTextViewSync(boundText: text) {
+            return
+        }
 
         if textView.string != text {
             textView.string = text
             context.coordinator.updateScrollerOnly(for: textView)
+            context.coordinator.updateEmptyState(textView.string)
+            context.coordinator.updateHeight(for: textView)
         }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
-        private let parent: ComposerTextView
+        private var parent: ComposerTextView
         private var pendingTextUpdate = false
         private var latestPendingTextValue = ""
+        private var pendingEmptyStateUpdate = false
+        private var latestPendingEmptyState = true
         private var pendingHeightUpdate = false
         private var latestPendingHeightValue: CGFloat = 0
 
@@ -69,10 +81,31 @@ struct ComposerTextView: NSViewRepresentable {
             self.parent = parent
         }
 
+        func updateParent(_ parent: ComposerTextView) {
+            self.parent = parent
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             enqueueTextBindingUpdate(textView.string)
+            updateEmptyState(textView.string)
             updateHeight(for: textView)
+        }
+
+        func updateEmptyState(_ value: String) {
+            let empty = value.isEmpty
+            latestPendingEmptyState = empty
+            guard !pendingEmptyStateUpdate else { return }
+            pendingEmptyStateUpdate = true
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.pendingEmptyStateUpdate = false
+                let latest = self.latestPendingEmptyState
+                if self.parent.isTextEmpty != latest {
+                    self.parent.isTextEmpty = latest
+                }
+            }
         }
 
         private func enqueueTextBindingUpdate(_ newValue: String) {
@@ -88,6 +121,10 @@ struct ComposerTextView: NSViewRepresentable {
                     self.parent.text = value
                 }
             }
+        }
+
+        func shouldDeferBindingToTextViewSync(boundText: String) -> Bool {
+            pendingTextUpdate && boundText != latestPendingTextValue
         }
 
         func updateHeight(for textView: NSTextView) {
