@@ -4,17 +4,59 @@ import Combine
 
 @MainActor
 final class ControlCenterRuntimeManager: ObservableObject {
-    @Published private(set) var state: ControlCenterRuntimeState = .idle
-    @Published private(set) var adapterName: String?
-    @Published private(set) var activeURL: URL?
-    @Published private(set) var logs: [String] = []
-    @Published private(set) var activeProjectID: UUID?
+    @Published var state: ControlCenterRuntimeState = .idle
+    @Published var adapterName: String?
+    @Published var activeURL: URL?
+    @Published var logs: [String] = []
+    @Published var activeProjectID: UUID?
 
-    private let adapters: [any ControlCenterRuntimeAdapter]
-    private let utilities: ControlCenterRuntimeUtilities
+    let adapters: [any ControlCenterRuntimeAdapter]
+    let utilities: ControlCenterRuntimeUtilities
 
-    private var process: Process?
-    private var outputPipe: Pipe?
+    var process: Process?
+    var stdoutPipe: Pipe?
+    var stderrPipe: Pipe?
+    var logEntries: [RuntimeLogEntry] = []
+
+    let maxUILogLines = 200
+    let maxDiagnosticLogEntries = 800
+    let failedPortReservationTTL: TimeInterval = 90
+
+    enum LogPhase: String {
+        case lifecycle
+        case install
+        case start
+        case runtime
+        case health
+    }
+
+    enum LogStream: String {
+        case system
+        case stdout
+        case stderr
+    }
+
+    struct RuntimeLogEntry {
+        let timestamp: Date
+        let phase: LogPhase
+        let stream: LogStream
+        let message: String
+    }
+
+    struct RuntimeContext {
+        let project: ProjectRef
+        let adapter: any ControlCenterRuntimeAdapter
+        let plan: ControlCenterRuntimePlan
+    }
+
+    enum RuntimeError: Error {
+        case noAdapter
+    }
+
+    enum LaunchHealthResult: Equatable {
+        case healthy
+        case unhealthy(failedPort: Int?)
+    }
 
     init(adapters: [any ControlCenterRuntimeAdapter], utilities: ControlCenterRuntimeUtilities = ControlCenterRuntimeUtilities()) {
         self.adapters = adapters
@@ -50,173 +92,11 @@ final class ControlCenterRuntimeManager: ObservableObject {
         process?.terminate()
         cleanupProcessHandles()
         state = .idle
-        appendLog("Stopped control center runtime")
+        appendLog("Stopped control center runtime", phase: .lifecycle)
     }
 
     func openInBrowser() {
         guard let activeURL else { return }
         NSWorkspace.shared.open(activeURL)
-    }
-
-    private func startInternal(project: ProjectRef, autoOpen: Bool, isRefresh: Bool) async {
-        if isRefresh {
-            appendLog("Refreshing control center for \(project.name)")
-            stop()
-        } else if activeProjectID != nil, activeProjectID != project.id {
-            appendLog("Switching control center runtime to \(project.name)")
-            stop()
-        }
-
-        activeProjectID = project.id
-        activeURL = nil
-        logs.removeAll(keepingCapacity: true)
-
-        guard let adapter = adapters.first(where: { $0.canHandle(project: project) }) else {
-            state = .failed("No control center adapter supports this project yet")
-            appendLog("No adapter matched project")
-            return
-        }
-
-        adapterName = adapter.displayName
-        appendLog("Using adapter: \(adapter.displayName)")
-
-        do {
-            let plan = try adapter.makePlan(project: project)
-
-            switch plan.mode {
-            case .directOpen(let target):
-                state = .running
-                activeURL = target
-                appendLog("Ready: \(target.absoluteString)")
-                if autoOpen {
-                    NSWorkspace.shared.open(target)
-                }
-
-            case .managedServer(let install, let start, let healthURL, let openURL, let bootTimeoutSeconds, let environment):
-                if let install {
-                    state = .installing
-                    appendLog("Installing dependencies...")
-                    let installResult = try await runAndCapture(command: install, cwd: plan.workingDirectory, environment: environment)
-                    if installResult.exitCode != 0 {
-                        state = .failed("Dependency installation failed")
-                        appendLog(installResult.output)
-                        return
-                    }
-                    if !installResult.output.isEmpty {
-                        appendLog(installResult.output)
-                    }
-                }
-
-                state = .starting
-                appendLog("Starting server...")
-                try launchServer(command: start, cwd: plan.workingDirectory, environment: environment)
-
-                let healthy = await utilities.waitForHealthyURL(healthURL, timeoutSeconds: bootTimeoutSeconds)
-                if !healthy {
-                    state = .failed("Server did not become healthy in time")
-                    appendLog("Health check timeout for \(healthURL.absoluteString)")
-                    stop()
-                    return
-                }
-
-                state = .running
-                activeURL = openURL
-                appendLog("Server running at \(openURL.absoluteString)")
-                if autoOpen {
-                    NSWorkspace.shared.open(openURL)
-                }
-            }
-        } catch {
-            state = .failed(error.localizedDescription)
-            appendLog("Control center failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func launchServer(command: ControlCenterCommand, cwd: URL, environment: [String: String]) throws {
-        cleanupProcessHandles()
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: command.executable)
-        process.arguments = command.arguments
-        process.currentDirectoryURL = cwd
-        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-
-        let outputPipe = Pipe()
-        self.outputPipe = outputPipe
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty,
-                  let text = String(data: data, encoding: .utf8)
-            else {
-                return
-            }
-
-            Task { @MainActor in
-                self?.appendLog(text)
-            }
-        }
-
-        process.terminationHandler = { [weak self] terminated in
-            Task { @MainActor in
-                self?.cleanupProcessHandles()
-                if terminated.terminationStatus != 0 {
-                    self?.state = .failed("Server exited unexpectedly (\(terminated.terminationStatus))")
-                } else if self?.state == .running {
-                    self?.state = .idle
-                }
-                self?.appendLog("Server exited with status \(terminated.terminationStatus)")
-            }
-        }
-
-        try process.run()
-        self.process = process
-    }
-
-    private func runAndCapture(command: ControlCenterCommand, cwd: URL, environment: [String: String]) async throws -> (exitCode: Int32, output: String) {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: command.executable)
-                process.arguments = command.arguments
-                process.currentDirectoryURL = cwd
-                process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-
-                let outputPipe = Pipe()
-                process.standardOutput = outputPipe
-                process.standardError = outputPipe
-
-                do {
-                    try process.run()
-                    process.waitUntilExit()
-                    let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                    let output = String(data: data, encoding: .utf8) ?? ""
-                    continuation.resume(returning: (process.terminationStatus, output))
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-    }
-
-    private func cleanupProcessHandles() {
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        outputPipe = nil
-        process = nil
-    }
-
-    private func appendLog(_ text: String) {
-        let lines = text
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .map { String($0) }
-
-        guard !lines.isEmpty else { return }
-
-        logs.append(contentsOf: lines)
-        if logs.count > 200 {
-            logs.removeFirst(logs.count - 200)
-        }
     }
 }

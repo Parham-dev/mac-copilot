@@ -139,31 +139,12 @@ final class ControlCenterViewModel: ObservableObject {
     }
 
     private var fixPrompt: String {
-        let stateText: String
-        switch runtimeManager.state {
-        case .idle:
-            stateText = "idle"
-        case .installing:
-            stateText = "installing"
-        case .starting:
-            stateText = "starting"
-        case .running:
-            stateText = "running"
-        case .failed(let message):
-            stateText = "failed: \(message)"
-        }
-
-        let adapter = runtimeManager.adapterName ?? "unknown"
-        let logs = runtimeManager.logs.suffix(120).joined(separator: "\n")
+        let diagnostics = runtimeManager.aiDiagnosticsSnapshot(maxEntries: 220)
 
         return """
         We tried to start project \(project.name) at path \(project.localPath), but control center runtime has issues.
 
-        Adapter: \(adapter)
-        Runtime state: \(stateText)
-
-        Runtime logs:
-        \(logs)
+        \(diagnostics)
 
         Please analyze the failure, make the required code/config fixes in this project, and then tell me to press Start again.
         """

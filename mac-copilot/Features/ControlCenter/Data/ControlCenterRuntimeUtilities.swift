@@ -2,6 +2,7 @@ import Foundation
 
 final class ControlCenterRuntimeUtilities {
     private let fileManager = FileManager.default
+    private static var reservedPorts: [Int: Date] = [:]
 
     func expandedProjectURL(for project: ProjectRef) -> URL {
         let expanded = (project.localPath as NSString).expandingTildeInPath
@@ -48,15 +49,27 @@ final class ControlCenterRuntimeUtilities {
     }
 
     func chooseOpenPort(preferred: [Int]) -> Int {
+        purgeExpiredReservedPorts()
+
         for port in preferred where !isPortInUse(port) {
+            if Self.reservedPorts[port] != nil {
+                continue
+            }
             return port
         }
 
         for port in 9000 ... 9300 where !isPortInUse(port) {
+            if Self.reservedPorts[port] != nil {
+                continue
+            }
             return port
         }
 
         return 8080
+    }
+
+    func reservePortTemporarily(_ port: Int, ttlSeconds: TimeInterval) {
+        Self.reservedPorts[port] = Date().addingTimeInterval(ttlSeconds)
     }
 
     func waitForHealthyURL(_ url: URL, timeoutSeconds: TimeInterval) async -> Bool {
@@ -120,5 +133,10 @@ final class ControlCenterRuntimeUtilities {
 
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func purgeExpiredReservedPorts() {
+        let now = Date()
+        Self.reservedPorts = Self.reservedPorts.filter { $0.value > now }
     }
 }
