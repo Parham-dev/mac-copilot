@@ -27,5 +27,5 @@
 ## Code Locations
 - Prompt send flow from UI: `mac-copilot/Features/Chat/Presentation/ViewModel/ChatViewModel+SendFlow.swift`
 - Sidecar prompt endpoint: `sidecar/src/index.ts`
-- Sidecar stream handling: `sidecar/src/copilotPromptStreaming.ts`
-- Sidecar SDK dispatch: `sidecar/src/copilot.ts`
+- Sidecar stream handling: `sidecar/src/copilot/copilotPromptStreaming.ts`
+- Sidecar SDK dispatch: `sidecar/src/copilot/copilot.ts`

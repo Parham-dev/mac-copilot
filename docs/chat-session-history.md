@@ -57,4 +57,4 @@ The sidecar derives a deterministic `sessionId` from the key, e.g. `copilotforge
 
 - Sidecar session management:
   - `sidecar/src/index.ts`
-  - `sidecar/src/copilot.ts`
+  - `sidecar/src/copilot/copilot.ts`

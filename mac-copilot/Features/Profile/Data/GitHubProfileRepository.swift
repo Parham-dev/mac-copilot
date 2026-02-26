@@ -2,10 +2,10 @@ import Foundation
 
 final class GitHubProfileRepository: ProfileRepository {
     private let baseURL = URL(string: "https://api.github.com")!
-    private let sidecarAuthClient: SidecarAuthClient?
+    private let sidecarAuthClient: SidecarAuthClient
 
     @MainActor
-    init(sidecarAuthClient: SidecarAuthClient? = nil) {
+    init(sidecarAuthClient: SidecarAuthClient) {
         self.sidecarAuthClient = sidecarAuthClient
     }
 
@@ -37,15 +37,14 @@ final class GitHubProfileRepository: ProfileRepository {
         var copilotResult = try await requestLocal(path: "copilot/report")
         var copilotReport = parseCopilotReport(from: copilotResult.data)
 
-        if let client = sidecarAuthClient,
-           shouldReauthorizeSidecar(using: copilotReport) {
+        if shouldReauthorizeSidecar(using: copilotReport) {
             NSLog(
                 "[CopilotForge][Profile] copilot report stale, reauth sidecar (sessionReady=%@ usingGitHubToken=%@)",
                 (copilotReport?.sessionReady == true) ? "true" : "false",
                 (copilotReport?.usingGitHubToken == true) ? "true" : "false"
             )
             do {
-                let refreshed = try await reauthorizeAndRefreshCopilotReport(client: client, accessToken: accessToken)
+                let refreshed = try await reauthorizeAndRefreshCopilotReport(client: sidecarAuthClient, accessToken: accessToken)
                 copilotResult = refreshed.report
                 copilotReport = refreshed.parsed
 
@@ -145,21 +144,7 @@ final class GitHubProfileRepository: ProfileRepository {
     }
 
     private func requestLocal(path: String) async throws -> (statusCode: Int, data: Data) {
-        if let sidecarAuthClient {
-            return try await sidecarAuthClient.get(path: path)
-        }
-
-        let localBaseURL = URL(string: "http://127.0.0.1:7878")!
-        var request = URLRequest(url: localBaseURL.appendingPathComponent(path))
-        request.httpMethod = "GET"
-        request.timeoutInterval = 8
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw ProfileError.invalidResponse
-        }
-
-        return (http.statusCode, data)
+        try await sidecarAuthClient.get(path: path)
     }
 
     private func parseUserProfile(from data: Data) -> UserProfile? {
