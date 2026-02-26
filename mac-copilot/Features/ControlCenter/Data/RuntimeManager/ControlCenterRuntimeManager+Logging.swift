@@ -35,7 +35,7 @@ extension ControlCenterRuntimeManager {
         for line in lines {
             logEntries.append(
                 RuntimeLogEntry(
-                    timestamp: Date(),
+                    timestamp: clock.now,
                     phase: phase,
                     stream: stream,
                     message: line

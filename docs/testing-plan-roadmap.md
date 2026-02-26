@@ -71,6 +71,10 @@ Implemented in Phase 0 so far:
 - Deterministic jitter seam (`SidecarRestartPolicy` `jitterProvider` injection).
 - Clock seam consistency (`ClockProviding` in sidecar runtime manager/probe decisions).
 - Async delay seam (`AsyncDelayScheduling`) for retry loops.
+- Control Center runtime manager process seams (`ControlCenterCommandStatusRunning` + injected clock/HTTP/delay for health polling and capture paths).
+- Sidecar runtime utility runner/sleep seams (`SidecarCommandRunning` + injected blocking sleeper).
+- Git filesystem check seam (`GitFileSystemChecking` in `LocalGitRepositoryManager`).
+- Simple HTML adapter filesystem seam (`ControlCenterFileManaging` injection).
 - Shared test fixtures/builders and fixture smoke tests.
 
 Remaining testability gaps to close before heavy Phase 1 test authoring:

@@ -13,6 +13,10 @@ final class ControlCenterRuntimeManager: ObservableObject {
 
     let adapters: [any ControlCenterRuntimeAdapter]
     let utilities: ControlCenterRuntimeUtilities
+    let healthTransport: HTTPDataTransporting
+    let delayScheduler: AsyncDelayScheduling
+    let clock: ClockProviding
+    let commandRunner: ControlCenterCommandStatusRunning
 
     var process: Process?
     var stdoutPipe: Pipe?
@@ -63,9 +67,20 @@ final class ControlCenterRuntimeManager: ObservableObject {
         case unhealthy(failedPort: Int?)
     }
 
-    init(adapters: [any ControlCenterRuntimeAdapter], utilities: ControlCenterRuntimeUtilities = ControlCenterRuntimeUtilities()) {
+    init(
+        adapters: [any ControlCenterRuntimeAdapter],
+        utilities: ControlCenterRuntimeUtilities = ControlCenterRuntimeUtilities(),
+        healthTransport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler(),
+        clock: ClockProviding = SystemClockProvider(),
+        commandRunner: ControlCenterCommandStatusRunning = ProcessControlCenterCommandStatusRunner()
+    ) {
         self.adapters = adapters
         self.utilities = utilities
+        self.healthTransport = healthTransport
+        self.delayScheduler = delayScheduler
+        self.clock = clock
+        self.commandRunner = commandRunner
     }
 
     var isBusy: Bool {
@@ -141,8 +156,7 @@ final class ControlCenterRuntimeManager: ObservableObject {
     private func scheduleForceKillIfNeeded(for runningProcess: Process) {
         let targetPID = runningProcess.processIdentifier
         Task { @MainActor in
-            let nanos = UInt64(gracefulStopTimeout * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: nanos)
+            try? await delayScheduler.sleep(seconds: gracefulStopTimeout)
 
             guard isStopRequested,
                   let current = process,

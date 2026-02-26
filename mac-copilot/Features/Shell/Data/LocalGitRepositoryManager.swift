@@ -1,5 +1,15 @@
 import Foundation
 
+protocol GitFileSystemChecking {
+    func fileExists(atPath path: String) -> Bool
+}
+
+struct DefaultGitFileSystemChecker: GitFileSystemChecking {
+    func fileExists(atPath path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
+    }
+}
+
 struct GitRepositoryError: LocalizedError {
     let message: String
 
@@ -10,15 +20,20 @@ struct GitRepositoryError: LocalizedError {
 
 final class LocalGitRepositoryManager: GitRepositoryManaging {
     private let commandRunner: GitCommandRunning
+    private let fileSystem: GitFileSystemChecking
 
-    init(commandRunner: GitCommandRunning = LocalGitCommandRunner()) {
+    init(
+        commandRunner: GitCommandRunning = LocalGitCommandRunner(),
+        fileSystem: GitFileSystemChecking = DefaultGitFileSystemChecker()
+    ) {
         self.commandRunner = commandRunner
+        self.fileSystem = fileSystem
     }
 
     func isGitRepository(at path: String) async -> Bool {
         await runInBackground {
             let gitURL = URL(fileURLWithPath: path).appendingPathComponent(".git")
-            if FileManager.default.fileExists(atPath: gitURL.path) {
+            if self.fileSystem.fileExists(atPath: gitURL.path) {
                 return true
             }
 

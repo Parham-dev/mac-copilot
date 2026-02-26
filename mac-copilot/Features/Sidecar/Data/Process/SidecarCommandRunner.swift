@@ -1,6 +1,11 @@
 import Foundation
 
-final class SidecarCommandRunner {
+protocol SidecarCommandRunning {
+    func runCommand(executable: String, arguments: [String]) -> String
+    func runStatus(executable: String, arguments: [String]) -> Int32
+}
+
+final class SidecarCommandRunner: SidecarCommandRunning {
     func runCommand(executable: String, arguments: [String]) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)

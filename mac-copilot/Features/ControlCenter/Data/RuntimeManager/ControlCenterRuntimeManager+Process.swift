@@ -146,17 +146,16 @@ extension ControlCenterRuntimeManager {
     }
 
     func waitForHealthyURLOrEarlyFailure(_ url: URL, timeoutSeconds: TimeInterval) async -> URL? {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        let deadline = clock.now.addingTimeInterval(timeoutSeconds)
 
         guard let port = url.port else {
             appendLog("Health URL has no explicit port: \(url.absoluteString)", phase: .health, stream: .stderr)
             return nil
         }
 
-        let probeSession = URLSession(configuration: .ephemeral)
         var hasLoggedPortListening = false
 
-        while Date() < deadline {
+        while clock.now < deadline {
             if !isProcessActive {
                 appendLog("Server process ended before health check succeeded", phase: .health, stream: .stderr)
                 return nil
@@ -177,7 +176,7 @@ extension ControlCenterRuntimeManager {
                 request.timeoutInterval = 1.2
 
                 do {
-                    let (_, response) = try await probeSession.data(for: request)
+                    let (_, response) = try await healthTransport.data(for: request)
                     if let http = response as? HTTPURLResponse,
                        (200 ... 499).contains(http.statusCode) {
                         return url
@@ -187,7 +186,7 @@ extension ControlCenterRuntimeManager {
                 }
             }
 
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await delayScheduler.sleep(seconds: 0.35)
         }
 
         appendLog("Server never opened expected port \(port) before timeout", phase: .health, stream: .stderr)
@@ -203,29 +202,13 @@ extension ControlCenterRuntimeManager {
     }
 
     func runAndCapture(command: ControlCenterCommand, cwd: URL, environment: [String: String]) async throws -> (exitCode: Int32, output: String) {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: command.executable)
-                process.arguments = command.arguments
-                process.currentDirectoryURL = cwd
-                process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-
-                let outputPipe = Pipe()
-                process.standardOutput = outputPipe
-                process.standardError = outputPipe
-
-                do {
-                    try process.run()
-                    process.waitUntilExit()
-                    let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                    let output = String(data: data, encoding: .utf8) ?? ""
-                    continuation.resume(returning: (process.terminationStatus, output))
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+        let result = try await commandRunner.runCommand(
+            executable: command.executable,
+            arguments: command.arguments,
+            cwd: cwd,
+            environment: environment
+        )
+        return (result.exitCode, result.output)
     }
 
     func cleanupProcessHandles() {

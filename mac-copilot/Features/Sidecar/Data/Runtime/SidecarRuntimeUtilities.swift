@@ -4,13 +4,14 @@ final class SidecarRuntimeUtilities {
     typealias HealthySidecarReuseDecision = SidecarHealthyReuseDecision
 
     private let port: Int
-    private let commandRunner: SidecarCommandRunner
+    private let commandRunner: SidecarCommandRunning
+    private let delaySleeper: BlockingDelaySleeping
     private let healthProbe: SidecarHealthProbe
     private let reusePolicy: SidecarReusePolicy
 
     init(
         port: Int,
-        commandRunner: SidecarCommandRunner = SidecarCommandRunner(),
+        commandRunner: SidecarCommandRunning = SidecarCommandRunner(),
         healthProbe: SidecarHealthProbe? = nil,
         healthDataFetcher: SidecarHealthDataFetching = URLSessionSidecarHealthDataFetcher(),
         delaySleeper: BlockingDelaySleeping = ThreadBlockingDelaySleeper(),
@@ -18,6 +19,7 @@ final class SidecarRuntimeUtilities {
     ) {
         self.port = port
         self.commandRunner = commandRunner
+        self.delaySleeper = delaySleeper
         self.healthProbe = healthProbe ?? SidecarHealthProbe(
             port: port,
             healthDataFetcher: healthDataFetcher,
@@ -69,6 +71,6 @@ final class SidecarRuntimeUtilities {
             NSLog("[CopilotForge] Terminated stale sidecar process pid=%@", pid)
         }
 
-        Thread.sleep(forTimeInterval: 0.2)
+        delaySleeper.sleep(seconds: 0.2)
     }
 }
