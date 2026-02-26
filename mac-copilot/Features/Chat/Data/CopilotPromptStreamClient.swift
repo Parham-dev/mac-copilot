@@ -157,32 +157,35 @@ final class CopilotPromptStreamClient {
 private extension CopilotPromptStreamClient {
     func connectWithRetry(request: URLRequest) async throws -> HTTPLineStreamResponse {
         let requestPath = request.url?.path ?? "<unknown>"
+        let maxAttempts = 5
 
-        for attempt in 1 ... 5 {
-            do {
-                return try await lineStreamTransport.openLineStream(for: request)
-            } catch {
-                let recoverable = shouldRetryConnection(error)
-
-                guard recoverable, attempt < 5 else {
-                    NSLog(
-                        "[CopilotForge][Prompt] stream connect failed path=%@ attempts=%d recoverable=%@ error=%@",
-                        requestPath,
-                        attempt,
-                        recoverable ? "true" : "false",
-                        error.localizedDescription
-                    )
-                    throw error
+        do {
+            return try await AsyncRetry.run(
+                maxAttempts: maxAttempts,
+                delayForAttempt: { attempt in
+                    min(0.25 * Double(attempt), 1.0)
+                },
+                shouldRetry: { [self] error, _ in
+                    shouldRetryConnection(error)
+                },
+                onRetry: { _, _ in
+                    ensureSidecarRunning()
+                },
+                operation: {
+                    try await lineStreamTransport.openLineStream(for: request)
                 }
-
-                ensureSidecarRunning()
-
-                let delay = min(0.25 * Double(attempt), 1.0)
-                try? await delayScheduler.sleep(seconds: delay)
-            }
+            )
+        } catch {
+            let recoverable = shouldRetryConnection(error)
+            NSLog(
+                "[CopilotForge][Prompt] stream connect failed path=%@ attempts=%d recoverable=%@ error=%@",
+                requestPath,
+                maxAttempts,
+                recoverable ? "true" : "false",
+                error.localizedDescription
+            )
+            throw error
         }
-
-        throw PromptStreamError(message: "Unable to establish stream")
     }
 
     func shouldRetryConnection(_ error: Error) -> Bool {

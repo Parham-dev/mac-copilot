@@ -66,6 +66,7 @@ final class SidecarHTTPClient {
 
     private func sendWithRetry(request: URLRequest) async throws -> SidecarHTTPResponse {
         let requestPath = request.url?.path ?? "<unknown>"
+        let maxAttempts = 3
 
         await ensureSidecarStartedIfUnavailable(requestPath: requestPath)
         let initialReady = await waitForSidecarReadyInternal(maxAttempts: 12, delaySeconds: 0.25)
@@ -73,38 +74,36 @@ final class SidecarHTTPClient {
             NSLog("%@ preflight wait timed out path=%@", loggerPrefix, requestPath)
         }
 
-        var lastError: Error?
-        for attempt in 0 ... 2 {
-            do {
-                return try await perform(request: request)
-            } catch {
-                lastError = error
-                let recoverable = isRecoverableConnectionError(error)
-
-                if recoverable, attempt < 2 {
+        do {
+            return try await AsyncRetry.run(
+                maxAttempts: maxAttempts,
+                shouldRetry: { [self] error, _ in
+                    isRecoverableConnectionError(error)
+                },
+                onRetry: { [self] _, _ in
                     await ensureSidecarStartedIfUnavailable(force: true, requestPath: requestPath)
                     let ready = await waitForSidecarReadyInternal(maxAttempts: 16, delaySeconds: 0.30)
                     if !ready {
                         NSLog("%@ sidecar not ready after retry wait path=%@", loggerPrefix, requestPath)
                         throw SidecarHTTPClientError.sidecarNotReady
                     }
-                    continue
+                },
+                operation: {
+                    try await perform(request: request)
                 }
-
-                NSLog(
-                    "%@ request failure path=%@ attempt=%d recoverable=%@ error=%@",
-                    loggerPrefix,
-                    requestPath,
-                    attempt + 1,
-                    recoverable ? "true" : "false",
-                    error.localizedDescription
-                )
-
-                throw error
-            }
+            )
+        } catch {
+            let recoverable = isRecoverableConnectionError(error)
+            NSLog(
+                "%@ request failure path=%@ attempts=%d recoverable=%@ error=%@",
+                loggerPrefix,
+                requestPath,
+                maxAttempts,
+                recoverable ? "true" : "false",
+                error.localizedDescription
+            )
+            throw error
         }
-
-        throw lastError ?? SidecarHTTPClientError.unknownFailure
     }
 
     private func ensureSidecarStartedIfUnavailable(force: Bool = false, requestPath: String = "<unknown>") async {

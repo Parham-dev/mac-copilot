@@ -5,6 +5,7 @@ enum AsyncRetry {
         maxAttempts: Int,
         delayForAttempt: (Int) -> TimeInterval = { _ in 0 },
         shouldRetry: (Error, Int) -> Bool,
+        onRetry: ((Error, Int) async throws -> Void)? = nil,
         operation: () async throws -> T
     ) async throws -> T {
         precondition(maxAttempts > 0, "maxAttempts must be greater than zero")
@@ -19,6 +20,10 @@ enum AsyncRetry {
 
                 guard attempt < maxAttempts, shouldRetry(error, attempt) else {
                     throw error
+                }
+
+                if let onRetry {
+                    try await onRetry(error, attempt)
                 }
 
                 let delay = max(0, delayForAttempt(attempt))
