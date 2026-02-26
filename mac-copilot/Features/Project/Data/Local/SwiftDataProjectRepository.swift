@@ -6,6 +6,8 @@ final class SwiftDataProjectRepository: ProjectRepository {
     private enum RepositoryError: LocalizedError {
         case fetchFailed(String)
         case saveFailed(String)
+        case deleteFetchFailed(String)
+        case deleteSaveFailed(String)
 
         var errorDescription: String? {
             switch self {
@@ -13,6 +15,10 @@ final class SwiftDataProjectRepository: ProjectRepository {
                 return "Project fetch failed: \(details)"
             case .saveFailed(let details):
                 return "Project save failed: \(details)"
+            case .deleteFetchFailed(let details):
+                return "Project delete fetch failed: \(details)"
+            case .deleteSaveFailed(let details):
+                return "Project delete save failed: \(details)"
             }
         }
     }
@@ -54,6 +60,33 @@ final class SwiftDataProjectRepository: ProjectRepository {
         }
 
         return ref
+    }
+
+    func deleteProject(projectID: UUID) {
+        let predicateProjectID = projectID
+        let descriptor = FetchDescriptor<ProjectEntity>(
+            predicate: #Predicate { $0.id == predicateProjectID }
+        )
+
+        let entity: ProjectEntity?
+        do {
+            entity = try context.fetch(descriptor).first
+        } catch {
+            log(.deleteFetchFailed(error.localizedDescription))
+            return
+        }
+
+        guard let entity else {
+            return
+        }
+
+        context.delete(entity)
+
+        do {
+            try context.save()
+        } catch {
+            log(.deleteSaveFailed(error.localizedDescription))
+        }
     }
 
     private func log(_ error: RepositoryError) {

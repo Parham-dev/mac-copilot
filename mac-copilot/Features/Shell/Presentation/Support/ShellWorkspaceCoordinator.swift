@@ -81,4 +81,9 @@ final class ShellWorkspaceCoordinator {
         chatRepository.deleteChat(chatID: chatID)
         return chatRepository.fetchChats(projectID: projectID)
     }
+
+    func deleteProject(projectID: UUID) -> BootstrapState {
+        projectRepository.deleteProject(projectID: projectID)
+        return makeBootstrapState()
+    }
 }

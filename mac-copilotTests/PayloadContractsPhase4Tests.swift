@@ -250,6 +250,10 @@ private final class FixedProjectRepository: ProjectRepository {
     func createProject(name: String, localPath: String) -> ProjectRef {
         ProjectRef(name: name, localPath: localPath)
     }
+
+    func deleteProject(projectID: UUID) {
+        _ = projectID
+    }
 }
 
 @MainActor

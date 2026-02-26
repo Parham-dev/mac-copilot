@@ -22,6 +22,7 @@ final class ShellViewModel: ObservableObject {
     @Published var selectedContextTab: ContextTab = .controlCenter
     @Published var activeProjectID: ProjectRef.ID?
     @Published private(set) var chatCreationError: String?
+    @Published private(set) var projectDeletionError: String?
 
     private let workspaceCoordinator: ShellWorkspaceCoordinator
 
@@ -111,6 +112,10 @@ final class ShellViewModel: ObservableObject {
         chatCreationError = nil
     }
 
+    func clearProjectDeletionError() {
+        projectDeletionError = nil
+    }
+
     @discardableResult
     func addProject(name: String, localPath: String) -> ProjectRef {
         let created = workspaceCoordinator.createProjectWithDefaultChat(name: name, localPath: localPath)
@@ -152,5 +157,21 @@ final class ShellViewModel: ObservableObject {
             projectChats[projectID] = chats
             return
         }
+    }
+
+    func deleteProject(projectID: ProjectRef.ID) {
+        let existed = projects.contains(where: { $0.id == projectID })
+        guard existed else {
+            projectDeletionError = "Project not found."
+            return
+        }
+
+        let bootstrap = workspaceCoordinator.deleteProject(projectID: projectID)
+        projects = bootstrap.projects
+        projectChats = bootstrap.projectChats
+        expandedProjectIDs = bootstrap.expandedProjectIDs
+        activeProjectID = bootstrap.activeProjectID
+        selectedItem = bootstrap.selectedItem
+        projectDeletionError = nil
     }
 }

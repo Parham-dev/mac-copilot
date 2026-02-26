@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import FactoryKit
 import Testing
 @testable import mac_copilot
 

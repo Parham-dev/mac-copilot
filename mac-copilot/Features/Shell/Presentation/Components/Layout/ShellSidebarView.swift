@@ -41,6 +41,13 @@ struct ShellSidebarView: View {
             } message: {
                 Text(shellViewModel.chatCreationError ?? "Unknown error")
             }
+            .alert("Could not delete project", isPresented: projectDeletionErrorAlertBinding) {
+                Button("OK", role: .cancel) {
+                    shellViewModel.clearProjectDeletionError()
+                }
+            } message: {
+                Text(shellViewModel.projectDeletionError ?? "Unknown error")
+            }
         }
     }
 
@@ -50,6 +57,17 @@ struct ShellSidebarView: View {
             set: { shouldShow in
                 if !shouldShow {
                     shellViewModel.clearChatCreationError()
+                }
+            }
+        )
+    }
+
+    private var projectDeletionErrorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { shellViewModel.projectDeletionError != nil },
+            set: { shouldShow in
+                if !shouldShow {
+                    shellViewModel.clearProjectDeletionError()
                 }
             }
         )
@@ -95,6 +113,12 @@ struct ShellSidebarView: View {
                         shellViewModel.createChat(in: project.id)
                     } label: {
                         Label("New Chat", systemImage: "plus.bubble")
+                    }
+
+                    Button(role: .destructive) {
+                        shellViewModel.deleteProject(projectID: project.id)
+                    } label: {
+                        Label("Delete Project", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")

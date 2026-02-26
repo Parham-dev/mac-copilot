@@ -58,11 +58,12 @@ These should be kept green while expanding coverage.
 
 Checklist:
 - [ ] App bootstraps onboarding vs authenticated shell deterministically.
-- [ ] Environment/container wiring verified for all injected dependencies.
+- [x] Environment/container wiring verified for all injected dependencies.
 - [x] Persistent stores roundtrip correctly for model/tool preferences.
 
 Progress notes:
-- 2026-02-26: Added `mac-copilotTests/AppStoresPhaseAUnitTests.swift` covering `AppBootstrapService`, `ModelSelectionStore`, `MCPToolsStore`, and `CompanionStatusStore`. Focused run passed with `-only-testing:mac-copilotTests/AppStoresPhaseAUnitTests`.
+- 2026-02-26: Added `mac-copilotTests/AppStoresPhaseAUnitTests.swift` covering `AppBootstrapService`, `ModelSelectionStore`, `MCPToolsStore`, `CompanionStatusStore`, and `AppEnvironment`/`AppContainer` wiring checks. Focused run passed with `-only-testing:mac-copilotTests/AppStoresPhaseAUnitTests`.
+- 2026-02-26: `mac-copilotUITests/mac_copilotUITests/testSmoke_launchShowsOnboardingOrShell` run is currently blocked by runner termination failure (`Failed to terminate co.uk.appwebdev.mac-copilot`), so launch-path checkbox remains open until UI runner stability is resolved.
 
 Target files:
 - `mac-copilot/App/Bootstrap/mac_copilotApp.swift`

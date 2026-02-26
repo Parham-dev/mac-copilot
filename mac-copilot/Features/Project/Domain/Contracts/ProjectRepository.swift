@@ -6,4 +6,6 @@ protocol ProjectRepository {
 
     @discardableResult
     func createProject(name: String, localPath: String) -> ProjectRef
+
+    func deleteProject(projectID: UUID)
 }
