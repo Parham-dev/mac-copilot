@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import Darwin
 
 @MainActor
 final class ControlCenterRuntimeManager: ObservableObject {
@@ -17,10 +18,13 @@ final class ControlCenterRuntimeManager: ObservableObject {
     var stdoutPipe: Pipe?
     var stderrPipe: Pipe?
     var logEntries: [RuntimeLogEntry] = []
+    var isStopRequested = false
+    var shouldClearLogsAfterStop = false
 
     let maxUILogLines = 200
     let maxDiagnosticLogEntries = 800
     let failedPortReservationTTL: TimeInterval = 90
+    let gracefulStopTimeout: TimeInterval = 1.5
 
     enum LogPhase: String {
         case lifecycle
@@ -89,14 +93,56 @@ final class ControlCenterRuntimeManager: ObservableObject {
     }
 
     func stop() {
-        process?.terminate()
-        cleanupProcessHandles()
+        let hadFailure: Bool
+        if case .failed = state {
+            hadFailure = true
+        } else {
+            hadFailure = false
+        }
+
+        isStopRequested = true
+        shouldClearLogsAfterStop = !hadFailure
+
+        guard let runningProcess = process else {
+            if shouldClearLogsAfterStop {
+                logs.removeAll(keepingCapacity: true)
+                logEntries.removeAll(keepingCapacity: true)
+            }
+            isStopRequested = false
+            shouldClearLogsAfterStop = false
+            state = .idle
+            return
+        }
+
+        runningProcess.terminate()
+        scheduleForceKillIfNeeded(for: runningProcess)
         state = .idle
-        appendLog("Stopped control center runtime", phase: .lifecycle)
+
+        if hadFailure {
+            appendLog("Stopping control center runtime...", phase: .lifecycle)
+        }
     }
 
     func openInBrowser() {
         guard let activeURL else { return }
         NSWorkspace.shared.open(activeURL)
+    }
+
+    private func scheduleForceKillIfNeeded(for runningProcess: Process) {
+        let targetPID = runningProcess.processIdentifier
+        Task { @MainActor in
+            let nanos = UInt64(gracefulStopTimeout * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+
+            guard isStopRequested,
+                  let current = process,
+                  current.processIdentifier == targetPID,
+                  current.isRunning
+            else {
+                return
+            }
+
+            Darwin.kill(targetPID, SIGKILL)
+        }
     }
 }

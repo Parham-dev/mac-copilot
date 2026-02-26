@@ -46,7 +46,25 @@ extension ControlCenterRuntimeManager {
 
         process.terminationHandler = { [weak self] terminated in
             Task { @MainActor in
+                let wasStopRequested = self?.isStopRequested ?? false
+                let clearLogsAfterStop = self?.shouldClearLogsAfterStop ?? false
+
                 self?.cleanupProcessHandles()
+                if wasStopRequested {
+                    self?.isStopRequested = false
+                    self?.shouldClearLogsAfterStop = false
+
+                    if clearLogsAfterStop {
+                        self?.logs.removeAll(keepingCapacity: true)
+                        self?.logEntries.removeAll(keepingCapacity: true)
+                    } else {
+                        self?.appendLog("Stopped control center runtime", phase: .lifecycle)
+                    }
+
+                    self?.state = .idle
+                    return
+                }
+
                 if terminated.terminationStatus != 0 {
                     self?.state = .failed("Server exited unexpectedly (\(terminated.terminationStatus))")
                 } else if self?.state == .running {

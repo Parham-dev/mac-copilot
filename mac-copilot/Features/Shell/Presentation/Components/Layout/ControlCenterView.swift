@@ -2,6 +2,20 @@ import SwiftUI
 
 struct ControlCenterView: View {
     @StateObject private var viewModel: ControlCenterViewModel
+    @State private var logsAutoScrollEnabled = true
+    @State private var logsViewportHeight: CGFloat = 0
+
+    private let logsBottomAnchorID = "control-center-logs-bottom-anchor"
+    private let logsBottomTolerance: CGFloat = 24
+
+    private var logsScrollToken: Int {
+        var hasher = Hasher()
+        hasher.combine(viewModel.logs.count)
+        hasher.combine(viewModel.logs.first ?? "")
+        hasher.combine(viewModel.logs.last ?? "")
+        hasher.combine(viewModel.logs.reduce(0) { $0 + $1.count })
+        return hasher.finalize()
+    }
 
     init(
         project: ProjectRef,
@@ -113,42 +127,79 @@ struct ControlCenterView: View {
     }
 
     private var logsSection: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Button(action: viewModel.copyLogsToClipboard) {
-                    Label("Copy Logs", systemImage: "doc.on.doc")
+        ScrollViewReader { proxy in
+            VStack(spacing: 8) {
+                HStack {
+                    Button(action: viewModel.copyLogsToClipboard) {
+                        Label("Copy Logs", systemImage: "doc.on.doc")
+                    }
+                    .disabled(!viewModel.canCopyLogs)
+
+                    Spacer()
+
+                    Button(action: viewModel.requestFixWithAI) {
+                        Label("Fix with AI", systemImage: "sparkles")
+                    }
+                    .disabled(!viewModel.canRequestFix)
                 }
-                .disabled(!viewModel.canCopyLogs)
 
-                Spacer()
-
-                Button(action: viewModel.requestFixWithAI) {
-                    Label("Fix with AI", systemImage: "sparkles")
-                }
-                .disabled(!viewModel.canRequestFix)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    if viewModel.logs.isEmpty {
-                        Text("Run your project to see logs here.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        ForEach(Array(viewModel.logs.enumerated()), id: \.offset) { _, line in
-                            Text(line)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if viewModel.logs.isEmpty {
+                            Text("Run your project to see logs here.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            ForEach(Array(viewModel.logs.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id(logsBottomAnchorID)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear.preference(
+                                        key: ControlCenterLogsBottomOffsetPreferenceKey.self,
+                                        value: geometry.frame(in: .named("control-center-logs-scroll")).maxY
+                                    )
+                                }
+                            )
                     }
                 }
+                .coordinateSpace(name: "control-center-logs-scroll")
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear {
+                                logsViewportHeight = geometry.size.height
+                            }
+                            .onChange(of: geometry.size.height) { _, newHeight in
+                                logsViewportHeight = newHeight
+                            }
+                    }
+                )
+                .onPreferenceChange(ControlCenterLogsBottomOffsetPreferenceKey.self) { bottomOffset in
+                    let isAtBottom = bottomOffset <= (logsViewportHeight + logsBottomTolerance)
+                    logsAutoScrollEnabled = isAtBottom
+                }
+                .onAppear {
+                    scrollLogsToBottom(using: proxy, animated: false)
+                }
+                .onChange(of: logsScrollToken) { _, _ in
+                    guard logsAutoScrollEnabled else { return }
+                    scheduleLogsScrollToBottom(using: proxy)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(8)
+                .background(Color.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(8)
-            .background(Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
@@ -186,5 +237,31 @@ struct ControlCenterView: View {
                 .font(.title3)
                 .fontWeight(.semibold)
         }
+    }
+
+    private func scrollLogsToBottom(using proxy: ScrollViewProxy, animated: Bool = false) {
+        let action = {
+            proxy.scrollTo(logsBottomAnchorID, anchor: .bottom)
+        }
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.2), action)
+        } else {
+            action()
+        }
+    }
+
+    private func scheduleLogsScrollToBottom(using proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            scrollLogsToBottom(using: proxy, animated: false)
+        }
+    }
+}
+
+private struct ControlCenterLogsBottomOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = .greatestFiniteMagnitude
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
