@@ -32,6 +32,12 @@ final class CopilotModelCatalogClient {
             else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? -1
                 NSLog("[CopilotForge][Models] fetch failed with HTTP status=\(status)")
+                SentryMonitoring.captureMessage(
+                    "Model catalog request returned non-success status",
+                    category: "model_catalog",
+                    extras: ["statusCode": String(status)],
+                    throttleKey: "http_\(status)"
+                )
                 return []
             }
 
@@ -64,6 +70,11 @@ final class CopilotModelCatalogClient {
             return unique
         } catch {
             NSLog("[CopilotForge][Models] fetch/decode failed: \(error.localizedDescription)")
+            SentryMonitoring.captureError(
+                error,
+                category: "model_catalog",
+                throttleKey: "fetch_or_decode"
+            )
             return []
         }
     }

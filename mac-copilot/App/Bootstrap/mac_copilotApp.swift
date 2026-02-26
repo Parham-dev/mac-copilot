@@ -12,6 +12,10 @@ import FactoryKit
 struct mac_copilotApp: App {
     @StateObject private var appEnvironment = Container.shared.appEnvironment()
 
+    init() {
+        SentryMonitoring.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             OnboardingRootView()

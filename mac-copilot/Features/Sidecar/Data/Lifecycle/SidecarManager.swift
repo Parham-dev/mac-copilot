@@ -156,6 +156,12 @@ final class SidecarManager: SidecarLifecycleManaging {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             stateMachine.transition(to: .failed(message), log: log)
             log(message)
+            SentryMonitoring.captureError(
+                error,
+                category: "sidecar_start",
+                extras: ["message": message],
+                throttleKey: "preflight_or_boot"
+            )
         }
 
         isStarting = false
@@ -177,6 +183,11 @@ final class SidecarManager: SidecarLifecycleManaging {
         } catch {
             stateMachine.transition(to: .failed("Failed to start sidecar: \(error.localizedDescription)"), log: log)
             log("Failed to start sidecar: \(error.localizedDescription)")
+            SentryMonitoring.captureError(
+                error,
+                category: "sidecar_launch",
+                throttleKey: "process_start"
+            )
         }
     }
 

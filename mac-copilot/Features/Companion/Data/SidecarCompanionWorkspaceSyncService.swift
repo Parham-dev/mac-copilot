@@ -28,6 +28,12 @@ final class SidecarCompanionWorkspaceSyncService: CompanionWorkspaceSyncing {
             let response = try await transport.post(path: "companion/sync/snapshot", body: snapshot)
             guard (200 ... 299).contains(response.statusCode) else {
                 NSLog("[CopilotForge][CompanionSync] snapshot sync failed with HTTP %d", response.statusCode)
+                SentryMonitoring.captureMessage(
+                    "Companion snapshot sync returned non-success status",
+                    category: "companion_sync",
+                    extras: ["statusCode": String(response.statusCode)],
+                    throttleKey: "http_\(response.statusCode)"
+                )
                 return
             }
 
@@ -39,6 +45,11 @@ final class SidecarCompanionWorkspaceSyncService: CompanionWorkspaceSyncing {
             )
         } catch {
             NSLog("[CopilotForge][CompanionSync] snapshot sync failed: %@", error.localizedDescription)
+            SentryMonitoring.captureError(
+                error,
+                category: "companion_sync",
+                throttleKey: "request_error"
+            )
         }
     }
 }
