@@ -15,13 +15,13 @@ final class CopilotPromptStreamClient {
     init(
         baseURL: URL,
         ensureSidecarRunning: @escaping () -> Void = {},
-        lineStreamTransport: HTTPLineStreamTransporting = URLSessionHTTPLineStreamTransport(),
-        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
+        lineStreamTransport: HTTPLineStreamTransporting? = nil,
+        delayScheduler: AsyncDelayScheduling? = nil
     ) {
         self.baseURL = baseURL
         self.ensureSidecarRunning = ensureSidecarRunning
-        self.lineStreamTransport = lineStreamTransport
-        self.delayScheduler = delayScheduler
+        self.lineStreamTransport = lineStreamTransport ?? URLSessionHTTPLineStreamTransport()
+        self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
     }
 
     func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {

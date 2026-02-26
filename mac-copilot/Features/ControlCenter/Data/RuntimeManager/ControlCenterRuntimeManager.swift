@@ -69,18 +69,18 @@ final class ControlCenterRuntimeManager: ObservableObject {
 
     init(
         adapters: [any ControlCenterRuntimeAdapter],
-        utilities: ControlCenterRuntimeUtilities = ControlCenterRuntimeUtilities(),
-        healthTransport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
-        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler(),
-        clock: ClockProviding = SystemClockProvider(),
-        commandRunner: ControlCenterCommandStatusRunning = ProcessControlCenterCommandStatusRunner()
+        utilities: ControlCenterRuntimeUtilities? = nil,
+        healthTransport: HTTPDataTransporting? = nil,
+        delayScheduler: AsyncDelayScheduling? = nil,
+        clock: ClockProviding? = nil,
+        commandRunner: ControlCenterCommandStatusRunning? = nil
     ) {
         self.adapters = adapters
-        self.utilities = utilities
-        self.healthTransport = healthTransport
-        self.delayScheduler = delayScheduler
-        self.clock = clock
-        self.commandRunner = commandRunner
+        self.utilities = utilities ?? ControlCenterRuntimeUtilities()
+        self.healthTransport = healthTransport ?? URLSessionHTTPDataTransport()
+        self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
+        self.clock = clock ?? SystemClockProvider()
+        self.commandRunner = commandRunner ?? ProcessControlCenterCommandStatusRunner()
     }
 
     var isBusy: Bool {

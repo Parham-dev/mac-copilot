@@ -34,6 +34,7 @@ export async function streamPromptWithSession(
 
   const toolNameByCallID = new Map<string, string>();
   const protocolFilter = new ProtocolMarkupFilter();
+  let mergedDeltaText = "";
   const traceID = debugLabel?.trim().length ? debugLabel.trim() : `session-${Date.now().toString(36)}`;
 
   const logTrace = (message: string, extras?: Record<string, unknown>) => {
@@ -58,7 +59,22 @@ export async function streamPromptWithSession(
   const unsubscribeDelta = session.on("assistant.message_delta", (event: any) => {
     const delta = event?.data?.deltaContent;
     if (typeof delta === "string" && delta.length > 0) {
-      const filtered = protocolFilter.process(delta);
+      const nextMerged = mergeDeltaText(mergedDeltaText, delta);
+      const incremental = extractIncrementalDelta(mergedDeltaText, nextMerged);
+      mergedDeltaText = nextMerged;
+
+      if (incremental.length === 0) {
+        if (promptTraceEnabled) {
+          logTrace("delta suppressed as replay/cumulative duplicate", {
+            incomingLength: delta.length,
+            mergedLength: nextMerged.length,
+          });
+        }
+        return;
+      }
+
+      sawDeltaOutput = true;
+      const filtered = protocolFilter.process(incremental);
 
       if (promptTraceEnabled) {
         const rawHasProtocolMarkup = protocolMarkerPattern.test(delta);
@@ -67,10 +83,12 @@ export async function streamPromptWithSession(
         if (rawHasProtocolMarkup || filteredHasProtocolMarkup) {
           logTrace("delta protocol marker observation", {
             rawLength: delta.length,
+            incrementalLength: incremental.length,
             filteredLength: filtered.length,
             rawHasProtocolMarkup,
             filteredHasProtocolMarkup,
             rawPreview: delta.slice(0, 160),
+            incrementalPreview: incremental.slice(0, 160),
             filteredPreview: filtered.slice(0, 160),
           });
         }
@@ -78,7 +96,6 @@ export async function streamPromptWithSession(
 
       if (filtered.length > 0) {
         sawAnyOutput = true;
-        sawDeltaOutput = true;
         onEvent({ type: "text", text: filtered });
       }
     }
@@ -175,4 +192,75 @@ export async function streamPromptWithSession(
     unsubscribeToolComplete();
     unsubscribeIdle();
   }
+}
+
+function mergeDeltaText(current: string, incoming: string): string {
+  if (!incoming) {
+    return current;
+  }
+
+  if (!current) {
+    return incoming;
+  }
+
+  if (incoming === current) {
+    return current;
+  }
+
+  if (incoming.startsWith(current)) {
+    return incoming;
+  }
+
+  if (current.startsWith(incoming)) {
+    return current;
+  }
+
+  const overlap = longestSuffixPrefixOverlap(current, incoming);
+  if (overlap > 0) {
+    return current + incoming.slice(overlap);
+  }
+
+  if (incoming.includes(current)) {
+    return incoming;
+  }
+
+  if (current.includes(incoming)) {
+    return current;
+  }
+
+  return current + incoming;
+}
+
+function extractIncrementalDelta(previous: string, next: string): string {
+  if (!next) {
+    return "";
+  }
+
+  if (!previous) {
+    return next;
+  }
+
+  if (next === previous) {
+    return "";
+  }
+
+  if (next.startsWith(previous)) {
+    return next.slice(previous.length);
+  }
+
+  if (previous.includes(next)) {
+    return "";
+  }
+
+  return next;
+}
+
+function longestSuffixPrefixOverlap(lhs: string, rhs: string): number {
+  const maxCandidate = Math.min(lhs.length, rhs.length);
+  for (let length = maxCandidate; length >= 1; length -= 1) {
+    if (lhs.slice(-length) === rhs.slice(0, length)) {
+      return length;
+    }
+  }
+  return 0;
 }

@@ -32,7 +32,7 @@ final class SidecarManager: SidecarLifecycleManaging {
         processController: SidecarProcessControlling? = nil,
         restartPolicy: SidecarRestartPolicyManaging? = nil,
         logger: SidecarLogWriting? = nil,
-        clock: ClockProviding = SystemClockProvider(),
+        clock: ClockProviding? = nil,
         scheduleAfter: ((_ delay: TimeInterval, _ operation: @escaping () -> Void) -> Void)? = nil
     ) {
         self.queue = queue
@@ -41,7 +41,7 @@ final class SidecarManager: SidecarLifecycleManaging {
         self.processController = processController ?? SidecarProcessController(callbackQueue: queue)
         self.restartPolicy = restartPolicy ?? SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
         self.logger = logger ?? SidecarLogger()
-        self.clock = clock
+        self.clock = clock ?? SystemClockProvider()
         self.scheduleAfter = scheduleAfter ?? { delay, operation in
             queue.asyncAfter(deadline: .now() + delay, execute: operation)
         }

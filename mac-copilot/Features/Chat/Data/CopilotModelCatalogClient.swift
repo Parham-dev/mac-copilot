@@ -9,13 +9,13 @@ final class CopilotModelCatalogClient {
     init(
         baseURL: URL,
         ensureSidecarRunning: @escaping () -> Void = {},
-        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
-        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
+        transport: HTTPDataTransporting? = nil,
+        delayScheduler: AsyncDelayScheduling? = nil
     ) {
         self.baseURL = baseURL
         self.ensureSidecarRunning = ensureSidecarRunning
-        self.transport = transport
-        self.delayScheduler = delayScheduler
+        self.transport = transport ?? URLSessionHTTPDataTransport()
+        self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
     }
 
     func fetchModelCatalog() async -> [CopilotModelCatalogItem] {

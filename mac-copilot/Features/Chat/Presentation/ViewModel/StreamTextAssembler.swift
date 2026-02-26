@@ -20,14 +20,14 @@ enum StreamTextAssembler {
             return current
         }
 
-        if let overlapCount = longestSuffixPrefixOverlap(lhs: current, rhs: incoming),
-           shouldApplyOverlapDedup(lhs: current, rhs: incoming, overlapCount: overlapCount) {
-            let suffix = String(incoming.dropFirst(overlapCount))
+                if let overlapCount = longestSuffixPrefixOverlap(lhs: current, rhs: incoming),
+                     shouldApplyOverlapDedup(lhs: current, rhs: incoming, overlapCount: overlapCount) {
+                        let suffix = String(incoming.dropFirst(overlapCount))
             return normalizeReadable(current + suffix)
         }
 
         if incomingComparable.count > currentComparable.count, incomingComparable.contains(currentComparable) {
-            return normalizeReadable(incoming)
+                        return normalizeReadable(incoming)
         }
 
         if currentComparable.contains(incomingComparable) {
@@ -129,6 +129,7 @@ enum StreamTextAssembler {
 
         return false
     }
+
 }
 
 private extension Character {

@@ -23,14 +23,14 @@ final class SidecarHealthProbe {
 
     init(
         port: Int,
-        healthDataFetcher: SidecarHealthDataFetching = URLSessionSidecarHealthDataFetcher(),
+        healthDataFetcher: SidecarHealthDataFetching? = nil,
         delaySleeper: BlockingDelaySleeping = ThreadBlockingDelaySleeper(),
-        clock: ClockProviding = SystemClockProvider()
+        clock: ClockProviding? = nil
     ) {
         self.port = port
-        self.healthDataFetcher = healthDataFetcher
+        self.healthDataFetcher = healthDataFetcher ?? URLSessionSidecarHealthDataFetcher()
         self.delaySleeper = delaySleeper
-        self.clock = clock
+        self.clock = clock ?? SystemClockProvider()
     }
 
     func isHealthySidecarAlreadyRunning(requiredSuccesses: Int) -> Bool {

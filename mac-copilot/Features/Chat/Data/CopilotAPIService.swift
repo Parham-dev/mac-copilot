@@ -21,21 +21,25 @@ final class CopilotAPIService {
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
         ensureSidecarRunning: @escaping () -> Void = {},
-        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
-        lineStreamTransport: HTTPLineStreamTransporting = URLSessionHTTPLineStreamTransport(),
-        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
+        transport: HTTPDataTransporting? = nil,
+        lineStreamTransport: HTTPLineStreamTransporting? = nil,
+        delayScheduler: AsyncDelayScheduling? = nil
     ) {
+        let resolvedTransport = transport ?? URLSessionHTTPDataTransport()
+        let resolvedLineStreamTransport = lineStreamTransport ?? URLSessionHTTPLineStreamTransport()
+        let resolvedDelayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
+
         self.modelCatalogClient = CopilotModelCatalogClient(
             baseURL: baseURL,
             ensureSidecarRunning: ensureSidecarRunning,
-            transport: transport,
-            delayScheduler: delayScheduler
+            transport: resolvedTransport,
+            delayScheduler: resolvedDelayScheduler
         )
         self.promptStreamClient = CopilotPromptStreamClient(
             baseURL: baseURL,
             ensureSidecarRunning: ensureSidecarRunning,
-            lineStreamTransport: lineStreamTransport,
-            delayScheduler: delayScheduler
+            lineStreamTransport: resolvedLineStreamTransport,
+            delayScheduler: resolvedDelayScheduler
         )
     }
 

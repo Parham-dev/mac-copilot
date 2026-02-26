@@ -33,13 +33,13 @@ final class SidecarHTTPClient {
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
         sidecarLifecycle: SidecarLifecycleManaging,
-        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
-        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
+        transport: HTTPDataTransporting? = nil,
+        delayScheduler: AsyncDelayScheduling? = nil
     ) {
         self.baseURL = baseURL
         self.sidecarLifecycle = sidecarLifecycle
-        self.transport = transport
-        self.delayScheduler = delayScheduler
+        self.transport = transport ?? URLSessionHTTPDataTransport()
+        self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
     }
 
     func get(path: String) async throws -> SidecarHTTPResponse {

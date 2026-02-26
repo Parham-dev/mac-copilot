@@ -12,15 +12,15 @@ final class ControlCenterRuntimeUtilities {
     init(
         fileManager: ControlCenterFileManaging = FileManagerControlCenterFileManager(),
         commandRunner: ControlCenterCommandRunning = ProcessControlCenterCommandRunner(),
-        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
-        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler(),
+        transport: HTTPDataTransporting? = nil,
+        delayScheduler: AsyncDelayScheduling? = nil,
         blockingSleeper: BlockingDelaySleeping = ThreadBlockingDelaySleeper(),
         dateProvider: DateProviding = SystemDateProvider()
     ) {
         self.fileManager = fileManager
         self.commandRunner = commandRunner
-        self.transport = transport
-        self.delayScheduler = delayScheduler
+        self.transport = transport ?? URLSessionHTTPDataTransport()
+        self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
         self.blockingSleeper = blockingSleeper
         self.dateProvider = dateProvider
     }
