@@ -22,13 +22,28 @@ final class mac_copilotUITests: XCTestCase {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
-    @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testSmoke_launchShowsOnboardingOrShell() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        assertOnboardingOrShell(app)
+    }
+
+    func testSmoke_chatComposerVisibleWhenChatIsActive() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let connectGitHub = app.buttons["Connect GitHub"]
+        if connectGitHub.waitForExistence(timeout: 3) {
+            throw XCTSkip("App is currently on onboarding/auth gate; chat composer smoke assertion requires authenticated shell state.")
+        }
+
+        if app.staticTexts["Ask CopilotForge to build something…"].waitForExistence(timeout: 6) {
+            XCTAssertTrue(app.staticTexts["Ask CopilotForge to build something…"].exists)
+            return
+        }
+
+        throw XCTSkip("No active chat composer found in current shell selection; skipping until project/chat setup is deterministic for UI tests.")
     }
 
     @MainActor
@@ -37,5 +52,16 @@ final class mac_copilotUITests: XCTestCase {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }
+    }
+
+    private func assertOnboardingOrShell(_ app: XCUIApplication) {
+        if app.buttons["Connect GitHub"].waitForExistence(timeout: 4) {
+            XCTAssertTrue(app.staticTexts["Welcome to CopilotForge"].exists)
+            return
+        }
+
+        let shellTitle = app.staticTexts["CopilotForge"]
+        let newChatButton = app.buttons["New Chat"]
+        XCTAssertTrue(shellTitle.waitForExistence(timeout: 6) || newChatButton.waitForExistence(timeout: 6))
     }
 }

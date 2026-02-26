@@ -136,6 +136,12 @@ Cases:
 Exit criteria:
 - Git panel correctness no longer depends on manual validation.
 
+Current progress (2026-02-26):
+- Implemented `mac-copilotTests/GitDomainPhase3Tests.swift` covering `LocalGitRepositoryParsing` edge cases (branch parsing, file-state mapping, numstat aggregation, rename normalization).
+- Added `LocalGitRepositoryManager` behavior tests with fake command runner and filesystem seam for file-change mapping and text-file line-count fallback.
+- Added commit-flow failure coverage for empty message validation, stage failure, and commit failure paths.
+- Focused run passed: `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS,arch=arm64' -only-testing:mac-copilotTests/GitDomainPhase3Tests`.
+
 ### Phase 4: Integration tests for persistence and sidecar payloads
 
 Targets:
@@ -151,6 +157,14 @@ Cases:
 Exit criteria:
 - Data integrity validated across read/write boundaries.
 
+Current progress (2026-02-26):
+- Implemented `mac-copilotTests/PersistencePhase4IntegrationTests.swift` for in-memory SwiftData roundtrip integrity across `SwiftDataProjectRepository` and `SwiftDataChatRepository`.
+- Added ordering/metadata/update/delete coverage for project/chat/message persistence behaviors.
+- Implemented `mac-copilotTests/PayloadContractsPhase4Tests.swift` for `/models` request contract, `/prompt` payload contract (including optional fields), and companion snapshot POST body contract.
+- Stabilized companion snapshot assertion to support URL loading bodies provided via `httpBody` or `httpBodyStream` in URLProtocol-captured requests.
+
+### Phase 5: Critical smoke UI and E2E tests
+
 ### Phase 5: Critical smoke UI and E2E tests
 
 Targets:
@@ -165,6 +179,10 @@ Cases:
 
 Exit criteria:
 - Release-blocking flows are covered by automated smoke tests.
+
+Current progress (2026-02-26):
+- Started with `mac-copilotUITests/mac_copilotUITests.swift` smoke coverage for app launch path detection (onboarding/auth gate vs authenticated shell).
+- Added a guarded smoke assertion for chat-composer visibility when shell state is active; test skips explicitly when environment state is not yet deterministic.
 
 ---
 
