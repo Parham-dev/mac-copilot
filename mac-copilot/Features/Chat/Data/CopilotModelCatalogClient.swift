@@ -54,7 +54,7 @@ final class CopilotModelCatalogClient {
                   (200 ... 299).contains(http.statusCode)
             else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                let message = decodeErrorMessage(from: data)
+                let message = ModelCatalogDecoder.decodeErrorMessage(from: data)
                 NSLog("[CopilotForge][Models] fetch failed with HTTP status=\(status)")
                 SentryMonitoring.captureMessage(
                     "Model catalog request returned non-success status",
@@ -73,29 +73,8 @@ final class CopilotModelCatalogClient {
                 throw CopilotModelCatalogError.server(statusCode: status, message: message)
             }
 
-            let payloads = try decodeModelPayloads(from: data)
-            let mapped = payloads.map { payload in
-                CopilotModelCatalogItem(
-                    id: payload.id,
-                    name: payload.name ?? payload.id,
-                    maxContextWindowTokens: payload.capabilities?.limits?.maxContextWindowTokens,
-                    maxPromptTokens: payload.capabilities?.limits?.maxPromptTokens,
-                    supportsVision: payload.capabilities?.supports?.vision ?? false,
-                    supportsReasoningEffort: payload.capabilities?.supports?.reasoningEffort ?? false,
-                    policyState: payload.policy?.state,
-                    policyTerms: payload.policy?.terms,
-                    billingMultiplier: payload.billing?.multiplier,
-                    supportedReasoningEfforts: payload.supportedReasoningEfforts ?? [],
-                    defaultReasoningEffort: payload.defaultReasoningEffort
-                )
-            }
-
-            var uniqueByID: [String: CopilotModelCatalogItem] = [:]
-            for item in mapped where !item.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                uniqueByID[item.id] = item
-            }
-
-            let unique = uniqueByID.values.sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
+            let payloads = try ModelCatalogDecoder.decodeModelPayloads(from: data)
+            let unique = ModelCatalogMapper.mapToUniqueSortedItems(payloads)
             if unique.isEmpty {
                 NSLog("[CopilotForge][Models] decoded catalog is empty")
             }
@@ -139,61 +118,9 @@ final class CopilotModelCatalogClient {
     private func shouldRetryConnection(_ error: Error) -> Bool {
         RecoverableNetworkError.isConnectionRelated(error)
     }
-
-    private func decodeModelPayloads(from data: Data) throws -> [ModelPayload] {
-        let decoder = JSONDecoder()
-
-        if let wrapped = try? decoder.decode(ModelsResponse.self, from: data) {
-            return wrapped.models
-        }
-
-        if let wrappedStrings = try? decoder.decode(ModelsStringResponse.self, from: data) {
-            return wrappedStrings.models.map { ModelPayload(stringID: $0) }
-        }
-
-        if let direct = try? decoder.decode([ModelPayload].self, from: data) {
-            return direct
-        }
-
-        if let directStrings = try? decoder.decode([String].self, from: data) {
-            return directStrings.map { ModelPayload(stringID: $0) }
-        }
-
-        throw ModelsDecodeError.unsupportedShape
-    }
-
-    private func decodeErrorMessage(from data: Data) -> String? {
-        guard let payload = try? JSONDecoder().decode(SidecarErrorResponse.self, from: data),
-              let message = payload.error?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !message.isEmpty
-        else {
-            return nil
-        }
-
-        return message
-    }
 }
 
-private struct SidecarErrorResponse: Decodable {
-    let ok: Bool?
-    let error: String?
-}
-
-private struct ModelsResponse: Decodable {
-    let ok: Bool?
-    let models: [ModelPayload]
-}
-
-private struct ModelsStringResponse: Decodable {
-    let ok: Bool?
-    let models: [String]
-}
-
-private enum ModelsDecodeError: Error {
-    case unsupportedShape
-}
-
-private struct ModelPayload: Decodable {
+struct ModelPayload: Decodable {
     let id: String
     let name: String?
     let capabilities: ModelCapabilitiesPayload?
@@ -237,7 +164,7 @@ private struct ModelPayload: Decodable {
     }
 }
 
-private struct ModelObjectPayload: Decodable {
+struct ModelObjectPayload: Decodable {
     let id: String?
     let model: String?
     let name: String?
@@ -248,17 +175,17 @@ private struct ModelObjectPayload: Decodable {
     let defaultReasoningEffort: String?
 }
 
-private struct ModelCapabilitiesPayload: Decodable {
+struct ModelCapabilitiesPayload: Decodable {
     let supports: ModelSupportsPayload?
     let limits: ModelLimitsPayload?
 }
 
-private struct ModelSupportsPayload: Decodable {
+struct ModelSupportsPayload: Decodable {
     let vision: Bool?
     let reasoningEffort: Bool?
 }
 
-private struct ModelLimitsPayload: Decodable {
+struct ModelLimitsPayload: Decodable {
     let maxPromptTokens: Int?
     let maxContextWindowTokens: Int?
 
@@ -287,11 +214,11 @@ private struct ModelLimitsPayload: Decodable {
     }
 }
 
-private struct ModelPolicyPayload: Decodable {
+struct ModelPolicyPayload: Decodable {
     let state: String?
     let terms: String?
 }
 
-private struct ModelBillingPayload: Decodable {
+struct ModelBillingPayload: Decodable {
     let multiplier: Double?
 }

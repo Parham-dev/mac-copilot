@@ -239,13 +239,8 @@ final class SwiftDataChatRepository: ChatRepository {
     }
 
     private func findProjectEntity(id: UUID) -> ProjectEntity? {
-        let predicateProjectID = id
-        let descriptor = FetchDescriptor<ProjectEntity>(
-            predicate: #Predicate { $0.id == predicateProjectID }
-        )
-
         do {
-            return try context.fetch(descriptor).first
+            return try ChatEntityLookup.findProjectEntity(id: id, context: context)
         } catch {
             log(.findProjectFailed(error.localizedDescription))
             return nil
@@ -253,13 +248,8 @@ final class SwiftDataChatRepository: ChatRepository {
     }
 
     private func findChatEntity(id: UUID) -> ChatThreadEntity? {
-        let predicateChatID = id
-        let descriptor = FetchDescriptor<ChatThreadEntity>(
-            predicate: #Predicate { $0.id == predicateChatID }
-        )
-
         do {
-            return try context.fetch(descriptor).first
+            return try ChatEntityLookup.findChatEntity(id: id, context: context)
         } catch {
             log(.findChatFailed(error.localizedDescription))
             return nil
@@ -274,8 +264,7 @@ final class SwiftDataChatRepository: ChatRepository {
         guard let metadata else { return nil }
 
         do {
-            let data = try JSONEncoder().encode(metadata)
-            return String(data: data, encoding: .utf8)
+            return try ChatMetadataCodec.encode(metadata)
         } catch {
             log(.encodeMetadataFailed(error.localizedDescription))
             return nil
@@ -283,10 +272,10 @@ final class SwiftDataChatRepository: ChatRepository {
     }
 
     private func decodeMetadata(from json: String?) -> ChatMessage.Metadata? {
-        guard let json, let data = json.data(using: .utf8) else { return nil }
+        guard let json else { return nil }
 
         do {
-            return try JSONDecoder().decode(ChatMessage.Metadata.self, from: data)
+            return try ChatMetadataCodec.decode(from: json)
         } catch {
             log(.decodeMetadataFailed(error.localizedDescription))
             return nil

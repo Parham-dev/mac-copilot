@@ -30,25 +30,14 @@ final class CopilotPromptStreamClient {
                 do {
                     ensureSidecarRunning()
                     NSLog("[CopilotForge][Prompt] stream start (chatID=%@ chars=%d)", chatID.uuidString, prompt.count)
-                    var request = URLRequest(url: baseURL.appendingPathComponent("prompt"))
-                    request.httpMethod = "POST"
-                    request.timeoutInterval = 120
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    var payload: [String: Any] = [
-                        "prompt": prompt,
-                        "chatID": chatID.uuidString,
-                        "projectPath": projectPath ?? "",
-                    ]
-
-                    if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        payload["model"] = model
-                    }
-
-                    if let allowedTools {
-                        payload["allowedTools"] = allowedTools
-                    }
-
-                    request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                    let request = try PromptStreamRequestBuilder.makeRequest(
+                        baseURL: baseURL,
+                        prompt: prompt,
+                        chatID: chatID,
+                        model: model,
+                        projectPath: projectPath,
+                        allowedTools: allowedTools
+                    )
 
                     let stream = try await connectWithRetry(request: request)
                     let response = stream.response
@@ -67,52 +56,25 @@ final class CopilotPromptStreamClient {
                     var protocolMarkerChunkCount = 0
 
                     for try await line in stream.lines {
-                        guard line.hasPrefix("data: ") else { continue }
+                        guard let parsed = try PromptSSEDecoder.decode(line: line) else {
+                            continue
+                        }
 
-                        let payload = String(line.dropFirst(6))
-                        if payload == "[DONE]" {
+                        if case .done = parsed {
                             NSLog("[CopilotForge][Prompt] stream done (chunks=%d chars=%d)", receivedChunks, receivedChars)
                             break
                         }
 
-                        guard let data = payload.data(using: .utf8) else { continue }
-                        let decoded = try JSONDecoder().decode(SSEPayload.self, from: data)
+                        guard case .payload(let decoded) = parsed else {
+                            continue
+                        }
 
                         if let error = decoded.error {
                             throw PromptStreamError(message: error)
                         }
 
-                        if let kind = decoded.type {
-                            switch kind {
-                            case "status":
-                                if let label = decoded.label, !label.isEmpty {
-                                    continuation.yield(.status(label))
-                                }
-                            case "tool_start":
-                                if let name = decoded.toolName, !name.isEmpty {
-                                    continuation.yield(.status("Tool started: \(name)"))
-                                }
-                            case "tool_complete":
-                                if let name = decoded.toolName, !name.isEmpty {
-                                    let suffix = (decoded.success == false) ? "failed" : "done"
-                                    continuation.yield(.status("Tool \(suffix): \(name)"))
-                                    continuation.yield(
-                                        .toolExecution(
-                                            PromptToolExecutionEvent(
-                                                toolName: name,
-                                                success: decoded.success != false,
-                                                details: decoded.details,
-                                                input: decoded.toolInput,
-                                                output: decoded.toolOutput ?? decoded.details
-                                            )
-                                        )
-                                    )
-                                }
-                            case "done":
-                                continuation.yield(.completed)
-                            default:
-                                break
-                            }
+                        for event in PromptSSEEventMapper.events(from: decoded) {
+                            continuation.yield(event)
                         }
 
                         if let text = decoded.text, !text.isEmpty {
@@ -190,128 +152,5 @@ private extension CopilotPromptStreamClient {
 
     func shouldRetryConnection(_ error: Error) -> Bool {
         RecoverableNetworkError.isConnectionRelated(error)
-    }
-}
-
-private struct SSEPayload: Decodable {
-    let type: String?
-    let text: String?
-    let label: String?
-    let toolName: String?
-    let success: Bool?
-    let details: String?
-    let toolInput: String?
-    let toolOutput: String?
-    let error: String?
-
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case text
-        case label
-        case toolName
-        case success
-        case details
-        case input
-        case output
-        case arguments
-        case result
-        case error
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        type = try container.decodeIfPresent(String.self, forKey: .type)
-        text = try container.decodeIfPresent(String.self, forKey: .text)
-        label = try container.decodeIfPresent(String.self, forKey: .label)
-        toolName = try container.decodeIfPresent(String.self, forKey: .toolName)
-        success = try container.decodeIfPresent(Bool.self, forKey: .success)
-        details = try container.decodeFlexibleString(forKey: .details)
-        toolInput = try container.decodeFlexibleString(forKey: .input)
-            ?? container.decodeFlexibleString(forKey: .arguments)
-        toolOutput = try container.decodeFlexibleString(forKey: .output)
-            ?? container.decodeFlexibleString(forKey: .result)
-        error = try container.decodeIfPresent(String.self, forKey: .error)
-    }
-}
-
-private extension KeyedDecodingContainer {
-    func decodeFlexibleString(forKey key: Key) throws -> String? {
-        if let stringValue = try decodeIfPresent(String.self, forKey: key) {
-            return stringValue
-        }
-
-        if let jsonValue = try decodeIfPresent(SSEJSONValue.self, forKey: key) {
-            return jsonValue.rendered
-        }
-
-        return nil
-    }
-}
-
-private enum SSEJSONValue: Decodable {
-    case string(String)
-    case number(Double)
-    case bool(Bool)
-    case object([String: SSEJSONValue])
-    case array([SSEJSONValue])
-    case null
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() {
-            self = .null
-        } else if let value = try? container.decode(String.self) {
-            self = .string(value)
-        } else if let value = try? container.decode(Double.self) {
-            self = .number(value)
-        } else if let value = try? container.decode(Bool.self) {
-            self = .bool(value)
-        } else if let value = try? container.decode([String: SSEJSONValue].self) {
-            self = .object(value)
-        } else if let value = try? container.decode([SSEJSONValue].self) {
-            self = .array(value)
-        } else {
-            throw DecodingError.typeMismatch(
-                SSEJSONValue.self,
-                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value")
-            )
-        }
-    }
-
-    var rendered: String {
-        switch self {
-        case .string(let value):
-            return value
-        case .number(let value):
-            return value.formatted(.number)
-        case .bool(let value):
-            return value ? "true" : "false"
-        case .object, .array:
-            guard let data = try? JSONSerialization.data(withJSONObject: foundationObject, options: [.prettyPrinted, .sortedKeys]),
-                  let text = String(data: data, encoding: .utf8)
-            else {
-                return ""
-            }
-            return text
-        case .null:
-            return ""
-        }
-    }
-
-    private var foundationObject: Any {
-        switch self {
-        case .string(let value):
-            return value
-        case .number(let value):
-            return value
-        case .bool(let value):
-            return value
-        case .object(let dictionary):
-            return dictionary.mapValues { $0.foundationObject }
-        case .array(let values):
-            return values.map { $0.foundationObject }
-        case .null:
-            return NSNull()
-        }
     }
 }
