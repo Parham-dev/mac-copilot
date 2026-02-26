@@ -2,11 +2,8 @@ import SwiftUI
 
 struct ControlCenterView: View {
     @StateObject private var viewModel: ControlCenterViewModel
-    @State private var logsAutoScrollEnabled = true
-    @State private var logsViewportHeight: CGFloat = 0
 
     private let logsBottomAnchorID = "control-center-logs-bottom-anchor"
-    private let logsBottomTolerance: CGFloat = 24
 
     private var logsScrollToken: Int {
         var hasher = Hasher()
@@ -162,37 +159,12 @@ struct ControlCenterView: View {
                         Color.clear
                             .frame(height: 1)
                             .id(logsBottomAnchorID)
-                            .background(
-                                GeometryReader { geometry in
-                                    Color.clear.preference(
-                                        key: ControlCenterLogsBottomOffsetPreferenceKey.self,
-                                        value: geometry.frame(in: .named("control-center-logs-scroll")).maxY
-                                    )
-                                }
-                            )
                     }
-                }
-                .coordinateSpace(name: "control-center-logs-scroll")
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear {
-                                logsViewportHeight = geometry.size.height
-                            }
-                            .onChange(of: geometry.size.height) { _, newHeight in
-                                logsViewportHeight = newHeight
-                            }
-                    }
-                )
-                .onPreferenceChange(ControlCenterLogsBottomOffsetPreferenceKey.self) { bottomOffset in
-                    let isAtBottom = bottomOffset <= (logsViewportHeight + logsBottomTolerance)
-                    logsAutoScrollEnabled = isAtBottom
                 }
                 .onAppear {
                     scrollLogsToBottom(using: proxy, animated: false)
                 }
                 .onChange(of: logsScrollToken) { _, _ in
-                    guard logsAutoScrollEnabled else { return }
                     scheduleLogsScrollToBottom(using: proxy)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -255,13 +227,5 @@ struct ControlCenterView: View {
         DispatchQueue.main.async {
             scrollLogsToBottom(using: proxy, animated: false)
         }
-    }
-}
-
-private struct ControlCenterLogsBottomOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = .greatestFiniteMagnitude
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }

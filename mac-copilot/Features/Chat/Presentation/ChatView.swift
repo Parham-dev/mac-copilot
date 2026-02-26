@@ -51,9 +51,15 @@ struct ChatView: View {
             )
         }
         .task(id: viewModel.chatID) {
+#if DEBUG
+            NSLog("[CopilotForge][ChatView] loadModels task triggered chatID=%@", viewModel.chatID.uuidString)
+#endif
             await viewModel.loadModelsIfNeeded()
         }
         .onChange(of: modelSelectionStore.changeToken) { _, _ in
+#if DEBUG
+            NSLog("[CopilotForge][ChatView] modelSelection changeToken triggered chatID=%@", viewModel.chatID.uuidString)
+#endif
             Task {
                 await viewModel.loadModelsIfNeeded(forceReload: true)
             }

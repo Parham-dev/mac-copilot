@@ -76,6 +76,7 @@ struct ComposerTextView: NSViewRepresentable {
         private var latestPendingEmptyState = true
         private var pendingHeightUpdate = false
         private var latestPendingHeightValue: CGFloat = 0
+        private var textDidChangeEventCount = 0
 
         init(parent: ComposerTextView) {
             self.parent = parent
@@ -87,6 +88,8 @@ struct ComposerTextView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
+            textDidChangeEventCount += 1
+            debugLog("textDidChange #\(textDidChangeEventCount) chars=\(textView.string.count) pendingText=\(pendingTextUpdate) pendingHeight=\(pendingHeightUpdate)")
             enqueueTextBindingUpdate(textView.string)
             updateEmptyState(textView.string)
             updateHeight(for: textView)
@@ -112,19 +115,25 @@ struct ComposerTextView: NSViewRepresentable {
             latestPendingTextValue = newValue
             guard !pendingTextUpdate else { return }
             pendingTextUpdate = true
+            debugLog("enqueueTextBindingUpdate chars=\(newValue.count)")
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.pendingTextUpdate = false
                 let value = self.latestPendingTextValue
                 if self.parent.text != value {
+                    self.debugLog("applyTextBindingUpdate chars=\(value.count)")
                     self.parent.text = value
                 }
             }
         }
 
         func shouldDeferBindingToTextViewSync(boundText: String) -> Bool {
-            pendingTextUpdate && boundText != latestPendingTextValue
+            let shouldDefer = pendingTextUpdate && boundText != latestPendingTextValue
+            if shouldDefer {
+                debugLog("deferBindingToTextViewSync boundChars=\(boundText.count) pendingChars=\(latestPendingTextValue.count)")
+            }
+            return shouldDefer
         }
 
         func updateHeight(for textView: NSTextView) {
@@ -149,8 +158,12 @@ struct ComposerTextView: NSViewRepresentable {
 
         private func enqueueHeightBindingUpdate(_ newValue: CGFloat) {
             latestPendingHeightValue = newValue
-            guard !pendingHeightUpdate else { return }
+            guard !pendingHeightUpdate else {
+                debugLog("skipHeightBindingUpdateWhilePending newHeight=\(String(format: "%.1f", newValue))")
+                return
+            }
             pendingHeightUpdate = true
+            debugLog("enqueueHeightBindingUpdate newHeight=\(String(format: "%.1f", newValue))")
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -158,9 +171,16 @@ struct ComposerTextView: NSViewRepresentable {
 
                 let rounded = (self.latestPendingHeightValue * 2).rounded() / 2
                 if abs(self.parent.dynamicHeight - rounded) > 0.25 {
+                    self.debugLog("applyHeightBindingUpdate height=\(String(format: "%.1f", rounded))")
                     self.parent.dynamicHeight = rounded
                 }
             }
+        }
+
+        private func debugLog(_ message: String) {
+#if DEBUG
+            NSLog("[CopilotForge][ComposerDebug] %@", message)
+#endif
         }
 
         func updateScrollerOnly(for textView: NSTextView) {

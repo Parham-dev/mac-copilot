@@ -68,7 +68,7 @@ final class SidecarHTTPClient {
     }
 
     private func sendWithRetry(request: URLRequest) async throws -> SidecarHTTPResponse {
-        sidecarLifecycle.startIfNeeded()
+        await ensureSidecarStartedIfUnavailable()
         _ = await waitForSidecarReadyInternal(maxAttempts: 3, delaySeconds: 0.25)
 
         var lastError: Error?
@@ -78,7 +78,7 @@ final class SidecarHTTPClient {
             } catch {
                 lastError = error
                 if isRecoverableConnectionError(error), attempt == 0 {
-                    sidecarLifecycle.startIfNeeded()
+                    await ensureSidecarStartedIfUnavailable(force: true)
                     let ready = await waitForSidecarReadyInternal(maxAttempts: 8, delaySeconds: 0.30)
                     if !ready {
                         throw SidecarHTTPClientError.sidecarNotReady
@@ -91,6 +91,14 @@ final class SidecarHTTPClient {
         }
 
         throw lastError ?? SidecarHTTPClientError.unknownFailure
+    }
+
+    private func ensureSidecarStartedIfUnavailable(force: Bool = false) async {
+        if !force, await pingHealth() {
+            return
+        }
+
+        sidecarLifecycle.startIfNeeded()
     }
 
     private func perform(request: URLRequest) async throws -> SidecarHTTPResponse {

@@ -21,12 +21,15 @@ final class SidecarManager: SidecarLifecycleManaging {
 
     private var isStarting = false
     private var runID: String?
+    private var startRequestCount = 0
 
     init() {}
 
     func startIfNeeded() {
         queue.async { [weak self] in
-            self?.startIfNeededLocked(reason: .appBoot)
+            guard let self else { return }
+            self.startRequestCount += 1
+            self.startIfNeededLocked(reason: .appBoot)
         }
     }
 
@@ -53,6 +56,11 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private func startIfNeededLocked(reason: StartReason) {
+        if stateMachine.state == .healthy,
+           runtimeUtilities.isHealthySidecarAlreadyRunning(requiredSuccesses: 1) {
+            return
+        }
+
         if stateMachine.isHealthyRunning(processIsRunning: processController.isRunning) {
             return
         }
@@ -66,6 +74,8 @@ final class SidecarManager: SidecarLifecycleManaging {
             log("Clearing stale process handle")
             processController.clearStaleProcessHandle()
         }
+
+        log("startIfNeeded accepted request #\(startRequestCount) isStarting=\(isStarting) processRunning=\(processController.isRunning)")
 
         do {
             let startup = try preflight.check()

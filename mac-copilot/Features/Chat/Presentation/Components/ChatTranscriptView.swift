@@ -7,15 +7,19 @@ struct ChatTranscriptView: View {
     let streamingAssistantMessageID: UUID?
 
     @State private var hasScrolledInitially = false
+    @State private var pendingScrollRequestID = 0
 
     private let bottomAnchorID = "chat-transcript-bottom-anchor"
+
+    private var latestMessageCharacterCount: Int {
+        messages.last?.text.count ?? 0
+    }
 
     private var scrollUpdateToken: Int {
         var hasher = Hasher()
         hasher.combine(messages.count)
-        hasher.combine(messages.reduce(0) { $0 + $1.text.count })
-        hasher.combine(statusChipsByMessageID.values.reduce(0) { $0 + $1.count })
-        hasher.combine(toolExecutionsByMessageID.values.reduce(0) { $0 + $1.count })
+        hasher.combine(messages.last?.id)
+        hasher.combine(latestMessageCharacterCount)
         hasher.combine(streamingAssistantMessageID)
         return hasher.finalize()
     }
@@ -52,6 +56,9 @@ struct ChatTranscriptView: View {
             .onAppear {
                 performInitialScrollIfNeeded(using: proxy)
             }
+            .onDisappear {
+                pendingScrollRequestID += 1
+            }
         }
     }
 
@@ -72,22 +79,18 @@ struct ChatTranscriptView: View {
         guard !messages.isEmpty else { return }
 
         hasScrolledInitially = true
-
-        scrollToBottom(using: proxy, animated: false)
-
         DispatchQueue.main.async {
-            scrollToBottom(using: proxy, animated: false)
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             scrollToBottom(using: proxy, animated: false)
         }
     }
 
     private func scheduleScrollToBottom(using proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
-            let shouldAnimate = false
-            scrollToBottom(using: proxy, animated: shouldAnimate)
+        pendingScrollRequestID += 1
+        let requestID = pendingScrollRequestID
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+            guard requestID == pendingScrollRequestID else { return }
+            scrollToBottom(using: proxy, animated: false)
         }
     }
 }
