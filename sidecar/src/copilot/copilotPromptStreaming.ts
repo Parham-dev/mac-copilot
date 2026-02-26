@@ -1,5 +1,5 @@
-import { ProtocolMarkupFilter, protocolMarkerPattern } from "./promptStreaming/protocolMarkup.js";
-import { extractToolExecutionResult } from "./promptStreaming/toolExecution.js";
+import { ProtocolMarkupFilter, protocolMarkerPattern } from "../promptStreaming/protocolMarkup.js";
+import { extractToolExecutionResult } from "../promptStreaming/toolExecution.js";
 
 type PromptEvent = Record<string, unknown>;
 

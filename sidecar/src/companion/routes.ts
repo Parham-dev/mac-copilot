@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { isAuthenticated, sendPrompt } from "../copilot.js";
+import { isAuthenticated, sendPrompt } from "../copilot/copilot.js";
 import { companionChatStore } from "./chatStore.js";
 import { CompanionStore } from "./store.js";
 

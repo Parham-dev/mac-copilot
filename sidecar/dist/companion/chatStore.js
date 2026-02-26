@@ -1,18 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-const defaultState = {
-    projects: [],
-    chats: [],
-    messagesByChat: {},
-};
+import { loadChatStoreState, saveChatStoreState } from "./chatStorePersistence.js";
 export class CompanionChatStore {
     projects = new Map();
     chats = new Map();
     messagesByChat = new Map();
     constructor() {
-        const state = loadState();
+        const state = loadChatStoreState();
         for (const project of state.projects)
             this.projects.set(project.id, project);
         for (const chat of state.chats)
@@ -197,7 +190,7 @@ export class CompanionChatStore {
         for (const [chatId, messages] of this.messagesByChat.entries()) {
             messagesByChat[chatId] = messages;
         }
-        saveState({
+        saveChatStoreState({
             projects: Array.from(this.projects.values()),
             chats: Array.from(this.chats.values()),
             messagesByChat,
@@ -233,26 +226,4 @@ function normalizeTimestamp(input) {
 }
 function maxTimestamp(lhs, rhs) {
     return lhs.localeCompare(rhs) >= 0 ? lhs : rhs;
-}
-function resolveStateFilePath() {
-    const currentFile = fileURLToPath(import.meta.url);
-    const currentDir = dirname(currentFile);
-    const dataDir = join(currentDir, "..", "..", "data");
-    return { dataDir, stateFilePath: join(dataDir, "companion-chat-state.json") };
-}
-function loadState() {
-    const { stateFilePath } = resolveStateFilePath();
-    if (!existsSync(stateFilePath))
-        return defaultState;
-    try {
-        return { ...defaultState, ...JSON.parse(readFileSync(stateFilePath, "utf8")) };
-    }
-    catch {
-        return defaultState;
-    }
-}
-function saveState(state) {
-    const { dataDir, stateFilePath } = resolveStateFilePath();
-    mkdirSync(dataDir, { recursive: true });
-    writeFileSync(stateFilePath, JSON.stringify(state, null, 2), "utf8");
 }

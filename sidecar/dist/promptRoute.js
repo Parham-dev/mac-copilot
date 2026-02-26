@@ -1,4 +1,4 @@
-import { sendPrompt, isAuthenticated } from "./copilot.js";
+import { sendPrompt, isAuthenticated } from "./copilot/copilot.js";
 import { companionChatStore } from "./companion/chatStore.js";
 const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
 const promptTraceEnabled = process.env.COPILOTFORGE_PROMPT_TRACE === "1";

@@ -61,7 +61,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
             throw GitRepositoryError(message: "Could not determine current Git branch.")
         }
 
-        let branchName = parseBranchName(from: headerLine)
+        let branchName = LocalGitRepositoryParsing.parseBranchName(from: headerLine)
         let changedFilesCount = max(lines.count - 1, 0)
 
         return GitRepositoryStatus(
@@ -88,8 +88,8 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
             self.runGit(arguments: ["-C", path, "diff", "--cached", "--numstat"])
         }
 
-        let unstagedLineCounts = parseNumStatMap(from: unstagedNumStatResult.output)
-        let stagedLineCounts = parseNumStatMap(from: stagedNumStatResult.output)
+        let unstagedLineCounts = LocalGitRepositoryParsing.parseNumStatMap(from: unstagedNumStatResult.output)
+        let stagedLineCounts = LocalGitRepositoryParsing.parseNumStatMap(from: stagedNumStatResult.output)
 
         let lines = statusResult.output
             .components(separatedBy: .newlines)
@@ -195,31 +195,6 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         }
     }
 
-    private func parseBranchName(from statusHeaderLine: String) -> String {
-        let header = statusHeaderLine
-            .replacingOccurrences(of: "##", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if header.hasPrefix("No commits yet on ") {
-            return String(header.dropFirst("No commits yet on ".count))
-        }
-
-        if header.hasPrefix("HEAD (no branch)") {
-            return "Detached HEAD"
-        }
-
-        let branchPart = header
-            .components(separatedBy: "...")
-            .first?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let branchPart, !branchPart.isEmpty else {
-            return "Unknown"
-        }
-
-        return branchPart
-    }
-
     private func parseGitFileChange(
         from line: String,
         repositoryPath: String,
@@ -233,12 +208,12 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         let unstagedStatus = chars[1]
 
         let rawPath = String(chars.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-        let path = normalizePath(rawPath)
+        let path = LocalGitRepositoryParsing.normalizePath(rawPath)
         guard !path.isEmpty else { return nil }
 
         let stagedStats = stagedLineCounts[path] ?? (0, 0)
         let unstagedStats = unstagedLineCounts[path] ?? (0, 0)
-        let state = mapFileState(stagedStatus: stagedStatus, unstagedStatus: unstagedStatus)
+        let state = LocalGitRepositoryParsing.mapFileState(stagedStatus: stagedStatus, unstagedStatus: unstagedStatus)
 
         var addedLines = stagedStats.added + unstagedStats.added
         let deletedLines = stagedStats.deleted + unstagedStats.deleted
@@ -246,7 +221,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         if state == .added,
            addedLines == 0,
            deletedLines == 0,
-           let textLineCount = countTextFileLinesIfPossible(repositoryPath: repositoryPath, relativePath: path) {
+           let textLineCount = LocalGitRepositoryParsing.countTextFileLinesIfPossible(repositoryPath: repositoryPath, relativePath: path) {
             addedLines = textLineCount
         }
 
@@ -260,77 +235,4 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         )
     }
 
-    private func mapFileState(stagedStatus: Character, unstagedStatus: Character) -> GitFileChangeState {
-        let statuses = [stagedStatus, unstagedStatus]
-
-        if statuses.contains("A") || statuses.contains("?") {
-            return .added
-        }
-
-        if statuses.contains("D") {
-            return .deleted
-        }
-
-        return .modified
-    }
-
-    private func parseNumStatMap(from output: String) -> [String: (added: Int, deleted: Int)] {
-        let lines = output
-            .components(separatedBy: .newlines)
-            .filter { !$0.isEmpty }
-
-        var map: [String: (added: Int, deleted: Int)] = [:]
-
-        for line in lines {
-            let parts = line.components(separatedBy: "\t")
-            guard parts.count >= 3 else { continue }
-
-            let addedLines = Int(parts[0]) ?? 0
-            let deletedLines = Int(parts[1]) ?? 0
-            let path = normalizePath(parts[2])
-            guard !path.isEmpty else { continue }
-
-            let existing = map[path] ?? (0, 0)
-            map[path] = (existing.added + addedLines, existing.deleted + deletedLines)
-        }
-
-        return map
-    }
-
-    private func normalizePath(_ rawPath: String) -> String {
-        let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if let arrowRange = trimmed.range(of: " -> ", options: .backwards) {
-            return String(trimmed[arrowRange.upperBound...]).trimmingCharacters(in: .whitespaces)
-        }
-
-        return trimmed
-    }
-
-    private func countTextFileLinesIfPossible(repositoryPath: String, relativePath: String) -> Int? {
-        let fileURL = URL(fileURLWithPath: repositoryPath).appendingPathComponent(relativePath)
-
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return nil
-        }
-
-        guard let data = try? Data(contentsOf: fileURL) else {
-            return nil
-        }
-
-        if data.contains(0) {
-            return nil
-        }
-
-        guard let text = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-
-        var lineCount = 0
-        text.enumerateLines { _, _ in
-            lineCount += 1
-        }
-
-        return lineCount
-    }
 }

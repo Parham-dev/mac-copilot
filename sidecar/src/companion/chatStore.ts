@@ -1,44 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-type MessageRole = "user" | "assistant";
-type CompanionMessage = {
-  id: string;
-  role: MessageRole;
-  text: string;
-  createdAt: string;
-};
-type CompanionChat = {
-  id: string;
-  projectId: string;
-  title: string;
-  lastUpdatedAt: string;
-};
-type CompanionProject = {
-  id: string;
-  name: string;
-  localPath: string;
-  lastUpdatedAt: string;
-};
-type PersistedChatState = {
-  projects: CompanionProject[];
-  chats: CompanionChat[];
-  messagesByChat: Record<string, CompanionMessage[]>;
-};
-
-type CompanionSnapshot = {
-  projects?: CompanionProject[];
-  chats?: CompanionChat[];
-  messages?: Array<CompanionMessage & { chatId: string }>;
-};
-
-const defaultState: PersistedChatState = {
-  projects: [],
-  chats: [],
-  messagesByChat: {},
-};
+import { loadChatStoreState, saveChatStoreState } from "./chatStorePersistence.js";
+import {
+  type CompanionChat,
+  type CompanionMessage,
+  type CompanionProject,
+  type CompanionSnapshot,
+  type MessageRole,
+} from "./chatStoreTypes.js";
 
 export class CompanionChatStore {
   private readonly projects = new Map<string, CompanionProject>();
@@ -46,7 +14,7 @@ export class CompanionChatStore {
   private readonly messagesByChat = new Map<string, CompanionMessage[]>();
 
   constructor() {
-    const state = loadState();
+    const state = loadChatStoreState();
     for (const project of state.projects) this.projects.set(project.id, project);
     for (const chat of state.chats) this.chats.set(chat.id, chat);
     for (const [chatId, messages] of Object.entries(state.messagesByChat)) {
@@ -254,7 +222,7 @@ export class CompanionChatStore {
       messagesByChat[chatId] = messages;
     }
 
-    saveState({
+    saveChatStoreState({
       projects: Array.from(this.projects.values()),
       chats: Array.from(this.chats.values()),
       messagesByChat,
@@ -294,28 +262,4 @@ function normalizeTimestamp(input: string | undefined) {
 
 function maxTimestamp(lhs: string, rhs: string) {
   return lhs.localeCompare(rhs) >= 0 ? lhs : rhs;
-}
-
-function resolveStateFilePath() {
-  const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = dirname(currentFile);
-  const dataDir = join(currentDir, "..", "..", "data");
-  return { dataDir, stateFilePath: join(dataDir, "companion-chat-state.json") };
-}
-
-function loadState(): PersistedChatState {
-  const { stateFilePath } = resolveStateFilePath();
-  if (!existsSync(stateFilePath)) return defaultState;
-
-  try {
-    return { ...defaultState, ...(JSON.parse(readFileSync(stateFilePath, "utf8")) as PersistedChatState) };
-  } catch {
-    return defaultState;
-  }
-}
-
-function saveState(state: PersistedChatState) {
-  const { dataDir, stateFilePath } = resolveStateFilePath();
-  mkdirSync(dataDir, { recursive: true });
-  writeFileSync(stateFilePath, JSON.stringify(state, null, 2), "utf8");
 }

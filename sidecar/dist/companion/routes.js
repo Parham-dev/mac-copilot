@@ -1,4 +1,4 @@
-import { isAuthenticated, sendPrompt } from "../copilot.js";
+import { isAuthenticated, sendPrompt } from "../copilot/copilot.js";
 import { companionChatStore } from "./chatStore.js";
 import { CompanionStore } from "./store.js";
 const store = new CompanionStore();

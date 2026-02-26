@@ -1,5 +1,5 @@
 import express from "express";
-import { startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot.js";
+import { startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot/copilot.js";
 import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
 import { registerCompanionRoutes } from "./companion/routes.js";
 import { registerPromptRoute } from "./promptRoute.js";
