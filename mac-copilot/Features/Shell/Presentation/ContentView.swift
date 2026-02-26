@@ -38,7 +38,7 @@ struct ContentView: View {
                 onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 250)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 350)
         } detail: {
             ShellDetailPaneView(
                 shellViewModel: shellViewModel,
