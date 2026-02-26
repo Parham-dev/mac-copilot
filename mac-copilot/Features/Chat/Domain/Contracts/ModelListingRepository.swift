@@ -1,5 +1,5 @@
 import Foundation
 
 protocol ModelListingRepository {
-    func fetchModelCatalog() async -> [CopilotModelCatalogItem]
+    func fetchModelCatalog() async throws -> [CopilotModelCatalogItem]
 }

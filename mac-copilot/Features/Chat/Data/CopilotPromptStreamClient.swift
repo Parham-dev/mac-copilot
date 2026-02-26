@@ -168,7 +168,7 @@ private extension CopilotPromptStreamClient {
                 shouldRetry: { [self] error, _ in
                     shouldRetryConnection(error)
                 },
-                onRetry: { _, _ in
+                onRetry: { [self] _, _ in
                     ensureSidecarRunning()
                 },
                 operation: {

@@ -215,6 +215,17 @@ npm run check
 
 For sidecar-specific details, see `sidecar/README.md`.
 
+Optional monitoring config:
+
+- Set `SENTRY_DSN` in your Xcode scheme environment (or build settings) to enable Sentry.
+- If `SENTRY_DSN` is not set, monitoring remains disabled and the app logs a startup notice.
+
+Auth config:
+
+- Set `COPILOTFORGE_GITHUB_CLIENT_ID` in Xcode build settings/scheme env (wired to `GITHUB_OAUTH_CLIENT_ID` Info key).
+- You can also provide `GITHUB_OAUTH_CLIENT_ID` via environment variable at runtime.
+- If not configured, sign-in start will fail fast with a clear missing client ID message.
+
 3) Open the project
 
 ```bash

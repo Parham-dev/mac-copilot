@@ -34,6 +34,7 @@ extension ChatViewModel {
         let fetched = await fetchModelDataWithRetry()
         let modelCatalog = fetched.catalog
         modelCatalogByID = Dictionary(uniqueKeysWithValues: modelCatalog.map { ($0.id, $0) })
+        modelCatalogErrorMessage = fetched.errorMessage
 
         let models = fetched.models
         guard !models.isEmpty else {
@@ -60,17 +61,41 @@ extension ChatViewModel {
         }
     }
 
-    private func fetchModelDataWithRetry(maxAttempts: Int = 3) async -> (catalog: [CopilotModelCatalogItem], models: [String]) {
+    private func fetchModelDataWithRetry(maxAttempts: Int = 3) async -> (catalog: [CopilotModelCatalogItem], models: [String], errorMessage: String?) {
         await AsyncRetry.runUntil(
             maxAttempts: maxAttempts,
             delayForAttempt: { _ in 0.5 },
-            isSuccess: { !$0.models.isEmpty },
+            isSuccess: { !$0.models.isEmpty || $0.errorMessage != nil },
             operation: {
-            let catalog = await fetchModelCatalogUseCase.execute()
-            let models = catalog.map(\.id)
-            return (catalog, models)
+                do {
+                    let catalog = try await fetchModelCatalogUseCase.execute()
+                    let models = catalog.map(\.id)
+                    return (catalog, models, nil)
+                } catch {
+                    let message = modelCatalogErrorMessage(for: error)
+                    return ([], [], message)
+                }
             }
         )
+    }
+
+    private func modelCatalogErrorMessage(for error: Error) -> String {
+        if let catalogError = error as? CopilotModelCatalogError {
+            switch catalogError {
+            case .notAuthenticated:
+                return "Sign in to GitHub to load models."
+            case .sidecarUnavailable:
+                return "Local sidecar is offline. Relaunch app to retry."
+            case .server:
+                return catalogError.localizedDescription ?? "Model catalog request failed."
+            case .invalidPayload:
+                return "Model catalog response was invalid."
+            }
+        }
+
+        return error.localizedDescription.isEmpty
+            ? "Could not load models right now."
+            : error.localizedDescription
     }
 
     private func compactTokenString(_ value: Int) -> String {

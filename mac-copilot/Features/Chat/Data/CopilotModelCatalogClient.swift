@@ -1,5 +1,28 @@
 import Foundation
 
+enum CopilotModelCatalogError: LocalizedError {
+    case sidecarUnavailable
+    case notAuthenticated
+    case server(statusCode: Int, message: String?)
+    case invalidPayload
+
+    var errorDescription: String? {
+        switch self {
+        case .sidecarUnavailable:
+            return "Could not connect to the local sidecar."
+        case .notAuthenticated:
+            return "Sign in to GitHub to load Copilot models."
+        case .server(let statusCode, let message):
+            if let message, !message.isEmpty {
+                return "Model catalog request failed (HTTP \(statusCode)): \(message)"
+            }
+            return "Model catalog request failed (HTTP \(statusCode))."
+        case .invalidPayload:
+            return "Model catalog response had an unsupported format."
+        }
+    }
+}
+
 final class CopilotModelCatalogClient {
     private let baseURL: URL
     private let ensureSidecarRunning: () -> Void
@@ -18,7 +41,7 @@ final class CopilotModelCatalogClient {
         self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
     }
 
-    func fetchModelCatalog() async -> [CopilotModelCatalogItem] {
+    func fetchModelCatalog() async throws -> [CopilotModelCatalogItem] {
         ensureSidecarRunning()
 
         var request = URLRequest(url: baseURL.appendingPathComponent("models"))
@@ -31,14 +54,23 @@ final class CopilotModelCatalogClient {
                   (200 ... 299).contains(http.statusCode)
             else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                let message = decodeErrorMessage(from: data)
                 NSLog("[CopilotForge][Models] fetch failed with HTTP status=\(status)")
                 SentryMonitoring.captureMessage(
                     "Model catalog request returned non-success status",
                     category: "model_catalog",
-                    extras: ["statusCode": String(status)],
+                    extras: [
+                        "statusCode": String(status),
+                        "message": message ?? ""
+                    ],
                     throttleKey: "http_\(status)"
                 )
-                return []
+
+                if status == 401 {
+                    throw CopilotModelCatalogError.notAuthenticated
+                }
+
+                throw CopilotModelCatalogError.server(statusCode: status, message: message)
             }
 
             let payloads = try decodeModelPayloads(from: data)
@@ -68,6 +100,8 @@ final class CopilotModelCatalogClient {
                 NSLog("[CopilotForge][Models] decoded catalog is empty")
             }
             return unique
+        } catch let error as CopilotModelCatalogError {
+            throw error
         } catch {
             NSLog("[CopilotForge][Models] fetch/decode failed: \(error.localizedDescription)")
             SentryMonitoring.captureError(
@@ -75,7 +109,16 @@ final class CopilotModelCatalogClient {
                 category: "model_catalog",
                 throttleKey: "fetch_or_decode"
             )
-            return []
+
+            if shouldRetryConnection(error) {
+                throw CopilotModelCatalogError.sidecarUnavailable
+            }
+
+            if error is ModelsDecodeError {
+                throw CopilotModelCatalogError.invalidPayload
+            }
+
+            throw error
         }
     }
 
@@ -118,6 +161,22 @@ final class CopilotModelCatalogClient {
 
         throw ModelsDecodeError.unsupportedShape
     }
+
+    private func decodeErrorMessage(from data: Data) -> String? {
+        guard let payload = try? JSONDecoder().decode(SidecarErrorResponse.self, from: data),
+              let message = payload.error?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !message.isEmpty
+        else {
+            return nil
+        }
+
+        return message
+    }
+}
+
+private struct SidecarErrorResponse: Decodable {
+    let ok: Bool?
+    let error: String?
 }
 
 private struct ModelsResponse: Decodable {

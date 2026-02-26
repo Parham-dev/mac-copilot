@@ -2,7 +2,6 @@ import Foundation
 import Sentry
 
 enum SentryMonitoring {
-    private static let fallbackDSN = "https://988bf562b934f4a50989c8785333f860@o4510953909714944.ingest.de.sentry.io/4510953913778256"
     private static let duplicateWindowSeconds: TimeInterval = 60
     private static let lock = NSLock()
 
@@ -10,6 +9,11 @@ enum SentryMonitoring {
     private static var recentEventTimestamps: [String: Date] = [:]
 
     static func start() {
+        guard let dsn, !dsn.isEmpty else {
+            NSLog("[CopilotForge][Monitoring] Sentry disabled: SENTRY_DSN is not configured")
+            return
+        }
+
         lock.lock()
         let shouldStart = !started
         if shouldStart {
@@ -17,7 +21,7 @@ enum SentryMonitoring {
         }
         lock.unlock()
 
-        guard shouldStart, let dsn, !dsn.isEmpty else {
+        guard shouldStart else {
             return
         }
 
@@ -77,7 +81,7 @@ private extension SentryMonitoring {
             return value
         }
 
-        return fallbackDSN
+        return nil
     }
 
     static var appReleaseName: String {

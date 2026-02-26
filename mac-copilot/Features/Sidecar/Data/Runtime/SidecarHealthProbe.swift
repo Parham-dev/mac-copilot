@@ -65,8 +65,7 @@ final class SidecarHealthProbe {
             return nil
         }
 
-        guard let payload = try? JSONDecoder().decode(SidecarHealthPayload.self, from: data),
-              payload.service == "copilotforge-sidecar"
+        guard let payload = decodeHealthPayload(from: data)
         else {
             return nil
         }
@@ -81,15 +80,26 @@ final class SidecarHealthProbe {
 
     private func isHealthyOnce(timeout: TimeInterval) -> Bool {
         guard let data = healthData(timeout: timeout),
-              let body = String(data: data, encoding: .utf8)
+              decodeHealthPayload(from: data) != nil
         else {
             return false
         }
 
-        return body.contains("copilotforge-sidecar")
+        return true
     }
 
     private func healthData(timeout: TimeInterval) -> Data? {
         healthDataFetcher.fetchHealthData(port: port, timeout: timeout)
+    }
+
+    private func decodeHealthPayload(from data: Data) -> SidecarHealthPayload? {
+        guard let payload = try? JSONDecoder().decode(SidecarHealthPayload.self, from: data),
+              payload.service == "copilotforge-sidecar",
+              payload.ok == true
+        else {
+            return nil
+        }
+
+        return payload
     }
 }

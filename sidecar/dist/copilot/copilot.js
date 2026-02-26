@@ -95,6 +95,9 @@ export async function getCopilotReport() {
 }
 export async function listAvailableModels() {
     await ensureAuthenticatedClient("models");
+    if (!client) {
+        throw new Error("Not authenticated yet. Please complete GitHub auth first.");
+    }
     return listModelCatalog(client);
 }
 export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, requestId, onEvent) {

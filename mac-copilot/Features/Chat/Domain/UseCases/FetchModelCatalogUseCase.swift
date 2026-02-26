@@ -7,7 +7,7 @@ struct FetchModelCatalogUseCase {
         self.repository = repository
     }
 
-    func execute() async -> [CopilotModelCatalogItem] {
-        await repository.fetchModelCatalog()
+    func execute() async throws -> [CopilotModelCatalogItem] {
+        try await repository.fetchModelCatalog()
     }
 }

@@ -196,7 +196,13 @@ final class ContextPaneViewModel: ObservableObject {
     }
 
     private func resolvePreferredModel() async -> String? {
-        let models = await fetchModelCatalogUseCase.execute().map(\.id)
+        let models: [String]
+        do {
+            models = try await fetchModelCatalogUseCase.execute().map(\.id)
+        } catch {
+            return nil
+        }
+
         guard !models.isEmpty else { return nil }
 
         let preferredVisible = Set(modelSelectionStore.selectedModelIDs())

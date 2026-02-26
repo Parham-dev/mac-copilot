@@ -3,8 +3,6 @@ import Combine
 
 @MainActor
 final class GitHubAuthService: ObservableObject {
-    private static let configuredClientID = "Ov23lisoGOGOPveFYywW"
-
     @Published var isAuthenticated = false
     @Published var isLoading = false
     @Published var statusMessage = "Sign in required"
@@ -23,7 +21,7 @@ final class GitHubAuthService: ObservableObject {
 
     init(sidecarClient: SidecarAuthClient) {
         self.sidecarClient = sidecarClient
-        self.clientID = Self.configuredClientID
+        self.clientID = Self.resolveClientID() ?? ""
     }
 
     func restoreSessionIfNeeded() async {
@@ -87,7 +85,7 @@ final class GitHubAuthService: ObservableObject {
     }
 
     func startDeviceFlow() async {
-        let trimmedClientID = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedClientID = resolvedClientID()
         guard !trimmedClientID.isEmpty else {
             errorMessage = "App OAuth Client ID is missing. Contact support."
             return
@@ -117,7 +115,7 @@ final class GitHubAuthService: ObservableObject {
             return
         }
 
-        let trimmedClientID = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedClientID = resolvedClientID()
         guard !trimmedClientID.isEmpty else {
             errorMessage = "Client ID is required"
             return
@@ -202,5 +200,36 @@ final class GitHubAuthService: ObservableObject {
         }
 
         unsetenv("GITHUB_TOKEN")
+    }
+
+    private func resolvedClientID() -> String {
+        if let resolved = Self.resolveClientID() {
+            if clientID != resolved {
+                clientID = resolved
+            }
+            return resolved
+        }
+
+        clientID = ""
+        return ""
+    }
+
+    private static func resolveClientID() -> String? {
+        if let value = (Bundle.main.object(forInfoDictionaryKey: "GITHUB_OAUTH_CLIENT_ID") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty {
+            return value
+        }
+
+        if let value = ProcessInfo.processInfo.environment["COPILOTFORGE_GITHUB_CLIENT_ID"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty {
+            return value
+        }
+
+        if let value = ProcessInfo.processInfo.environment["GITHUB_OAUTH_CLIENT_ID"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty {
+            return value
+        }
+
+        return nil
     }
 }

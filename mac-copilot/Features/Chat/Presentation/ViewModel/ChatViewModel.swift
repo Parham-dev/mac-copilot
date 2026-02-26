@@ -17,6 +17,7 @@ final class ChatViewModel: ObservableObject {
     @Published var streamingAssistantMessageID: UUID?
     @Published var availableModels: [String] = []
     @Published var selectedModel = ""
+    @Published var modelCatalogErrorMessage: String?
 
     let chatID: UUID
     @Published var chatTitle: String

@@ -16,8 +16,8 @@ export async function isHealthySidecarAlreadyRunning(portNumber) {
         if (!response.ok) {
             return false;
         }
-        const body = await response.text();
-        return body.includes("copilotforge-sidecar");
+        const payload = (await response.json());
+        return payload?.ok === true && payload?.service === "copilotforge-sidecar";
     }
     catch {
         return false;

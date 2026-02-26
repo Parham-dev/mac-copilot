@@ -27,26 +27,52 @@ final class ModelsManagementViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
-        let fetched = await modelRepository.fetchModelCatalog()
-        models = fetched
+        do {
+            let fetched = try await modelRepository.fetchModelCatalog()
+            models = fetched
 
-        let persisted = Set(modelSelectionStore.selectedModelIDs())
-        if persisted.isEmpty {
-            selectedModelIDs = Set(fetched.map(\.id))
-        } else {
-            let visible = Set(fetched.map(\.id).filter { persisted.contains($0) })
-            selectedModelIDs = visible.isEmpty ? Set(fetched.map(\.id)) : visible
+            let persisted = Set(modelSelectionStore.selectedModelIDs())
+            if persisted.isEmpty {
+                selectedModelIDs = Set(fetched.map(\.id))
+            } else {
+                let visible = Set(fetched.map(\.id).filter { persisted.contains($0) })
+                selectedModelIDs = visible.isEmpty ? Set(fetched.map(\.id)) : visible
+            }
+
+            if focusedModelID == nil {
+                focusedModelID = fetched.first?.id
+            }
+
+            if fetched.isEmpty {
+                errorMessage = "No models are currently available."
+            }
+        } catch {
+            models = []
+            selectedModelIDs = []
+            focusedModelID = nil
+            errorMessage = mapCatalogLoadError(error)
+        }
+    }
+
+    private func mapCatalogLoadError(_ error: Error) -> String {
+        if let catalogError = error as? CopilotModelCatalogError {
+            switch catalogError {
+            case .notAuthenticated:
+                return "Sign in to GitHub to load models."
+            case .sidecarUnavailable:
+                return "Local sidecar is offline. Relaunch app to retry."
+            case .server:
+                return catalogError.localizedDescription ?? "Model catalog request failed."
+            case .invalidPayload:
+                return "Model catalog response was invalid."
+            }
         }
 
-        if focusedModelID == nil {
-            focusedModelID = fetched.first?.id
-        }
-
-        isLoading = false
-        if fetched.isEmpty {
-            errorMessage = "No models are currently available."
-        }
+        return error.localizedDescription.isEmpty
+            ? "Could not load models right now."
+            : error.localizedDescription
     }
 
     func selectAll() {

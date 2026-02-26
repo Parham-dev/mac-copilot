@@ -3,6 +3,11 @@ import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+type SidecarHealthPayload = {
+  ok?: boolean;
+  service?: string;
+};
+
 export async function isHealthySidecarAlreadyRunning(portNumber: number) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 800);
@@ -20,8 +25,8 @@ export async function isHealthySidecarAlreadyRunning(portNumber: number) {
       return false;
     }
 
-    const body = await response.text();
-    return body.includes("copilotforge-sidecar");
+    const payload = (await response.json()) as SidecarHealthPayload;
+    return payload?.ok === true && payload?.service === "copilotforge-sidecar";
   } catch {
     return false;
   } finally {

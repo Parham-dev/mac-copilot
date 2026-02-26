@@ -43,8 +43,8 @@ final class CopilotAPIService {
         )
     }
 
-    func fetchModelCatalog() async -> [CopilotModelCatalogItem] {
-        await modelCatalogClient.fetchModelCatalog()
+    func fetchModelCatalog() async throws -> [CopilotModelCatalogItem] {
+        try await modelCatalogClient.fetchModelCatalog()
     }
 
     func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
