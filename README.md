@@ -12,7 +12,12 @@ CopilotForge is a native macOS app that provides a project-first chat workspace 
 - Auth flow: implemented (GitHub device flow)
 - Chat streaming: implemented
 - Project-scoped workspace shell: implemented
-- Preview runtime scaffolding: implemented
+- Control Center adapters (Node/Python/HTML): implemented
+- Control Center runtime manager (process + health + logs): implemented
+- Git panel (status, grouped changes, commit, recent commits): implemented
+- AI-assisted commit message + fix-from-logs flow: implemented
+- Runtime start/stop hardening (port retry, auto-free occupied port, graceful stop): implemented
+- Runtime/log UX polish (copy logs, smart autoscroll, noise filtering): implemented
 - Deployment integrations (MCP/hosting): in progress
 
 ## Architecture (Feature-First)
@@ -75,6 +80,31 @@ mac-copilot/
 3. Swift app talks to sidecar on `127.0.0.1:7878`.
 4. Sidecar executes Copilot SDK operations and streams responses.
 
+## Control Center (Runtime)
+
+- Project detection uses adapter-based resolution with priority fallback:
+  - Node
+  - Python
+  - Simple HTML
+- Runtime execution uses per-stack runtime adapters and a shared runtime manager.
+- Control Center supports:
+  - dependency install + start orchestration
+  - health checks with runtime URL detection from process output
+  - port conflict handling (auto-free when possible)
+  - graceful stop + UI reset behavior
+  - structured logs, copy logs, and AI fix handoff
+
+Adapter/runtime source layout:
+
+```text
+mac-copilot/Features/ControlCenter/Data/
+├── Adapters/
+│   ├── Project/
+│   └── Runtime/
+├── RuntimeManager/
+└── ControlCenterRuntimeUtilities.swift
+```
+
 ## Requirements
 
 - macOS (Xcode-capable development machine)
@@ -133,7 +163,8 @@ open mac-copilot.xcodeproj
 ## Roadmap (Short)
 
 - Harden sidecar startup/health observability
-- Expand project runtime preview adapters
+- Expand project/runtime adapter coverage (framework-aware profiles)
+- Improve runtime health strategy for custom app startup signatures
 - Add deployment workflows and approvals
 - Improve shell domain/use-case coverage
 
