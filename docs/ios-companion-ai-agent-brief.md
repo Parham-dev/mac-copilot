@@ -150,7 +150,7 @@ Available endpoints:
 {
   "prompt": "continue this",
   "projectPath": "/Users/.../my-project",
-  "model": "gpt-5",
+  "model": "<selected-model-id>",
   "allowedTools": ["run_in_terminal"]
 }
 ```

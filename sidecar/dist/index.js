@@ -40,7 +40,7 @@ app.get("/models", async (_req, res) => {
         res.json({ ok: true, models });
     }
     catch (error) {
-        res.status(500).json({ ok: false, error: String(error), models: ["gpt-5"] });
+        res.status(500).json({ ok: false, error: String(error) });
     }
 });
 app.post("/auth/start", async (req, res) => {

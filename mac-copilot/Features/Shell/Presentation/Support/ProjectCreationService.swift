@@ -25,4 +25,22 @@ final class ProjectCreationService {
         try FileManager.default.createDirectory(at: targetURL, withIntermediateDirectories: true)
         return CreatedProject(name: targetURL.lastPathComponent, localPath: targetURL.path)
     }
+
+    func openProjectInteractively() throws -> CreatedProject? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.title = "Open Project"
+        panel.prompt = "Open"
+        panel.message = "Choose an existing project folder to add."
+
+        let response = panel.runModal()
+        guard response == .OK, let selectedURL = panel.url else {
+            return nil
+        }
+
+        return CreatedProject(name: selectedURL.lastPathComponent, localPath: selectedURL.path)
+    }
 }

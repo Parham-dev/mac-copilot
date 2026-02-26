@@ -8,15 +8,18 @@ struct PromptStreamError: LocalizedError {
 
 final class CopilotPromptStreamClient {
     private let baseURL: URL
+    private let ensureSidecarRunning: () -> Void
 
-    init(baseURL: URL) {
+    init(baseURL: URL, ensureSidecarRunning: @escaping () -> Void = {}) {
         self.baseURL = baseURL
+        self.ensureSidecarRunning = ensureSidecarRunning
     }
 
     func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
+                    ensureSidecarRunning()
                     NSLog("[CopilotForge][Prompt] stream start (chatID=%@ chars=%d)", chatID.uuidString, prompt.count)
                     var request = URLRequest(url: baseURL.appendingPathComponent("prompt"))
                     request.httpMethod = "POST"
@@ -25,9 +28,12 @@ final class CopilotPromptStreamClient {
                     var payload: [String: Any] = [
                         "prompt": prompt,
                         "chatID": chatID.uuidString,
-                        "model": model ?? "gpt-5",
                         "projectPath": projectPath ?? "",
                     ]
+
+                    if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        payload["model"] = model
+                    }
 
                     if let allowedTools {
                         payload["allowedTools"] = allowedTools

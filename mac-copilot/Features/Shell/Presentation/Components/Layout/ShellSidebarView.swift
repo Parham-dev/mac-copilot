@@ -4,6 +4,7 @@ struct ShellSidebarView: View {
     @ObservedObject var shellViewModel: ShellViewModel
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
+    let onOpenProject: () -> Void
     let onManageModels: () -> Void
     let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
@@ -68,7 +69,8 @@ struct ShellSidebarView: View {
 
     private var projectsHeader: some View {
         ShellSidebarProjectsHeaderView(
-            onCreateProject: onCreateProject
+            onCreateProject: onCreateProject,
+            onOpenProject: onOpenProject
         )
     }
 

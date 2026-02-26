@@ -5,7 +5,7 @@ export type SessionState = {
   chatKey: string;
   sessionId: string;
   session: any;
-  model: string;
+  model: string | null;
   workingDirectory: string | null;
   availableTools: string[] | null;
 };
@@ -36,14 +36,17 @@ export class CopilotSessionManager {
 
   activeSnapshot() {
     return {
-      model: this.lastSessionState?.model ?? "gpt-5",
+      model: this.lastSessionState?.model ?? null,
       workingDirectory: this.lastSessionState?.workingDirectory ?? null,
       availableTools: this.lastSessionState?.availableTools ?? null,
     };
   }
 
   async ensureSessionForContext(client: CopilotClient | null, args: EnsureSessionArgs) {
-    const requestedModel = typeof args.model === "string" && args.model.trim().length > 0 ? args.model.trim() : "gpt-5";
+    const requestedModel = typeof args.model === "string" ? args.model.trim() : "";
+    if (!requestedModel) {
+      throw new Error("No model selected. Load models and choose one before sending a prompt.");
+    }
     const requestedWorkingDirectory = typeof args.projectPath === "string" && args.projectPath.trim().length > 0
       ? args.projectPath.trim()
       : null;

@@ -1,23 +1,14 @@
 import { CopilotClient } from "@github/copilot-sdk";
 
-const defaultModel = {
-  id: "gpt-5",
-  name: "GPT-5",
-  capabilities: {
-    supports: { vision: false, reasoningEffort: false },
-    limits: { max_context_window_tokens: 0 },
-  },
-};
-
 export async function listModelCatalog(client: CopilotClient | null) {
   if (!client || typeof (client as any).listModels !== "function") {
-    return [defaultModel];
+    return [];
   }
 
   try {
     const raw = await (client as any).listModels();
     if (!Array.isArray(raw)) {
-      return [defaultModel];
+      return [];
     }
 
     const models = raw
@@ -86,8 +77,8 @@ export async function listModelCatalog(client: CopilotClient | null) {
       .filter((value: any) => value && typeof value.id === "string" && value.id.length > 0);
 
     const uniqueByID = Array.from(new Map(models.map((model: any) => [model.id, model])).values());
-    return uniqueByID.length > 0 ? uniqueByID : [defaultModel];
+    return uniqueByID;
   } catch {
-    return [defaultModel];
+    return [];
   }
 }

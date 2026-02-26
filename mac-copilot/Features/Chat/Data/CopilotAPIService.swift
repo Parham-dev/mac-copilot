@@ -18,15 +18,17 @@ final class CopilotAPIService {
     private let modelCatalogClient: CopilotModelCatalogClient
     private let promptStreamClient: CopilotPromptStreamClient
 
-    init(baseURL: URL = URL(string: "http://127.0.0.1:7878")!) {
-        self.modelCatalogClient = CopilotModelCatalogClient(baseURL: baseURL)
-        self.promptStreamClient = CopilotPromptStreamClient(baseURL: baseURL)
+    init(
+        baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
+        ensureSidecarRunning: @escaping () -> Void = {}
+    ) {
+        self.modelCatalogClient = CopilotModelCatalogClient(baseURL: baseURL, ensureSidecarRunning: ensureSidecarRunning)
+        self.promptStreamClient = CopilotPromptStreamClient(baseURL: baseURL, ensureSidecarRunning: ensureSidecarRunning)
     }
 
     func fetchModels() async -> [String] {
         let catalog = await fetchModelCatalog()
-        let ids = catalog.map(\.id)
-        return ids.isEmpty ? ["gpt-5"] : ids
+        return catalog.map(\.id)
     }
 
     func fetchModelCatalog() async -> [CopilotModelCatalogItem] {

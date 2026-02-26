@@ -31,6 +31,7 @@ struct ContentView: View {
                 shellViewModel: shellViewModel,
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
+                onOpenProject: openProjectWithFolderBrowser,
                 onManageModels: { showsModelsSheet = true },
                 onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
@@ -121,6 +122,18 @@ struct ContentView: View {
             }
 
             shellViewModel.addProject(name: created.name, localPath: created.localPath)
+        } catch {
+            projectCreationError = error.localizedDescription
+        }
+    }
+
+    private func openProjectWithFolderBrowser() {
+        do {
+            guard let opened = try projectCreationService.openProjectInteractively() else {
+                return
+            }
+
+            shellViewModel.addProject(name: opened.name, localPath: opened.localPath)
         } catch {
             projectCreationError = error.localizedDescription
         }

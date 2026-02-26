@@ -90,7 +90,14 @@ extension Container {
     }
 
     var promptApiService: Factory<CopilotAPIService> {
-        self { @MainActor in CopilotAPIService() }
+        self { @MainActor in
+            let sidecarLifecycle = self.sidecarLifecycleManager()
+            return CopilotAPIService(
+                ensureSidecarRunning: {
+                    sidecarLifecycle.startIfNeeded()
+                }
+            )
+        }
             .singleton
     }
 

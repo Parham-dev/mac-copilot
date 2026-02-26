@@ -50,7 +50,7 @@ struct ChatView: View {
                 onSend: { Task { await viewModel.send() } }
             )
         }
-        .task {
+        .task(id: viewModel.chatID) {
             await viewModel.loadModelsIfNeeded()
         }
         .onChange(of: modelSelectionStore.changeToken) { _, _ in

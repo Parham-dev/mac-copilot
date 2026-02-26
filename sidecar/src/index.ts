@@ -47,7 +47,7 @@ app.get("/models", async (_req, res) => {
     const models = await listAvailableModels();
     res.json({ ok: true, models });
   } catch (error) {
-    res.status(500).json({ ok: false, error: String(error), models: ["gpt-5"] });
+    res.status(500).json({ ok: false, error: String(error) });
   }
 });
 

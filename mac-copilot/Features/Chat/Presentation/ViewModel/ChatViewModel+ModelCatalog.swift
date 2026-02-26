@@ -31,26 +31,56 @@ extension ChatViewModel {
             return
         }
 
-        let modelCatalog = await fetchModelCatalogUseCase.execute()
+        let fetched = await fetchModelDataWithRetry()
+        let modelCatalog = fetched.catalog
         modelCatalogByID = Dictionary(uniqueKeysWithValues: modelCatalog.map { ($0.id, $0) })
 
-        let models = await fetchModelsUseCase.execute()
-        if !models.isEmpty {
-            let preferredVisible = Set(modelSelectionStore.selectedModelIDs())
-            let filtered: [String]
+        let models = fetched.models
+        guard !models.isEmpty else {
+            availableModels = []
+            if !selectedModel.isEmpty {
+                selectedModel = ""
+            }
+            return
+        }
 
-            if preferredVisible.isEmpty {
-                filtered = models
-            } else {
-                let matches = models.filter { preferredVisible.contains($0) }
-                filtered = matches.isEmpty ? models : matches
+        let preferredVisible = Set(modelSelectionStore.selectedModelIDs())
+        let filtered: [String]
+
+        if preferredVisible.isEmpty {
+            filtered = models
+        } else {
+            let matches = models.filter { preferredVisible.contains($0) }
+            filtered = matches.isEmpty ? models : matches
+        }
+
+        availableModels = filtered
+        if !filtered.contains(selectedModel), let first = filtered.first {
+            selectedModel = first
+        }
+    }
+
+    private func fetchModelDataWithRetry(maxAttempts: Int = 3) async -> (catalog: [CopilotModelCatalogItem], models: [String]) {
+        var lastCatalog: [CopilotModelCatalogItem] = []
+        var lastModels: [String] = []
+
+        for attempt in 1 ... maxAttempts {
+            let catalog = await fetchModelCatalogUseCase.execute()
+            let models = await fetchModelsUseCase.execute()
+
+            lastCatalog = catalog
+            lastModels = models
+
+            if !models.isEmpty {
+                return (catalog, models)
             }
 
-            availableModels = filtered
-            if !filtered.contains(selectedModel), let first = filtered.first {
-                selectedModel = first
+            if attempt < maxAttempts {
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
+
+        return (lastCatalog, lastModels)
     }
 
     private func compactTokenString(_ value: Int) -> String {

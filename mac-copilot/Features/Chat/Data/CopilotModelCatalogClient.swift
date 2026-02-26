@@ -2,26 +2,32 @@ import Foundation
 
 final class CopilotModelCatalogClient {
     private let baseURL: URL
+    private let ensureSidecarRunning: () -> Void
 
-    init(baseURL: URL) {
+    init(baseURL: URL, ensureSidecarRunning: @escaping () -> Void = {}) {
         self.baseURL = baseURL
+        self.ensureSidecarRunning = ensureSidecarRunning
     }
 
     func fetchModelCatalog() async -> [CopilotModelCatalogItem] {
+        ensureSidecarRunning()
+
         var request = URLRequest(url: baseURL.appendingPathComponent("models"))
         request.httpMethod = "GET"
         request.timeoutInterval = 8
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await fetchDataWithConnectionRetry(request: request)
             guard let http = response as? HTTPURLResponse,
                   (200 ... 299).contains(http.statusCode)
             else {
-                return [fallbackModelItem]
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                NSLog("[CopilotForge][Models] fetch failed with HTTP status=\(status)")
+                return []
             }
 
-            let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
-            let mapped = decoded.models.map { payload in
+            let payloads = try decodeModelPayloads(from: data)
+            let mapped = payloads.map { payload in
                 CopilotModelCatalogItem(
                     id: payload.id,
                     name: payload.name ?? payload.id,
@@ -43,32 +49,78 @@ final class CopilotModelCatalogClient {
             }
 
             let unique = uniqueByID.values.sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-            return unique.isEmpty ? [fallbackModelItem] : unique
+            if unique.isEmpty {
+                NSLog("[CopilotForge][Models] decoded catalog is empty")
+            }
+            return unique
         } catch {
-            return [fallbackModelItem]
+            NSLog("[CopilotForge][Models] fetch/decode failed: \(error.localizedDescription)")
+            return []
         }
     }
 
-    private var fallbackModelItem: CopilotModelCatalogItem {
-        CopilotModelCatalogItem(
-            id: "gpt-5",
-            name: "GPT-5",
-            maxContextWindowTokens: nil,
-            maxPromptTokens: nil,
-            supportsVision: false,
-            supportsReasoningEffort: false,
-            policyState: nil,
-            policyTerms: nil,
-            billingMultiplier: nil,
-            supportedReasoningEfforts: [],
-            defaultReasoningEffort: nil
-        )
+    private func fetchDataWithConnectionRetry(request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await URLSession.shared.data(for: request)
+        } catch {
+            guard shouldRetryConnection(error) else {
+                throw error
+            }
+
+            ensureSidecarRunning()
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            return try await URLSession.shared.data(for: request)
+        }
+    }
+
+    private func shouldRetryConnection(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else {
+            return false
+        }
+
+        return nsError.code == NSURLErrorCannotConnectToHost
+            || nsError.code == NSURLErrorNetworkConnectionLost
+            || nsError.code == NSURLErrorTimedOut
+            || nsError.code == NSURLErrorNotConnectedToInternet
+            || nsError.code == NSURLErrorCannotFindHost
+    }
+
+    private func decodeModelPayloads(from data: Data) throws -> [ModelPayload] {
+        let decoder = JSONDecoder()
+
+        if let wrapped = try? decoder.decode(ModelsResponse.self, from: data) {
+            return wrapped.models
+        }
+
+        if let wrappedStrings = try? decoder.decode(ModelsStringResponse.self, from: data) {
+            return wrappedStrings.models.map { ModelPayload(stringID: $0) }
+        }
+
+        if let direct = try? decoder.decode([ModelPayload].self, from: data) {
+            return direct
+        }
+
+        if let directStrings = try? decoder.decode([String].self, from: data) {
+            return directStrings.map { ModelPayload(stringID: $0) }
+        }
+
+        throw ModelsDecodeError.unsupportedShape
     }
 }
 
 private struct ModelsResponse: Decodable {
-    let ok: Bool
+    let ok: Bool?
     let models: [ModelPayload]
+}
+
+private struct ModelsStringResponse: Decodable {
+    let ok: Bool?
+    let models: [String]
+}
+
+private enum ModelsDecodeError: Error {
+    case unsupportedShape
 }
 
 private struct ModelPayload: Decodable {
@@ -79,6 +131,16 @@ private struct ModelPayload: Decodable {
     let billing: ModelBillingPayload?
     let supportedReasoningEfforts: [String]?
     let defaultReasoningEffort: String?
+
+    init(stringID: String) {
+        self.id = stringID
+        self.name = stringID
+        self.capabilities = nil
+        self.policy = nil
+        self.billing = nil
+        self.supportedReasoningEfforts = nil
+        self.defaultReasoningEffort = nil
+    }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -95,7 +157,7 @@ private struct ModelPayload: Decodable {
         }
 
         let object = try container.decode(ModelObjectPayload.self)
-        self.id = object.id ?? object.model ?? "gpt-5"
+        self.id = object.id ?? object.model ?? ""
         self.name = object.name
         self.capabilities = object.capabilities
         self.policy = object.policy
@@ -133,6 +195,25 @@ private struct ModelLimitsPayload: Decodable {
     enum CodingKeys: String, CodingKey {
         case maxPromptTokens = "max_prompt_tokens"
         case maxContextWindowTokens = "max_context_window_tokens"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.maxPromptTokens = Self.decodeInt(container: container, key: .maxPromptTokens)
+        self.maxContextWindowTokens = Self.decodeInt(container: container, key: .maxContextWindowTokens)
+    }
+
+    private static func decodeInt(container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let intValue = try? container.decode(Int.self, forKey: key) {
+            return intValue
+        }
+
+        if let stringValue = try? container.decode(String.self, forKey: key),
+           let intValue = Int(stringValue) {
+            return intValue
+        }
+
+        return nil
     }
 }
 
