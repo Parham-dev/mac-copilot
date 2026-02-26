@@ -124,6 +124,8 @@ extension Container {
     var controlCenterResolver: Factory<ProjectControlCenterResolver> {
         self { @MainActor in
             ProjectControlCenterResolver(adapters: [
+                NodeControlCenterAdapter(),
+                PythonProjectControlCenterAdapter(),
                 SimpleHTMLControlCenterAdapter(),
             ])
         }

@@ -28,6 +28,41 @@ Deliver a simple, reliable Git experience inside CopilotForge so users can:
 3. Commit composer
 4. Recent history list + mini graph
 
+## Progress Update (2026-02-26)
+
+### Completed
+- **P0 Status + Init**
+  - Branch and clean/dirty status shown in panel header.
+  - `Init Git` flow works and refreshes state immediately.
+  - Status refresh now triggers on panel open, project switch, and chat completion.
+- **P1 Change Summary (core)**
+  - File changes grouped by `A / M / D`.
+  - Per-file `+added / -deleted` displayed.
+  - Added-file text fallback counts lines when git numstat returns `0/0`.
+- **P2 Commit Workflow (adapted)**
+  - Commit composer exists with auto-generated message when left empty.
+  - Empty-message generation now uses Copilot prompt flow with selected user model.
+  - Commit operation stages all changes internally before commit.
+  - Added cooldown after AI connection failure to avoid repeated sidecar errors/log noise.
+- **P3 History (minimal)**
+  - Recent commit list (message, short SHA, author, relative time) is live.
+  - Recent commits section is capped to 3 visible rows with scroll for more.
+
+### In Progress
+- **P3 Graph lane**
+  - Vertical commit graph lane (dots/lines) not implemented yet.
+
+### Not Started
+- **P4 Quality-of-Life**
+  - Amend, branch create/switch, ahead/behind, push/pull actions.
+
+## Implemented UX Decisions (Intentional)
+- Removed `All / Staged / Unstaged` tabs from the panel (always shows all changes).
+- Removed `Stage All / Unstage All` buttons from UI.
+- Commit now stages all changes automatically to keep flow single-action.
+
+These decisions were made intentionally during implementation to keep the panel minimal and reduce user friction.
+
 ---
 
 ## Roadmap (Priority Ordered)
@@ -126,12 +161,12 @@ Acceptance criteria:
 - `git_commit_success` / `git_commit_failed`
 
 ## Suggested Implementation Order (Engineering)
-1. Stabilize status + init flow.
-2. Add changed-file summary + line stats.
-3. Add commit composer + stage controls.
-4. Add history list + mini graph.
-5. Add QoL branch/remote features.
+1. ✅ Stabilize status + init flow.
+2. ✅ Add changed-file summary + line stats.
+3. ✅ Add commit composer (adapted single-action flow).
+4. ⏳ Add history list + mini graph (list done, graph pending).
+5. ⏳ Add QoL branch/remote features.
 
 ## Current Baseline Notes
-- Existing implementation already checks repository state and supports `Init Git`.
-- This roadmap extends that baseline into a complete in-app Git workflow.
+- Existing implementation now includes status, grouped changes, commit composer, AI-assisted empty-message generation, and minimal recent history list.
+- Remaining milestones are graph visualization and branch/remote quality-of-life actions.
