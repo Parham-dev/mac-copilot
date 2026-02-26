@@ -47,12 +47,24 @@ extension ControlCenterRuntimeManager {
         process.terminationHandler = { [weak self] terminated in
             Task { @MainActor in
                 let wasStopRequested = self?.isStopRequested ?? false
+                let resetUIAfterStop = self?.shouldResetUIAfterStop ?? false
                 let clearLogsAfterStop = self?.shouldClearLogsAfterStop ?? false
+
+                if self?.process?.processIdentifier != terminated.processIdentifier {
+                    return
+                }
 
                 self?.cleanupProcessHandles()
                 if wasStopRequested {
                     self?.isStopRequested = false
+                    self?.shouldResetUIAfterStop = false
                     self?.shouldClearLogsAfterStop = false
+
+                    if resetUIAfterStop {
+                        self?.activeURL = nil
+                        self?.adapterName = nil
+                        self?.activeProjectID = nil
+                    }
 
                     if clearLogsAfterStop {
                         self?.logs.removeAll(keepingCapacity: true)
@@ -89,81 +101,97 @@ extension ControlCenterRuntimeManager {
     ) async throws -> LaunchHealthResult {
         try launchServer(command: start, cwd: cwd, environment: environment)
 
-        let healthy = await waitForHealthyURLOrEarlyFailure(healthURL, timeoutSeconds: bootTimeoutSeconds)
-        if !healthy {
+        let readyURL = await waitForHealthyURLOrEarlyFailure(healthURL, timeoutSeconds: bootTimeoutSeconds)
+        if let readyURL {
+            state = .running
+            activeURL = readyURL
+
+            if readyURL == openURL {
+                appendLog("Server running at \(readyURL.absoluteString)", phase: .health)
+            } else {
+                appendLog("Server running at \(readyURL.absoluteString) (detected from runtime output)", phase: .health)
+            }
+
+            if autoOpen {
+                NSWorkspace.shared.open(readyURL)
+            }
+
+            return .healthy
+        }
+
+        if !isProcessActive {
             let failedPort = healthURL.port
             state = .failed("Server did not become healthy in time")
             appendLog("Health check timeout for \(healthURL.absoluteString)", phase: .health, stream: .stderr)
             return .unhealthy(failedPort: failedPort)
         }
 
-        state = .running
-        activeURL = openURL
-        appendLog("Server running at \(openURL.absoluteString)", phase: .health)
-        if autoOpen {
-            NSWorkspace.shared.open(openURL)
+        if let runtimeURL = detectRuntimeURLFromRecentRuntimeLogs() {
+            if isProcessActive,
+               runtimeURL.absoluteString.hasPrefix("http") {
+                state = .running
+                activeURL = runtimeURL
+                appendLog("Server running at \(runtimeURL.absoluteString) (detected from runtime output)", phase: .health)
+                if autoOpen {
+                    NSWorkspace.shared.open(runtimeURL)
+                }
+                return .healthy
+            }
         }
-        return .healthy
+
+        let failedPort = healthURL.port
+        state = .failed("Server did not become healthy in time")
+        appendLog("Health check timeout for \(healthURL.absoluteString)", phase: .health, stream: .stderr)
+        return .unhealthy(failedPort: failedPort)
     }
 
-    func waitForHealthyURLOrEarlyFailure(_ url: URL, timeoutSeconds: TimeInterval) async -> Bool {
+    func waitForHealthyURLOrEarlyFailure(_ url: URL, timeoutSeconds: TimeInterval) async -> URL? {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
 
         guard let port = url.port else {
             appendLog("Health URL has no explicit port: \(url.absoluteString)", phase: .health, stream: .stderr)
-            return false
-        }
-
-        let listening = await waitForListeningPortOrEarlyFailure(port: port, deadline: deadline)
-        if !listening {
-            return false
+            return nil
         }
 
         let probeSession = URLSession(configuration: .ephemeral)
+        var hasLoggedPortListening = false
 
         while Date() < deadline {
             if !isProcessActive {
                 appendLog("Server process ended before health check succeeded", phase: .health, stream: .stderr)
-                return false
+                return nil
             }
 
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.timeoutInterval = 1.2
-
-            do {
-                let (_, response) = try await probeSession.data(for: request)
-                if let http = response as? HTTPURLResponse,
-                   (200 ... 499).contains(http.statusCode) {
-                    return true
-                }
-            } catch {
-                // keep polling
-            }
-
-            try? await Task.sleep(nanoseconds: 800_000_000)
-        }
-
-        return false
-    }
-
-    func waitForListeningPortOrEarlyFailure(port: Int, deadline: Date) async -> Bool {
-        while Date() < deadline {
-            if !isProcessActive {
-                appendLog("Server process ended before opening port \(port)", phase: .health, stream: .stderr)
-                return false
+            if let runtimeURL = detectRuntimeURLFromRecentRuntimeLogs() {
+                return runtimeURL
             }
 
             if utilities.isLocalPortListening(port) {
-                appendLog("Port \(port) is listening. Verifying HTTP readiness...", phase: .health)
-                return true
+                if !hasLoggedPortListening {
+                    appendLog("Port \(port) is listening. Verifying HTTP readiness...", phase: .health)
+                    hasLoggedPortListening = true
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "GET"
+                request.timeoutInterval = 1.2
+
+                do {
+                    let (_, response) = try await probeSession.data(for: request)
+                    if let http = response as? HTTPURLResponse,
+                       (200 ... 499).contains(http.statusCode) {
+                        return url
+                    }
+                } catch {
+                    // keep polling
+                }
             }
 
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            try? await Task.sleep(nanoseconds: 350_000_000)
         }
 
-        appendLog("Server never opened port \(port) before timeout", phase: .health, stream: .stderr)
-        return false
+        appendLog("Server never opened expected port \(port) before timeout", phase: .health, stream: .stderr)
+        return nil
     }
 
     var isProcessActive: Bool {
@@ -206,5 +234,33 @@ extension ControlCenterRuntimeManager {
         stdoutPipe = nil
         stderrPipe = nil
         process = nil
+    }
+
+    private func detectRuntimeURLFromRecentRuntimeLogs() -> URL? {
+        let pattern = "https?://(?:localhost|127\\.0\\.0\\.1):[0-9]{2,5}(?:/[^\\s]*)?"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        for entry in logEntries.suffix(220).reversed() {
+            guard entry.phase == .runtime else {
+                continue
+            }
+
+            let line = entry.message
+            let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard let match = regex.firstMatch(in: line, options: [], range: nsRange),
+                  let urlRange = Range(match.range, in: line)
+            else {
+                continue
+            }
+
+            let candidate = String(line[urlRange])
+            if let url = URL(string: candidate) {
+                return url
+            }
+        }
+
+        return nil
     }
 }

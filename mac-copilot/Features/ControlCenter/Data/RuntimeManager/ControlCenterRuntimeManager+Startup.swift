@@ -15,10 +15,10 @@ extension ControlCenterRuntimeManager {
     func prepareForStart(project: ProjectRef, isRefresh: Bool) {
         if isRefresh {
             appendLog("Refreshing control center for \(project.name)", phase: .lifecycle)
-            stop()
+            stop(resetUI: false, clearLogsWhenClean: false)
         } else if activeProjectID != nil, activeProjectID != project.id {
             appendLog("Switching control center runtime to \(project.name)", phase: .lifecycle)
-            stop()
+            stop(resetUI: false, clearLogsWhenClean: false)
         }
 
         activeProjectID = project.id
@@ -193,7 +193,7 @@ extension ControlCenterRuntimeManager {
     ) async throws {
         appendLog("Port \(failedPort) failed to start cleanly. Retrying on a new port...", phase: .health)
         utilities.reservePortTemporarily(failedPort, ttlSeconds: failedPortReservationTTL)
-        stop()
+        stop(resetUI: false, clearLogsWhenClean: false)
 
         let retryPlan = try adapter.makePlan(project: project)
         guard case .managedServer(_, let retryStart, let retryHealthURL, let retryOpenURL, let retryBootTimeout, let retryEnvironment) = retryPlan.mode else {
@@ -221,7 +221,7 @@ extension ControlCenterRuntimeManager {
 
         state = .failed("Server did not become healthy in time")
         appendLog("Retry health check failed for \(retryHealthURL.absoluteString)", phase: .health)
-        stop()
+        stop(resetUI: false, clearLogsWhenClean: false)
     }
 
     private func detectAddressInUsePort() -> Int? {

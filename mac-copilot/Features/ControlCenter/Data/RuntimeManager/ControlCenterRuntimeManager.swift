@@ -19,6 +19,7 @@ final class ControlCenterRuntimeManager: ObservableObject {
     var stderrPipe: Pipe?
     var logEntries: [RuntimeLogEntry] = []
     var isStopRequested = false
+    var shouldResetUIAfterStop = false
     var shouldClearLogsAfterStop = false
 
     let maxUILogLines = 200
@@ -92,7 +93,7 @@ final class ControlCenterRuntimeManager: ObservableObject {
         }
     }
 
-    func stop() {
+    func stop(resetUI: Bool = true, clearLogsWhenClean: Bool = true) {
         let hadFailure: Bool
         if case .failed = state {
             hadFailure = true
@@ -101,14 +102,23 @@ final class ControlCenterRuntimeManager: ObservableObject {
         }
 
         isStopRequested = true
-        shouldClearLogsAfterStop = !hadFailure
+        shouldResetUIAfterStop = resetUI
+        shouldClearLogsAfterStop = clearLogsWhenClean && !hadFailure
 
         guard let runningProcess = process else {
+            if shouldResetUIAfterStop {
+                activeURL = nil
+                adapterName = nil
+                activeProjectID = nil
+            }
+
             if shouldClearLogsAfterStop {
                 logs.removeAll(keepingCapacity: true)
                 logEntries.removeAll(keepingCapacity: true)
             }
+
             isStopRequested = false
+            shouldResetUIAfterStop = false
             shouldClearLogsAfterStop = false
             state = .idle
             return
