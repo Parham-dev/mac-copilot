@@ -31,6 +31,11 @@ final class SidecarAuthClient {
         await transport.waitForSidecarReady(maxAttempts: maxAttempts, delaySeconds: delaySeconds)
     }
 
+    func get(path: String) async throws -> (statusCode: Int, data: Data) {
+        let response = try await transport.get(path: path)
+        return (response.statusCode, response.data)
+    }
+
     private func post<RequestBody: Encodable, ResponseBody: Decodable>(
         path: String,
         body: RequestBody,

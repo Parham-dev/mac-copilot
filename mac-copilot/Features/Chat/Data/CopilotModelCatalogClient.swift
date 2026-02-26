@@ -94,16 +94,7 @@ final class CopilotModelCatalogClient {
     }
 
     private func shouldRetryConnection(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        guard nsError.domain == NSURLErrorDomain else {
-            return false
-        }
-
-        return nsError.code == NSURLErrorCannotConnectToHost
-            || nsError.code == NSURLErrorNetworkConnectionLost
-            || nsError.code == NSURLErrorTimedOut
-            || nsError.code == NSURLErrorNotConnectedToInternet
-            || nsError.code == NSURLErrorCannotFindHost
+        RecoverableNetworkError.isConnectionRelated(error)
     }
 
     private func decodeModelPayloads(from data: Data) throws -> [ModelPayload] {

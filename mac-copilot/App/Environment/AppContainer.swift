@@ -63,10 +63,16 @@ extension Container {
 
     var authService: Factory<GitHubAuthService> {
         self { @MainActor in
-            let client = SidecarAuthClient(sidecarLifecycle: self.sidecarLifecycleManager())
-            return GitHubAuthService(sidecarClient: client)
+            GitHubAuthService(sidecarClient: self.sidecarAuthClient())
         }
             .singleton
+    }
+
+    var sidecarAuthClient: Factory<SidecarAuthClient> {
+        self { @MainActor in
+            SidecarAuthClient(sidecarLifecycle: self.sidecarLifecycleManager())
+        }
+        .singleton
     }
 
     var authRepository: Factory<any AuthRepository> {
@@ -118,7 +124,7 @@ extension Container {
 
     var profileRepository: Factory<any ProfileRepository> {
         self { @MainActor in
-            GitHubProfileRepository(sidecarAuthClient: SidecarAuthClient(sidecarLifecycle: self.sidecarLifecycleManager()))
+            GitHubProfileRepository(sidecarAuthClient: self.sidecarAuthClient())
         }
             .singleton
     }

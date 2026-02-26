@@ -57,17 +57,7 @@ final class SidecarHTTPClient {
     }
 
     func isRecoverableConnectionError(_ error: Error) -> Bool {
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .networkConnectionLost, .cannotConnectToHost, .timedOut, .notConnectedToInternet, .cannotFindHost:
-                return true
-            default:
-                break
-            }
-        }
-
-        let nsError = error as NSError
-        return nsError.domain == NSURLErrorDomain && nsError.code == URLError.networkConnectionLost.rawValue
+        RecoverableNetworkError.isConnectionRelated(error)
     }
 
     func waitForSidecarReady(maxAttempts: Int, delaySeconds: TimeInterval) async -> Bool {

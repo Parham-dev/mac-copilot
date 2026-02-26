@@ -2,7 +2,6 @@ import Foundation
 
 final class GitHubProfileRepository: ProfileRepository {
     private let baseURL = URL(string: "https://api.github.com")!
-    private let localBaseURL = URL(string: "http://127.0.0.1:7878")!
     private let sidecarAuthClient: SidecarAuthClient?
 
     @MainActor
@@ -146,6 +145,11 @@ final class GitHubProfileRepository: ProfileRepository {
     }
 
     private func requestLocal(path: String) async throws -> (statusCode: Int, data: Data) {
+        if let sidecarAuthClient {
+            return try await sidecarAuthClient.get(path: path)
+        }
+
+        let localBaseURL = URL(string: "http://127.0.0.1:7878")!
         var request = URLRequest(url: localBaseURL.appendingPathComponent(path))
         request.httpMethod = "GET"
         request.timeoutInterval = 8

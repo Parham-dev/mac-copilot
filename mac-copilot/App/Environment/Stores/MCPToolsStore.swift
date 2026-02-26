@@ -12,19 +12,12 @@ final class MCPToolsStore: ObservableObject {
 
     func enabledToolIDs() -> [String] {
         let raw = preferencesStore.readEnabledMCPToolIDs()
-        return Self.normalize(raw)
+        return NormalizedIDList.from(raw)
     }
 
     func setEnabledToolIDs(_ ids: [String]) {
-        let normalized = Self.normalize(ids)
+        let normalized = NormalizedIDList.from(ids)
         preferencesStore.writeEnabledMCPToolIDs(normalized)
         changeToken += 1
-    }
-
-    private static func normalize(_ ids: [String]) -> [String] {
-        let trimmed = ids
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return Array(Set(trimmed)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 }

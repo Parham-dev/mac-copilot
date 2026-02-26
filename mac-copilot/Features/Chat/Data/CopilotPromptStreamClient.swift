@@ -186,16 +186,7 @@ private extension CopilotPromptStreamClient {
     }
 
     func shouldRetryConnection(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        if nsError.domain != NSURLErrorDomain {
-            return false
-        }
-
-        return nsError.code == NSURLErrorCannotConnectToHost
-            || nsError.code == NSURLErrorNetworkConnectionLost
-            || nsError.code == NSURLErrorTimedOut
-            || nsError.code == NSURLErrorCannotParseResponse
-            || nsError.code == NSURLErrorBadServerResponse
+        RecoverableNetworkError.isConnectionRelated(error)
     }
 }
 
