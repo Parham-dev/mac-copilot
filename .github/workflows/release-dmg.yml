@@ -65,6 +65,7 @@ jobs:
             -configuration "$CONFIGURATION" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -destination 'platform=macOS' \
+            MACOSX_DEPLOYMENT_TARGET=15.5 \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY='Developer ID Application' \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
