@@ -89,8 +89,7 @@ final class ContextPaneViewModel: ObservableObject {
             gitRepositoryStatus = nil
             gitFileChanges = []
             recentCommits = []
-            let message = error.localizedDescription
-            gitErrorMessage = message.isEmpty ? "Could not read Git repository status." : message
+            gitErrorMessage = UserFacingErrorMapper.message(error, fallback: "Could not read Git repository status.")
         }
     }
 
@@ -103,8 +102,7 @@ final class ContextPaneViewModel: ObservableObject {
             try await initializeGitRepositoryUseCase.execute(path: projectPath)
             await refreshGitStatus(projectPath: projectPath)
         } catch {
-            let message = error.localizedDescription
-            gitErrorMessage = message.isEmpty ? "Could not initialize Git repository." : message
+            gitErrorMessage = UserFacingErrorMapper.message(error, fallback: "Could not initialize Git repository.")
         }
     }
 
@@ -147,8 +145,7 @@ final class ContextPaneViewModel: ObservableObject {
             if trimmedMessage.isEmpty {
                 commitMessage = effectiveMessage
             }
-            let errorMessage = error.localizedDescription
-            gitErrorMessage = errorMessage.isEmpty ? "Could not commit Git changes." : errorMessage
+            gitErrorMessage = UserFacingErrorMapper.message(error, fallback: "Could not commit Git changes.")
         }
     }
 

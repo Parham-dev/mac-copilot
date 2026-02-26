@@ -172,8 +172,7 @@ struct ContentView: View {
             try shellViewModel.addProject(name: created.name, localPath: created.localPath)
         } catch {
             let fallbackMessage = "Could not create project right now."
-            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            projectCreationError = message.isEmpty ? fallbackMessage : message
+            projectCreationError = UserFacingErrorMapper.message(error, fallback: fallbackMessage)
         }
     }
 
@@ -186,8 +185,7 @@ struct ContentView: View {
             try shellViewModel.addProject(name: opened.name, localPath: opened.localPath)
         } catch {
             let fallbackMessage = "Could not open project right now."
-            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            projectCreationError = message.isEmpty ? fallbackMessage : message
+            projectCreationError = UserFacingErrorMapper.message(error, fallback: fallbackMessage)
         }
     }
 }

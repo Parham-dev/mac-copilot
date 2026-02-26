@@ -170,7 +170,7 @@ extension ChatViewModel {
             }
         } catch {
             appendStatus("Failed", for: assistantMessage.id)
-            messages[assistantIndex].text = "Error: \(error.localizedDescription)"
+            messages[assistantIndex].text = "The response failed to complete. Please try again."
             inlineSegmentsByMessageID[assistantMessage.id] = [.text(messages[assistantIndex].text)]
         }
 

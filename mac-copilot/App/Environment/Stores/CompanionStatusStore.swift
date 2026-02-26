@@ -105,7 +105,7 @@ final class CompanionStatusStore: ObservableObject {
             try await operation(operationID)
         } catch {
             if operationID == latestOperationID {
-                lastErrorMessage = error.localizedDescription
+                lastErrorMessage = UserFacingErrorMapper.message(error, fallback: "Companion operation failed. Please try again.")
             }
         }
     }

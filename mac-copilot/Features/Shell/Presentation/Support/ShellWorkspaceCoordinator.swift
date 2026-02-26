@@ -66,8 +66,10 @@ final class ShellWorkspaceCoordinator {
         var loadErrorMessage: String?
         for project in projects {
             var chats: [ChatThreadRef]
+            var didLoadChats = false
             do {
                 chats = try chatRepository.fetchChats(projectID: project.id)
+                didLoadChats = true
             } catch {
                 NSLog("[CopilotForge][Workspace] project chat load failed for %@: %@", project.name, error.localizedDescription)
                 chats = []
@@ -76,12 +78,15 @@ final class ShellWorkspaceCoordinator {
                 }
             }
 
-            if chats.isEmpty {
+            if didLoadChats, chats.isEmpty {
                 do {
                     chats = [try chatRepository.createChat(projectID: project.id, title: "General")]
                 } catch {
                     NSLog("[CopilotForge][Workspace] bootstrap default chat create failed: %@", error.localizedDescription)
                     chats = []
+                    if loadErrorMessage == nil {
+                        loadErrorMessage = "A default chat could not be created for one of your projects."
+                    }
                 }
             }
             projectChats[project.id] = chats
@@ -123,7 +128,9 @@ final class ShellWorkspaceCoordinator {
         do {
             project = try projectRepository.createProject(name: name, localPath: localPath)
         } catch {
-            throw CoordinatorError.projectCreationFailed(error.localizedDescription)
+            throw CoordinatorError.projectCreationFailed(
+                UserFacingErrorMapper.message(error, fallback: "Could not create project right now.")
+            )
         }
 
         let defaultChat = try chatRepository.createChat(projectID: project.id, title: "General")
@@ -134,13 +141,17 @@ final class ShellWorkspaceCoordinator {
         do {
             try chatRepository.deleteChat(chatID: chatID)
         } catch {
-            throw CoordinatorError.chatDeletionFailed(error.localizedDescription)
+            throw CoordinatorError.chatDeletionFailed(
+                UserFacingErrorMapper.message(error, fallback: "Could not delete chat right now.")
+            )
         }
 
         do {
             return try chatRepository.fetchChats(projectID: projectID)
         } catch {
-            throw CoordinatorError.chatDeletionFailed(error.localizedDescription)
+            throw CoordinatorError.chatDeletionFailed(
+                UserFacingErrorMapper.message(error, fallback: "Chat was deleted, but chat list refresh failed.")
+            )
         }
     }
 
@@ -148,7 +159,9 @@ final class ShellWorkspaceCoordinator {
         do {
             try projectRepository.deleteProject(projectID: projectID)
         } catch {
-            throw CoordinatorError.projectDeletionFailed(error.localizedDescription)
+            throw CoordinatorError.projectDeletionFailed(
+                UserFacingErrorMapper.message(error, fallback: "Could not delete project right now.")
+            )
         }
         return makeBootstrapState()
     }

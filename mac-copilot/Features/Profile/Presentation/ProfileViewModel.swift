@@ -29,7 +29,7 @@ final class ProfileViewModel: ObservableObject {
             rawUserJSON = snapshot.rawUserJSON
             checks = snapshot.checks
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingErrorMapper.message(error, fallback: "Could not load profile data right now.")
         }
 
         isLoading = false

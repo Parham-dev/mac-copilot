@@ -37,12 +37,38 @@ struct ContextPaneView: View {
     }
 
     var body: some View {
-        VSplitView {
-            controlCenterPanel
-                .frame(minHeight: 220, idealHeight: 320)
+        VStack(spacing: 0) {
+            if let gitErrorMessage = viewModel.gitErrorMessage,
+               !gitErrorMessage.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
 
-            gitPanel
-                .frame(minHeight: 180, idealHeight: 260)
+                    Text(gitErrorMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+
+                    Button("Dismiss") {
+                        viewModel.clearGitError()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+            }
+
+            VSplitView {
+                controlCenterPanel
+                    .frame(minHeight: 220, idealHeight: 320)
+
+                gitPanel
+                    .frame(minHeight: 180, idealHeight: 260)
+            }
         }
         .onAppear {
             Task {
@@ -63,13 +89,6 @@ struct ContextPaneView: View {
             Task {
                 await viewModel.refreshGitStatus(projectPath: project.localPath)
             }
-        }
-        .alert("Git", isPresented: gitErrorAlertBinding) {
-            Button("OK", role: .cancel) {
-                viewModel.clearGitError()
-            }
-        } message: {
-            Text(viewModel.gitErrorMessage ?? "Unknown error")
         }
     }
 
@@ -93,17 +112,6 @@ struct ContextPaneView: View {
             onCommit: {
                 Task {
                     await viewModel.commit(projectPath: project.localPath)
-                }
-            }
-        )
-    }
-
-    private var gitErrorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.gitErrorMessage != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    viewModel.clearGitError()
                 }
             }
         )

@@ -87,15 +87,13 @@ extension ChatViewModel {
             case .sidecarUnavailable:
                 return "Local sidecar is offline. Relaunch app to retry."
             case .server:
-                return catalogError.localizedDescription ?? "Model catalog request failed."
+                return UserFacingErrorMapper.message(catalogError, fallback: "Model catalog request failed.")
             case .invalidPayload:
                 return "Model catalog response was invalid."
             }
         }
 
-        return error.localizedDescription.isEmpty
-            ? "Could not load models right now."
-            : error.localizedDescription
+        return UserFacingErrorMapper.message(error, fallback: "Could not load models right now.")
     }
 
     private func compactTokenString(_ value: Int) -> String {

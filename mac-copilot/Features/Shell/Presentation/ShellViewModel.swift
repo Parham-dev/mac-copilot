@@ -94,7 +94,7 @@ final class ShellViewModel: ObservableObject {
             selectedItem = .chat(projectID, created.id)
             chatCreationError = nil
         } catch {
-            chatCreationError = error.localizedDescription
+            chatCreationError = UserFacingErrorMapper.message(error, fallback: "Could not create chat right now.")
         }
     }
 
@@ -103,7 +103,7 @@ final class ShellViewModel: ObservableObject {
         do {
             updatedChats = try workspaceCoordinator.deleteChat(projectID: projectID, chatID: chatID)
         } catch {
-            chatDeletionError = error.localizedDescription
+            chatDeletionError = UserFacingErrorMapper.message(error, fallback: "Could not delete chat right now.")
             return
         }
 
@@ -193,7 +193,7 @@ final class ShellViewModel: ObservableObject {
         do {
             bootstrap = try workspaceCoordinator.deleteProject(projectID: projectID)
         } catch {
-            projectDeletionError = error.localizedDescription
+            projectDeletionError = UserFacingErrorMapper.message(error, fallback: "Could not delete project right now.")
             return
         }
 
