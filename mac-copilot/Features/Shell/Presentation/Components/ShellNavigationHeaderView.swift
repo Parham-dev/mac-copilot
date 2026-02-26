@@ -42,6 +42,7 @@ struct ShellOpenProjectMenuButton: View {
     }
 }
 
+@MainActor
 struct ShellNavigationHeaderState {
     private let headerContext: HeaderContext
 

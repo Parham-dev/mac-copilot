@@ -43,6 +43,7 @@ struct SignOutUseCase {
         self.repository = repository
     }
 
+    @MainActor
     func execute() {
         repository.signOut()
     }
