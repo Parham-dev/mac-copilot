@@ -1,0 +1,144 @@
+name: Release DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_notarize:
+        description: Skip notarization (test-only)
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-sign-notarize:
+    runs-on: macos-14
+    env:
+      APP_NAME: mac-copilot
+      PROJECT_PATH: mac-copilot.xcodeproj
+      SCHEME: mac-copilot
+      CONFIGURATION: Release
+      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+      APP_PATH: ${{ runner.temp }}/DerivedData/Build/Products/Release/mac-copilot.app
+      DMG_PATH: dist/mac-copilot.dmg
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERT_BASE64: ${{ secrets.MACOS_CERT_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "$MACOS_CERT_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security default-keychain -d user | tr -d '\"')"
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security find-identity -v -p codesigning
+
+      - name: Build signed app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -destination 'platform=macOS' \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY='Developer ID Application' \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            build
+
+          test -d "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build_dmg.sh
+          ./scripts/build_dmg.sh --app-path "$APP_PATH" --output "$DMG_PATH" --skip-build
+
+      - name: Notarize + staple app and DMG
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_notarize != true }}
+        env:
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          echo "$APPLE_NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+
+          xcrun notarytool submit "$APP_PATH" \
+            --key "$KEY_PATH" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$APP_PATH"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$KEY_PATH" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
+
+      - name: Validate DMG notarization staple
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_notarize != true }}
+        run: |
+          set -euo pipefail
+          xcrun stapler validate "$DMG_PATH"
+
+      - name: Prepare release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "" ]; then
+            VERSION="manual-${GITHUB_RUN_NUMBER}"
+          fi
+
+          VERSIONED_DMG="dist/${APP_NAME}-${VERSION}.dmg"
+          cp "$DMG_PATH" "$VERSIONED_DMG"
+          shasum -a 256 "$VERSIONED_DMG" > dist/SHA256SUMS.txt
+
+          echo "versioned_dmg=$VERSIONED_DMG" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-copilot-release-assets
+          path: |
+            ${{ steps.assets.outputs.versioned_dmg }}
+            dist/SHA256SUMS.txt
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ steps.assets.outputs.versioned_dmg }}
+            dist/SHA256SUMS.txt
