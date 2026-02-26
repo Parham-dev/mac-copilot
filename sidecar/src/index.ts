@@ -1,18 +1,13 @@
 import express from "express";
-import { existsSync } from "node:fs";
-import { networkInterfaces } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { sendPrompt, startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot.js";
+import { startClient, isAuthenticated, clearSession, getCopilotReport, listAvailableModels } from "./copilot.js";
 import { pollDeviceFlow, startDeviceFlow, fetchTokenScopes } from "./auth.js";
-import { companionChatStore } from "./companion/chatStore.js";
 import { registerCompanionRoutes } from "./companion/routes.js";
+import { registerPromptRoute } from "./promptRoute.js";
+import { buildDoctorReport, isHealthySidecarAlreadyRunning, resolvedStartupURLs } from "./sidecarRuntime.js";
 
 const app = express();
 app.use(express.json());
 registerCompanionRoutes(app);
-const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
-const promptTraceEnabled = process.env.COPILOTFORGE_PROMPT_TRACE === "1";
 const processStartedAtMs = Date.now();
 
 let lastOAuthScope: string | null = null;
@@ -105,82 +100,7 @@ app.post("/auth", async (req, res) => {
   }
 });
 
-app.post("/prompt", async (req, res) => {
-  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const promptText = String(req.body?.prompt ?? "");
-  const chatID = typeof req.body?.chatID === "string" ? req.body.chatID : undefined;
-  const projectPath = typeof req.body?.projectPath === "string" ? req.body.projectPath : undefined;
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  if (typeof (res as any).flushHeaders === "function") {
-    (res as any).flushHeaders();
-  }
-
-  let chunkCount = 0;
-  let totalChars = 0;
-  let assistantText = "";
-
-  companionChatStore.recordUserPrompt({
-    chatId: chatID,
-    projectPath,
-    prompt: promptText,
-  });
-
-  console.log("[CopilotForge][Prompt] start", JSON.stringify({
-    requestId,
-    promptChars: promptText.length,
-    authenticated: isAuthenticated(),
-  }));
-
-  try {
-    await sendPrompt(promptText, chatID, req.body?.model, projectPath, req.body?.allowedTools, requestId, (event) => {
-      const payload = typeof event === "object" && event !== null
-        ? event
-        : { type: "text", text: String(event ?? "") };
-
-      const maybeText = typeof (payload as any)?.text === "string" ? String((payload as any).text) : "";
-      if (promptTraceEnabled && maybeText.length > 0 && protocolMarkerPattern.test(maybeText)) {
-        console.warn("[CopilotForge][PromptTrace] outbound SSE payload contains protocol marker", JSON.stringify({
-          requestId,
-          textLength: maybeText.length,
-          preview: maybeText.slice(0, 180),
-        }));
-      }
-
-      const text = JSON.stringify(payload);
-      if (payload.type === "text" && typeof payload.text === "string") {
-        assistantText += payload.text;
-      }
-      chunkCount += 1;
-      totalChars += text.length;
-      res.write(`data: ${text}\n\n`);
-    });
-
-    if (chatID && assistantText.trim().length > 0) {
-      companionChatStore.recordAssistantResponse(chatID, assistantText);
-    }
-
-    console.log("[CopilotForge][Prompt] done", JSON.stringify({
-      requestId,
-      chunkCount,
-      totalChars,
-    }));
-
-    res.write("data: [DONE]\n\n");
-  } catch (error) {
-    console.error("[CopilotForge][Prompt] error", JSON.stringify({
-      requestId,
-      error: String(error),
-      chunkCount,
-      totalChars,
-    }));
-    res.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
-  }
-
-  res.end();
-});
+registerPromptRoute(app);
 
 const port = 7878;
 const host = (process.env.COPILOTFORGE_SIDECAR_HOST ?? "0.0.0.0").trim() || "0.0.0.0";
@@ -212,101 +132,3 @@ server.on("error", (error: any) => {
     process.exit(1);
   })();
 });
-
-async function isHealthySidecarAlreadyRunning(portNumber: number) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 800);
-
-  try {
-    const response = await fetch(`http://127.0.0.1:${portNumber}/health`, {
-      method: "GET",
-      signal: controller.signal,
-      headers: {
-        "Cache-Control": "no-cache",
-      },
-    });
-
-    if (!response.ok) {
-      return false;
-    }
-
-    const body = await response.text();
-    return body.includes("copilotforge-sidecar");
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function buildDoctorReport() {
-  const sqliteSupport = await supportsNodeSqlite();
-  const sdkPath = resolveSDKPath();
-  const sdkPresent = existsSync(sdkPath);
-
-  return {
-    ok: sqliteSupport && sdkPresent,
-    service: "copilotforge-sidecar",
-    nodeVersion: process.version,
-    nodeExecPath: process.execPath,
-    sqliteSupport,
-    sdkPath,
-    sdkPresent,
-  };
-}
-
-async function supportsNodeSqlite() {
-  try {
-    await import("node:sqlite");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function resolveSDKPath() {
-  const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = dirname(currentFile);
-  const candidates = [
-    join(currentDir, "node_modules", "@github", "copilot-sdk"),
-    join(currentDir, "..", "node_modules", "@github", "copilot-sdk"),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return candidates[0];
-}
-
-function resolvedStartupURLs(hostValue: string, portValue: number) {
-  const normalizedHost = hostValue.trim().toLowerCase();
-  if (normalizedHost !== "0.0.0.0" && normalizedHost !== "::") {
-    return [`http://${hostValue}:${portValue}`];
-  }
-
-  const urls = new Set<string>();
-  urls.add(`http://127.0.0.1:${portValue}`);
-  urls.add(`http://localhost:${portValue}`);
-
-  const interfaces = networkInterfaces();
-  for (const candidates of Object.values(interfaces)) {
-    if (!candidates) {
-      continue;
-    }
-
-    for (const candidate of candidates) {
-      if (!candidate || candidate.internal) {
-        continue;
-      }
-
-      if (candidate.family === "IPv4") {
-        urls.add(`http://${candidate.address}:${portValue}`);
-      }
-    }
-  }
-
-  return Array.from(urls).sort((left, right) => left.localeCompare(right));
-}
