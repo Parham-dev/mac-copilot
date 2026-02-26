@@ -64,12 +64,6 @@ export async function streamPromptWithSession(
       mergedDeltaText = nextMerged;
 
       if (incremental.length === 0) {
-        if (promptTraceEnabled) {
-          logTrace("delta suppressed as replay/cumulative duplicate", {
-            incomingLength: delta.length,
-            mergedLength: nextMerged.length,
-          });
-        }
         return;
       }
 
