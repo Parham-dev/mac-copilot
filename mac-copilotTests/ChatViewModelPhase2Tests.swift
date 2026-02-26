@@ -73,10 +73,25 @@ struct ChatViewModelPhase2Tests {
         #expect(promptRepo.lastRequest?.prompt == "build feature")
         #expect(promptRepo.lastRequest?.allowedTools == nil)
 
+        let inlineSegments = viewModel.inlineSegmentsByMessageID[assistantID] ?? []
+        #expect(
+            inlineSegments.map(segmentMarker) == [
+                "tool:read_file:success:opened::",
+                "text:Hello world"
+            ]
+        )
+
         let persisted = try? #require(chatRepo.updatedMessages[assistantID])
         #expect(persisted?.text == "Hello world")
         #expect(persisted?.metadata?.statusChips == ["Queued", "Planning", "Completed"])
         #expect((persisted?.metadata?.toolExecutions.count ?? 0) == 1)
+        #expect(
+            persisted?.metadata?.transcriptSegments.map(segmentMarker)
+                == [
+                    "tool:read_file:success:opened::",
+                    "text:Hello world"
+                ]
+        )
     }
 
     @Test func send_failureMarksFailedAndWritesErrorMessage() async {
@@ -121,6 +136,152 @@ struct ChatViewModelPhase2Tests {
         #expect(updatedTitle?.hasSuffix("...") == true)
         #expect(updatedTitle?.hasPrefix("Build a robust sidebar synchronization") == true)
         #expect(viewModel.chatTitle == updatedTitle)
+    }
+
+    @Test func send_streamAssemblerHandlesCumulativeChunksWithoutDuplication() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("Let me check the actual current working directory:"),
+                .textDelta("Let me check the actual current working directory:Now let me read the files:"),
+                .textDelta("Let me check the actual current working directory:Now let me read the files:This is a basic Node.js web server project")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        let assistantText = viewModel.messages.last?.text ?? ""
+        #expect(assistantText == "Let me check the actual current working directory: Now let me read the files: This is a basic Node.js web server project")
+    }
+
+    @Test func send_streamAssemblerHandlesCumulativeWhitespaceVariantsWithoutDuplication() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("Let me check the current directory:"),
+                .textDelta("Let me check the current directory:\nNow let me view the files with proper paths:"),
+                .textDelta("Now let me view the files with proper paths:")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(viewModel.messages.last?.text == "Let me check the current directory: Now let me view the files with proper paths:")
+    }
+
+    @Test func send_streamAssemblerHandlesOverlappingDeltaChunks() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("Hello wor"),
+                .textDelta("world")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(viewModel.messages.last?.text == "Hello world")
+    }
+
+    @Test func send_streamAssemblerDoesNotSplitWordsAcrossChunks() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("some"),
+                .textDelta("f words and charact"),
+                .textDelta("eristics")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(viewModel.messages.last?.text == "somef words and characteristics")
+    }
+
+    @Test func send_streamAssemblerPreservesMarkdownBoldMarkersAcrossChunks() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("• *"),
+                .textDelta("*Frontend:** An index.html with a Hello World page")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(viewModel.messages.last?.text == "• **Frontend:** An index.html with a Hello World page")
+    }
+
+    @Test func send_streamAssemblerAvoidsSingleCharacterOverlapLetterDrop() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("This project has:\n- **N"),
+                .textDelta("Name**: `basic-node-app`")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(viewModel.messages.last?.text == "This project has:\n- **Name**: `basic-node-app`")
+    }
+
+    @Test func send_streamAssemblerFormatsOrderedListBoundaries() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("1."),
+                .textDelta("A homepage"),
+                .textDelta("2. CSS styling"),
+                .textDelta("3"),
+                .textDelta("An HTML file")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(viewModel.messages.last?.text == "1. A homepage\n2. CSS styling\n3 An HTML file")
+    }
+
+    @Test func send_inlineToolCallAppearsBetweenTextSegmentsInOrder() async {
+        let promptRepo = FakePromptStreamingRepository(
+            streamEvents: [
+                .textDelta("First segment. "),
+                .toolExecution(
+                    PromptToolExecutionEvent(
+                        toolName: "read_file",
+                        success: true,
+                        details: "opened",
+                        input: "{\"path\":\"/tmp\"}",
+                        output: "[\"app.js\",\"package.json\"]"
+                    )
+                ),
+                .textDelta("Second segment.")
+            ]
+        )
+
+        let viewModel = makeViewModel(promptRepo: promptRepo)
+        await viewModel.send(prompt: "inspect")
+
+        #expect(
+            viewModel.inlineSegmentsByMessageID[viewModel.messages.last?.id ?? UUID()]?.map(segmentMarker)
+                == [
+                    "text:First segment. ",
+                    "tool:read_file:success:opened:{\"path\":\"/tmp\"}:[\"app.js\",\"package.json\"]",
+                    "text:Second segment."
+                ]
+        )
+        #expect(viewModel.messages.last?.text == "First segment. Second segment.")
+    }
+}
+
+private func segmentMarker(_ segment: AssistantTranscriptSegment) -> String {
+    switch segment {
+    case .text(let text):
+        return "text:\(text)"
+    case .tool(let tool):
+        let state = tool.success ? "success" : "failed"
+        return "tool:\(tool.toolName):\(state):\(tool.details ?? ""):\(tool.input ?? ""):\(tool.output ?? "")"
     }
 }
 

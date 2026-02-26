@@ -37,11 +37,15 @@ extension ChatViewModel {
         messages.append(assistantMessage)
         statusChipsByMessageID[assistantMessage.id] = ["Queued"]
         toolExecutionsByMessageID[assistantMessage.id] = []
+        inlineSegmentsByMessageID[assistantMessage.id] = []
         streamingAssistantMessageID = assistantMessage.id
         draftPrompt = ""
 
         do {
             var hasContent = false
+            var assembledAssistantText = ""
+            var renderedSegments: [AssistantTranscriptSegment] = []
+            var flushedAssistantText = ""
             let enabledMCPTools = mcpToolsStore.enabledToolIDs()
             let allToolIDs = MCPToolsCatalog.all.map(\.id)
             let effectiveAllowedTools: [String]? = {
@@ -58,6 +62,37 @@ extension ChatViewModel {
                 return enabledMCPTools
             }()
 
+            func textTailSinceLastFlush() -> String {
+                guard !assembledAssistantText.isEmpty else { return "" }
+                guard !flushedAssistantText.isEmpty else { return assembledAssistantText }
+
+                if assembledAssistantText.hasPrefix(flushedAssistantText) {
+                    return String(assembledAssistantText.dropFirst(flushedAssistantText.count))
+                }
+
+                return assembledAssistantText
+            }
+
+            func currentRenderedSegments() -> [AssistantTranscriptSegment] {
+                var segments = renderedSegments
+                let pending = textTailSinceLastFlush()
+                if !pending.isEmpty {
+                    segments.append(.text(pending))
+                }
+                return segments
+            }
+
+            func updateInlineSegments() {
+                inlineSegmentsByMessageID[assistantMessage.id] = currentRenderedSegments()
+            }
+
+            func flushTextSegment() {
+                let pending = textTailSinceLastFlush()
+                guard !pending.isEmpty else { return }
+                renderedSegments.append(.text(pending))
+                flushedAssistantText = assembledAssistantText
+            }
+
             for try await event in sendPromptUseCase.execute(
                 prompt: text,
                 chatID: chatID,
@@ -67,7 +102,6 @@ extension ChatViewModel {
             ) {
                 switch event {
                 case .textDelta(let chunk):
-                    hasContent = true
                     if PromptTrace.containsProtocolMarker(in: chunk) {
                         NSLog(
                             "[CopilotForge][PromptTrace] UI received protocol marker chunk (chatID=%@ assistantMessageID=%@ chars=%d preview=%@)",
@@ -77,7 +111,13 @@ extension ChatViewModel {
                             String(chunk.prefix(180))
                         )
                     }
-                    messages[assistantIndex].text += chunk
+
+                    assembledAssistantText = StreamTextAssembler.merge(current: assembledAssistantText, incoming: chunk)
+                    messages[assistantIndex].text = assembledAssistantText
+                    updateInlineSegments()
+                    if !assembledAssistantText.isEmpty {
+                        hasContent = true
+                    }
 
                     if PromptTrace.containsProtocolMarker(in: messages[assistantIndex].text) {
                         NSLog(
@@ -90,18 +130,29 @@ extension ChatViewModel {
                 case .status(let label):
                     appendStatus(label, for: assistantMessage.id)
                 case .toolExecution(let tool):
-                    appendToolExecution(tool, for: assistantMessage.id)
+                    let entry = appendToolExecution(tool, for: assistantMessage.id)
+                    flushTextSegment()
+                    renderedSegments.append(.tool(entry))
+                    updateInlineSegments()
+                    if !renderedSegments.isEmpty || !assembledAssistantText.isEmpty {
+                        hasContent = true
+                    }
                 case .completed:
                     appendStatus("Completed", for: assistantMessage.id)
                 }
             }
 
+            flushTextSegment()
+            inlineSegmentsByMessageID[assistantMessage.id] = renderedSegments
+
             if !hasContent {
                 messages[assistantIndex].text = "No response from Copilot."
+                inlineSegmentsByMessageID[assistantMessage.id] = [.text("No response from Copilot.")]
             }
         } catch {
             appendStatus("Failed", for: assistantMessage.id)
             messages[assistantIndex].text = "Error: \(error.localizedDescription)"
+            inlineSegmentsByMessageID[assistantMessage.id] = [.text(messages[assistantIndex].text)]
         }
 
         sessionCoordinator.persistAssistantContent(

@@ -4,6 +4,16 @@ struct PromptToolExecutionEvent: Equatable {
     let toolName: String
     let success: Bool
     let details: String?
+    let input: String?
+    let output: String?
+
+    init(toolName: String, success: Bool, details: String?, input: String? = nil, output: String? = nil) {
+        self.toolName = toolName
+        self.success = success
+        self.details = details
+        self.input = input
+        self.output = output
+    }
 }
 
 enum PromptStreamEvent: Equatable {

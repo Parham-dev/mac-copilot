@@ -101,7 +101,9 @@ final class CopilotPromptStreamClient {
                                             PromptToolExecutionEvent(
                                                 toolName: name,
                                                 success: decoded.success != false,
-                                                details: decoded.details
+                                                details: decoded.details,
+                                                input: decoded.toolInput,
+                                                output: decoded.toolOutput ?? decoded.details
                                             )
                                         )
                                     )
@@ -186,5 +188,118 @@ private struct SSEPayload: Decodable {
     let toolName: String?
     let success: Bool?
     let details: String?
+    let toolInput: String?
+    let toolOutput: String?
     let error: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case text
+        case label
+        case toolName
+        case success
+        case details
+        case input
+        case output
+        case arguments
+        case result
+        case error
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        toolName = try container.decodeIfPresent(String.self, forKey: .toolName)
+        success = try container.decodeIfPresent(Bool.self, forKey: .success)
+        details = try container.decodeFlexibleString(forKey: .details)
+        toolInput = try container.decodeFlexibleString(forKey: .input)
+            ?? container.decodeFlexibleString(forKey: .arguments)
+        toolOutput = try container.decodeFlexibleString(forKey: .output)
+            ?? container.decodeFlexibleString(forKey: .result)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeFlexibleString(forKey key: Key) throws -> String? {
+        if let stringValue = try decodeIfPresent(String.self, forKey: key) {
+            return stringValue
+        }
+
+        if let jsonValue = try decodeIfPresent(SSEJSONValue.self, forKey: key) {
+            return jsonValue.rendered
+        }
+
+        return nil
+    }
+}
+
+private enum SSEJSONValue: Decodable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case object([String: SSEJSONValue])
+    case array([SSEJSONValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode([String: SSEJSONValue].self) {
+            self = .object(value)
+        } else if let value = try? container.decode([SSEJSONValue].self) {
+            self = .array(value)
+        } else {
+            throw DecodingError.typeMismatch(
+                SSEJSONValue.self,
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value")
+            )
+        }
+    }
+
+    var rendered: String {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return value.formatted(.number)
+        case .bool(let value):
+            return value ? "true" : "false"
+        case .object, .array:
+            guard let data = try? JSONSerialization.data(withJSONObject: foundationObject, options: [.prettyPrinted, .sortedKeys]),
+                  let text = String(data: data, encoding: .utf8)
+            else {
+                return ""
+            }
+            return text
+        case .null:
+            return ""
+        }
+    }
+
+    private var foundationObject: Any {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return value
+        case .bool(let value):
+            return value
+        case .object(let dictionary):
+            return dictionary.mapValues { $0.foundationObject }
+        case .array(let values):
+            return values.map { $0.foundationObject }
+        case .null:
+            return NSNull()
+        }
+    }
 }

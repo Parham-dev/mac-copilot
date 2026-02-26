@@ -6,65 +6,16 @@ import Textual
 
 struct ChatMessageRow: View {
     let message: ChatMessage
-    let statusChips: [String]
-    let toolExecutions: [ChatMessage.ToolExecution]
     let isStreaming: Bool
+    let inlineSegments: [AssistantTranscriptSegment]
 
-    @State private var showsToolDetails = false
+    @State private var expandedToolIDs: Set<UUID> = []
 
     var body: some View {
         HStack {
             if message.role == .assistant {
                 VStack(alignment: .leading, spacing: 6) {
                     assistantBubble(color: .gray.opacity(0.18), alignment: .leading)
-
-                    if !statusChips.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(Array(statusChips.enumerated()), id: \.offset) { _, chip in
-                                    Text(chip)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(.gray.opacity(0.14))
-                                        .clipShape(Capsule())
-                                }
-                            }
-                        }
-                        .padding(.leading, 6)
-                    }
-
-                    if !toolExecutions.isEmpty {
-                        DisclosureGroup(isExpanded: $showsToolDetails) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(toolExecutions) { tool in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: tool.success ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                                                .foregroundStyle(tool.success ? .green : .red)
-                                            Text(tool.toolName)
-                                                .font(.caption)
-                                                .fontWeight(.semibold)
-                                        }
-
-                                        if let details = tool.details, !details.isEmpty {
-                                            Text(details)
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(4)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.top, 2)
-                        } label: {
-                            Label("Tools (\(toolExecutions.count))", systemImage: "wrench.and.screwdriver")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.leading, 6)
-                    }
 
                     if !message.text.isEmpty {
                         Button {
@@ -88,7 +39,9 @@ struct ChatMessageRow: View {
 
     private func assistantBubble(color: Color, alignment: Alignment) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !message.text.isEmpty {
+            if !inlineSegments.isEmpty {
+                assistantInlineContent
+            } else if !message.text.isEmpty {
                 assistantContent
             }
 
@@ -121,6 +74,129 @@ struct ChatMessageRow: View {
         #endif
     }
 
+    private var assistantInlineContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(inlineSegments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .text(let text):
+                    if !text.isEmpty {
+                        #if canImport(Textual)
+                        StructuredText(markdown: text)
+                            .textual.structuredTextStyle(.gitHub)
+                            .textual.textSelection(.enabled)
+                        #else
+                        Text(text)
+                            .textSelection(.enabled)
+                        #endif
+                    }
+                case .tool(let tool):
+                    toolCallCard(tool)
+                }
+            }
+        }
+    }
+
+    private func toolCallCard(_ tool: ChatMessage.ToolExecution) -> some View {
+        DisclosureGroup(isExpanded: bindingForTool(tool.id)) {
+            VStack(alignment: .leading, spacing: 10) {
+                detailSection(title: "Input", value: normalizedValue(tool.input))
+                detailSection(title: "Output", value: normalizedValue(resolvedOutput(for: tool)))
+            }
+            .padding(.top, 4)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "wrench.and.screwdriver.fill")
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tool.toolName)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    Text(toolSubtitle(for: tool))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: tool.success ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                    .foregroundStyle(tool.success ? .green : .red)
+            }
+        }
+        .tint(.primary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.gray.opacity(0.14))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func detailSection(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func toolSubtitle(for tool: ChatMessage.ToolExecution) -> String {
+        let output = resolvedOutput(for: tool)
+        if !output.isEmpty {
+            return leadingWords(from: output, limit: 8)
+        }
+
+        return tool.success ? "No output" : "Failed"
+    }
+
+    private func resolvedOutput(for tool: ChatMessage.ToolExecution) -> String {
+        if let output = tool.output?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
+            return output
+        }
+
+        if let details = tool.details?.trimmingCharacters(in: .whitespacesAndNewlines), !details.isEmpty {
+            return details
+        }
+
+        return ""
+    }
+
+    private func normalizedValue(_ raw: String?) -> String {
+        let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? "Not provided" : text
+    }
+
+    private func leadingWords(from text: String, limit: Int) -> String {
+        let normalized = text
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "" }
+
+        let words = normalized.split(separator: " ")
+        if words.count <= limit {
+            return normalized
+        }
+
+        return words.prefix(limit).joined(separator: " ") + "…"
+    }
+
+    private func bindingForTool(_ toolID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { expandedToolIDs.contains(toolID) },
+            set: { isExpanded in
+                if isExpanded {
+                    expandedToolIDs.insert(toolID)
+                } else {
+                    expandedToolIDs.remove(toolID)
+                }
+            }
+        )
+    }
+
     private func bubble(color: Color, alignment: Alignment) -> some View {
         Text(message.text)
             .textSelection(.enabled)
@@ -137,28 +213,24 @@ struct ChatMessageRow: View {
     }
 
     private var fullCopyText: String {
-        var sections: [String] = []
-
-        if !message.text.isEmpty {
-            sections.append(message.text)
+        if inlineSegments.isEmpty {
+            return message.text
         }
 
-        if !statusChips.isEmpty {
-            let statusBlock = statusChips.joined(separator: "\n- ")
-            sections.append("Status:\n- \(statusBlock)")
-        }
-
-        if !toolExecutions.isEmpty {
-            let toolLines = toolExecutions.map { tool in
-                let state = tool.success ? "success" : "failed"
-                if let details = tool.details, !details.isEmpty {
-                    return "- \(tool.toolName) [\(state)]\n  \(details)"
-                }
-                return "- \(tool.toolName) [\(state)]"
+        let parts = inlineSegments.compactMap { segment -> String? in
+            switch segment {
+            case .text(let text):
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            case .tool(let tool):
+                var lines: [String] = []
+                lines.append("Tool: \(tool.toolName) [\(tool.success ? "success" : "failed")]")
+                lines.append("Input:\n\(normalizedValue(tool.input))")
+                lines.append("Output:\n\(normalizedValue(resolvedOutput(for: tool)))")
+                return lines.joined(separator: "\n")
             }
-            sections.append("Tool Calls:\n\(toolLines.joined(separator: "\n"))")
         }
 
-        return sections.joined(separator: "\n\n")
+        return parts.joined(separator: "\n\n")
     }
 }

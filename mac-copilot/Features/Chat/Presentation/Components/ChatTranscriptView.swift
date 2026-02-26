@@ -2,8 +2,7 @@ import SwiftUI
 
 struct ChatTranscriptView: View {
     let messages: [ChatMessage]
-    let statusChipsByMessageID: [UUID: [String]]
-    let toolExecutionsByMessageID: [UUID: [ChatMessage.ToolExecution]]
+    let inlineSegmentsByMessageID: [UUID: [AssistantTranscriptSegment]]
     let streamingAssistantMessageID: UUID?
 
     @State private var hasScrolledInitially = false
@@ -31,9 +30,8 @@ struct ChatTranscriptView: View {
                     ForEach(messages) { message in
                         ChatMessageRow(
                             message: message,
-                            statusChips: statusChipsByMessageID[message.id] ?? [],
-                            toolExecutions: toolExecutionsByMessageID[message.id] ?? [],
-                            isStreaming: streamingAssistantMessageID == message.id
+                            isStreaming: streamingAssistantMessageID == message.id,
+                            inlineSegments: inlineSegmentsByMessageID[message.id] ?? []
                         )
                     }
 
