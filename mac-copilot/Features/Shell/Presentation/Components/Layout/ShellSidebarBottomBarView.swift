@@ -5,6 +5,8 @@ struct ShellSidebarBottomBarView: View {
     let sidebarWidth: CGFloat
     let onUpdate: () -> Void
     let onOpenProfile: () -> Void
+    let companionStatusLabel: String
+    let onManageCompanion: () -> Void
     let onManageModels: () -> Void
     let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
@@ -60,6 +62,11 @@ struct ShellSidebarBottomBarView: View {
         return VStack(alignment: .leading, spacing: 6) {
             profileMenuButton("Profile", systemImage: "person.crop.circle") {
                 onOpenProfile()
+                showsProfileMenu = false
+            }
+
+            profileMenuButton("Mobile Companion (\(companionStatusLabel))", systemImage: "iphone") {
+                onManageCompanion()
                 showsProfileMenu = false
             }
 

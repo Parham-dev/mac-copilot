@@ -19,6 +19,7 @@ struct WindowFrameGuard: NSViewRepresentable {
     final class Coordinator {
         private weak var window: NSWindow?
         private var observers: [NSObjectProtocol] = []
+        private var initialPreferredClampPassesRemaining = 0
 
         deinit {
             removeObservers()
@@ -33,6 +34,7 @@ struct WindowFrameGuard: NSViewRepresentable {
 
             removeObservers()
             self.window = window
+            initialPreferredClampPassesRemaining = 2
 
             clamp(window: window)
 
@@ -69,6 +71,11 @@ struct WindowFrameGuard: NSViewRepresentable {
                     self.clamp(window: window)
                 }
             )
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                guard let self, let window = self.window else { return }
+                self.clamp(window: window)
+            }
         }
 
         private func clamp(window: NSWindow) {
@@ -79,11 +86,22 @@ struct WindowFrameGuard: NSViewRepresentable {
             let maxWidth = max(visible.width - horizontalPadding, 700)
             let maxHeight = max(visible.height - verticalPadding, 560)
 
-            let preferredMinWidth: CGFloat = 900
+            let preferredMinWidth: CGFloat = 760
             let preferredMinHeight: CGFloat = 700
             let clampedMinWidth = min(preferredMinWidth, maxWidth)
             let clampedMinHeight = min(preferredMinHeight, maxHeight)
             window.minSize = NSSize(width: clampedMinWidth, height: clampedMinHeight)
+
+            if initialPreferredClampPassesRemaining > 0 {
+                let preferredLaunchWidth: CGFloat = 920
+                let preferredLaunchHeight: CGFloat = 900
+
+                var preferredFrame = window.frame
+                preferredFrame.size.width = min(max(preferredLaunchWidth, clampedMinWidth), maxWidth)
+                preferredFrame.size.height = min(max(preferredLaunchHeight, clampedMinHeight), maxHeight)
+                window.setFrame(preferredFrame, display: true, animate: false)
+                initialPreferredClampPassesRemaining -= 1
+            }
 
             var frame = window.frame
             var changed = false

@@ -21,6 +21,6 @@ struct mac_copilotApp: App {
                 .environmentObject(appEnvironment.companionEnvironment)
                 .background(WindowFrameGuard())
         }
-        .defaultSize(width: 1040, height: 900)
+        .defaultSize(width: 920, height: 900)
     }
 }

@@ -31,7 +31,7 @@ struct ShellDetailPaneView: View {
                     viewModel: chatViewModel,
                     modelSelectionStore: shellEnvironment.modelSelectionStore
                 )
-                    .frame(minWidth: 510, idealWidth: 720)
+                    .frame(minWidth: 430, idealWidth: 620)
                     .layoutPriority(2)
 
                 ContextPaneView(
@@ -49,7 +49,7 @@ struct ShellDetailPaneView: View {
                         }
                     }
                 )
-                .frame(minWidth: 340, idealWidth: 480, maxWidth: 560)
+                .frame(minWidth: 210, idealWidth: 320, maxWidth: 400)
                 .layoutPriority(1)
             }
         } else if shellViewModel.project(for: projectID) == nil {

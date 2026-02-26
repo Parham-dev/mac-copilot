@@ -5,7 +5,9 @@ struct ShellSidebarView: View {
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
     let onOpenProject: () -> Void
+    let companionStatusLabel: String
     let onManageModels: () -> Void
+    let onManageCompanion: () -> Void
     let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
 
@@ -79,6 +81,8 @@ struct ShellSidebarView: View {
             sidebarWidth: sidebarWidth,
             onUpdate: { showsUpdatePlaceholder = true },
             onOpenProfile: { shellViewModel.selectedItem = .profile },
+            companionStatusLabel: companionStatusLabel,
+            onManageCompanion: onManageCompanion,
             onManageModels: onManageModels,
             onManageMCPTools: onManageMCPTools,
             onSignOut: onSignOut

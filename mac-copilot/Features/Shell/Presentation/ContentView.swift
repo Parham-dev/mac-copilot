@@ -32,43 +32,25 @@ struct ContentView: View {
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
                 onOpenProject: openProjectWithFolderBrowser,
+                companionStatusLabel: companionStatusStore.statusLabel,
                 onManageModels: { showsModelsSheet = true },
+                onManageCompanion: { showsCompanionSheet = true },
                 onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
             )
-            .navigationSplitViewColumnWidth(min: 260, ideal: 300)
-            .navigationTitle("CopilotForge")
-            .toolbar {
-                ToolbarItem {
-                    Button {
-                        showsCompanionSheet = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(companionStatusStore.statusColor)
-                                .frame(width: 6, height: 6)
-                            Image(systemName: "iphone")
-                            Text(companionStatusStore.statusLabel)
-                                .font(.caption)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .help("Mobile companion status")
-                }
-
-                ToolbarItem {
-                    Button(action: shellViewModel.createChatInActiveProject) {
-                        Label("New Chat", systemImage: "plus")
-                    }
-                    .disabled(!authViewModel.isAuthenticated)
-                }
-            }
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250)
         } detail: {
             ShellDetailPaneView(
                 shellViewModel: shellViewModel,
                 shellEnvironment: shellEnvironment,
                 isAuthenticated: authViewModel.isAuthenticated
             )
+            .navigationTitle(navigationHeaderState.title)
+        }
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                ShellOpenProjectMenuButton(shellViewModel: shellViewModel)
+            }
         }
         .onChange(of: shellViewModel.selectedItem) { _, newValue in
             shellViewModel.didSelectSidebarItem(newValue)
@@ -122,6 +104,10 @@ struct ContentView: View {
                 }
             }
         )
+    }
+
+    private var navigationHeaderState: ShellNavigationHeaderState {
+        ShellNavigationHeaderState(shellViewModel: shellViewModel)
     }
 
     private func createProjectWithFolderBrowser() {
