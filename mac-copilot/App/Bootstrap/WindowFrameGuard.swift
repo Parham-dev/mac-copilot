@@ -20,6 +20,8 @@ struct WindowFrameGuard: NSViewRepresentable {
         private weak var window: NSWindow?
         private var observers: [NSObjectProtocol] = []
         private var initialPreferredClampPassesRemaining = 0
+        private var pendingFrame: NSRect?
+        private var hasPendingFrameApply = false
 
         deinit {
             removeObservers()
@@ -99,7 +101,7 @@ struct WindowFrameGuard: NSViewRepresentable {
                 var preferredFrame = window.frame
                 preferredFrame.size.width = min(max(preferredLaunchWidth, clampedMinWidth), maxWidth)
                 preferredFrame.size.height = min(max(preferredLaunchHeight, clampedMinHeight), maxHeight)
-                window.setFrame(preferredFrame, display: true, animate: false)
+                scheduleFrameApply(window: window, frame: preferredFrame)
                 initialPreferredClampPassesRemaining -= 1
             }
 
@@ -137,6 +139,29 @@ struct WindowFrameGuard: NSViewRepresentable {
             }
 
             if changed {
+                scheduleFrameApply(window: window, frame: frame)
+            }
+        }
+
+        private func scheduleFrameApply(window: NSWindow, frame: NSRect) {
+            pendingFrame = frame
+            guard !hasPendingFrameApply else { return }
+
+            hasPendingFrameApply = true
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self else { return }
+                self.hasPendingFrameApply = false
+                guard let window, self.window === window,
+                      let frame = self.pendingFrame
+                else {
+                    self.pendingFrame = nil
+                    return
+                }
+
+                self.pendingFrame = nil
+                if window.frame.equalTo(frame) {
+                    return
+                }
                 window.setFrame(frame, display: true, animate: false)
             }
         }

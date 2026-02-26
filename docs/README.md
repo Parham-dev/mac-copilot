@@ -4,6 +4,7 @@ This folder contains operational and release documentation for CopilotForge.
 
 ## Start Here
 
+- [Apps Platform Direction](../README_APPS.md)
 - [DMG Release Guide](release-dmg.md)
 - [Sidecar Runtime and Packaging](sidecar-runtime.md)
 - [Chat Session History Architecture](chat-session-history.md)

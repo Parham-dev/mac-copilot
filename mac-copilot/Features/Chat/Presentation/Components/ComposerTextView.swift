@@ -36,6 +36,7 @@ struct ComposerTextView: NSViewRepresentable {
         textView.font = .preferredFont(forTextStyle: .body)
         textView.string = text
         textView.isEditable = isEditable
+        context.coordinator.stageTextValue(textView.string)
         context.coordinator.updateEmptyState(textView.string)
 
         if let container = textView.textContainer {
@@ -44,7 +45,6 @@ struct ComposerTextView: NSViewRepresentable {
         }
 
         scrollView.documentView = textView
-        context.coordinator.updateScrollerOnly(for: textView)
         return scrollView
     }
 
@@ -62,21 +62,20 @@ struct ComposerTextView: NSViewRepresentable {
 
         if textView.string != text {
             textView.string = text
-            context.coordinator.updateScrollerOnly(for: textView)
+            context.coordinator.stageTextValue(textView.string)
             context.coordinator.updateEmptyState(textView.string)
-            context.coordinator.updateHeight(for: textView)
+            context.coordinator.scheduleMetricsRefresh(for: textView)
+            context.coordinator.enqueueBindingFlush()
         }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         private var parent: ComposerTextView
-        private var pendingTextUpdate = false
+        private var pendingBindingFlush = false
+        private var pendingMetricsRefresh = false
         private var latestPendingTextValue = ""
-        private var pendingEmptyStateUpdate = false
         private var latestPendingEmptyState = true
-        private var pendingHeightUpdate = false
         private var latestPendingHeightValue: CGFloat = 0
-        private var textDidChangeEventCount = 0
 
         init(parent: ComposerTextView) {
             self.parent = parent
@@ -88,52 +87,23 @@ struct ComposerTextView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            textDidChangeEventCount += 1
-            debugLog("textDidChange #\(textDidChangeEventCount) chars=\(textView.string.count) pendingText=\(pendingTextUpdate) pendingHeight=\(pendingHeightUpdate)")
-            enqueueTextBindingUpdate(textView.string)
+            stageTextValue(textView.string)
             updateEmptyState(textView.string)
-            updateHeight(for: textView)
+            scheduleMetricsRefresh(for: textView)
+            enqueueBindingFlush()
+        }
+
+        func stageTextValue(_ value: String) {
+            latestPendingTextValue = value
+            latestPendingEmptyState = value.isEmpty
         }
 
         func updateEmptyState(_ value: String) {
-            let empty = value.isEmpty
-            latestPendingEmptyState = empty
-            guard !pendingEmptyStateUpdate else { return }
-            pendingEmptyStateUpdate = true
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.pendingEmptyStateUpdate = false
-                let latest = self.latestPendingEmptyState
-                if self.parent.isTextEmpty != latest {
-                    self.parent.isTextEmpty = latest
-                }
-            }
-        }
-
-        private func enqueueTextBindingUpdate(_ newValue: String) {
-            latestPendingTextValue = newValue
-            guard !pendingTextUpdate else { return }
-            pendingTextUpdate = true
-            debugLog("enqueueTextBindingUpdate chars=\(newValue.count)")
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.pendingTextUpdate = false
-                let value = self.latestPendingTextValue
-                if self.parent.text != value {
-                    self.debugLog("applyTextBindingUpdate chars=\(value.count)")
-                    self.parent.text = value
-                }
-            }
+            latestPendingEmptyState = value.isEmpty
         }
 
         func shouldDeferBindingToTextViewSync(boundText: String) -> Bool {
-            let shouldDefer = pendingTextUpdate && boundText != latestPendingTextValue
-            if shouldDefer {
-                debugLog("deferBindingToTextViewSync boundChars=\(boundText.count) pendingChars=\(latestPendingTextValue.count)")
-            }
-            return shouldDefer
+            pendingBindingFlush && boundText != latestPendingTextValue
         }
 
         func updateHeight(for textView: NSTextView) {
@@ -156,49 +126,48 @@ struct ComposerTextView: NSViewRepresentable {
             }
         }
 
+        func scheduleMetricsRefresh(for textView: NSTextView) {
+            guard !pendingMetricsRefresh else { return }
+            pendingMetricsRefresh = true
+
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self else { return }
+                self.pendingMetricsRefresh = false
+                guard let textView else { return }
+                self.updateHeight(for: textView)
+                self.enqueueBindingFlush()
+            }
+        }
+
         private func enqueueHeightBindingUpdate(_ newValue: CGFloat) {
             latestPendingHeightValue = newValue
-            guard !pendingHeightUpdate else {
-                debugLog("skipHeightBindingUpdateWhilePending newHeight=\(String(format: "%.1f", newValue))")
-                return
-            }
-            pendingHeightUpdate = true
-            debugLog("enqueueHeightBindingUpdate newHeight=\(String(format: "%.1f", newValue))")
+        }
+
+        func enqueueBindingFlush() {
+            guard !pendingBindingFlush else { return }
+            pendingBindingFlush = true
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.pendingHeightUpdate = false
+                self.pendingBindingFlush = false
+
+                let text = self.latestPendingTextValue
+                if self.parent.text != text {
+                    self.parent.text = text
+                }
+
+                let latestEmpty = self.latestPendingEmptyState
+                if self.parent.isTextEmpty != latestEmpty {
+                    self.parent.isTextEmpty = latestEmpty
+                }
 
                 let rounded = (self.latestPendingHeightValue * 2).rounded() / 2
                 if abs(self.parent.dynamicHeight - rounded) > 0.25 {
-                    self.debugLog("applyHeightBindingUpdate height=\(String(format: "%.1f", rounded))")
                     self.parent.dynamicHeight = rounded
                 }
             }
         }
 
-        private func debugLog(_ message: String) {
-#if DEBUG
-            NSLog("[CopilotForge][ComposerDebug] %@", message)
-#endif
-        }
-
-        func updateScrollerOnly(for textView: NSTextView) {
-            guard let layoutManager = textView.layoutManager,
-                  let textContainer = textView.textContainer
-            else { return }
-
-            layoutManager.ensureLayout(for: textContainer)
-            let contentHeight = layoutManager.usedRect(for: textContainer).height + (textView.textContainerInset.height * 2)
-            let maxHeight = self.parent.maxHeight
-
-            if let scrollView = textView.enclosingScrollView {
-                let shouldShowScroller = contentHeight > maxHeight
-                if scrollView.hasVerticalScroller != shouldShowScroller {
-                    scrollView.hasVerticalScroller = shouldShowScroller
-                }
-            }
-        }
     }
 }
 

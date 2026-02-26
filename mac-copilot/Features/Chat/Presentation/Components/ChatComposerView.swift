@@ -15,8 +15,28 @@ struct ChatComposerView: View {
     let isSending: Bool
     let onSend: () -> Void
 
-    @State private var composerHeight: CGFloat = 56
+    @State private var composerHeight: CGFloat
     @State private var isComposerTextEmpty = true
+
+    init(
+        draftPrompt: Binding<String>,
+        selectedModel: Binding<String>,
+        availableModels: [String],
+        selectedModelInfoLabel: String,
+        isSending: Bool,
+        onSend: @escaping () -> Void
+    ) {
+        self._draftPrompt = draftPrompt
+        self._selectedModel = selectedModel
+        self.availableModels = availableModels
+        self.selectedModelInfoLabel = selectedModelInfoLabel
+        self.isSending = isSending
+        self.onSend = onSend
+
+        let lineHeight = NSFont.preferredFont(forTextStyle: .body).composerLineHeight
+        let initialHeight = ceil((lineHeight * 2) + 14)
+        self._composerHeight = State(initialValue: initialHeight)
+    }
 
     private var canSend: Bool {
         !draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending

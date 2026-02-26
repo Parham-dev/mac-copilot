@@ -79,6 +79,36 @@ struct PersistencePhase4IntegrationTests {
         #expect(chatRepository.fetchChats(projectID: project.id).isEmpty)
         #expect(chatRepository.loadMessages(chatID: chat.id).isEmpty)
     }
+
+    @Test func swiftData_loadMessages_decodesLegacyMetadataWithoutToolExecutionID() throws {
+        let context = try makeInMemoryContext()
+        let projectRepository = SwiftDataProjectRepository(context: context)
+        let chatRepository = SwiftDataChatRepository(context: context)
+
+        let project = projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
+        let chat = chatRepository.createChat(projectID: project.id, title: "Legacy")
+
+        let legacyMetadata = "{\"statusChips\":[\"Queued\"],\"toolExecutions\":[{\"toolName\":\"read_file\",\"success\":true,\"details\":\"ok\"}]}"
+        let legacyMessage = ChatMessageEntity(
+            id: UUID(),
+            chatID: chat.id,
+            roleRaw: ChatMessage.Role.assistant.rawValue,
+            text: "legacy",
+            metadataJSON: legacyMetadata,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_500),
+            chat: nil
+        )
+
+        context.insert(legacyMessage)
+        try context.save()
+
+        let loaded = chatRepository.loadMessages(chatID: chat.id)
+
+        #expect(loaded.count == 1)
+        #expect(loaded[0].metadata?.statusChips == ["Queued"])
+        #expect(loaded[0].metadata?.toolExecutions.count == 1)
+        #expect(loaded[0].metadata?.toolExecutions.first?.toolName == "read_file")
+    }
 }
 
 @MainActor
