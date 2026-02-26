@@ -103,6 +103,11 @@ never leaves your machine unless you choose to deploy it.
 - AI-assisted commit message + fix-from-logs flow: implemented
 - Runtime start/stop hardening (port retry, auto-free occupied port, graceful stop): implemented
 - Runtime/log UX polish (copy logs, smart autoscroll, noise filtering): implemented
+- Shared user-facing error mapping + non-blocking warning UX: implemented
+- Typed chat event store wiring (replacing stringly NotificationCenter chat events): implemented
+- Swift 6 concurrency capture hardening in runtime startup/process flows: implemented
+- Chat data layer modularization (streaming, model catalog, SwiftData repository helpers): implemented
+- App container modularization by feature (`AppContainer+*.swift`): implemented
 - Deployment integrations (MCP/hosting): in progress
 
 ## Architecture (Feature-First)
@@ -157,6 +162,13 @@ mac-copilot/
 │   └── Support/
 └── sidecar/
 ```
+
+Recent architecture updates:
+
+- App composition root split into feature extensions for clearer DI boundaries.
+- Chat cross-feature UI sync now uses a typed `ChatEventsStore` instead of string keys.
+- Shared `UserFacingErrorMapper` enforces consistent, production-safe user messaging.
+- Large data files were split into focused helpers to keep behavior stable while improving maintainability.
 
 ## Runtime Components
 
