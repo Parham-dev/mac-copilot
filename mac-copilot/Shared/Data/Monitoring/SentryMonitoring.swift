@@ -2,7 +2,7 @@ import Foundation
 import Sentry
 
 enum SentryMonitoring {
-    private static let fallbackDSN = "https://76ba58f1eba14f2fede2904f06f0f31d@o4509884530819072.ingest.de.sentry.io/4509884535668816"
+    private static let fallbackDSN = "https://988bf562b934f4a50989c8785333f860@o4510953909714944.ingest.de.sentry.io/4510953913778256"
     private static let duplicateWindowSeconds: TimeInterval = 60
     private static let lock = NSLock()
 
@@ -27,6 +27,7 @@ enum SentryMonitoring {
             options.sendDefaultPii = false
             options.maxBreadcrumbs = 25
             options.tracesSampleRate = 0
+            options.enableLogs = true
             options.environment = buildEnvironment
             options.releaseName = appReleaseName
         }
@@ -48,7 +49,8 @@ enum SentryMonitoring {
                 scope.setExtra(value: value, key: key)
             }
         }
-        SentrySDK.capture(error: error)
+        let eventID = SentrySDK.capture(error: error)
+        _ = SentrySDK.flush(timeout: 2.0)
     }
 
     static func captureMessage(
