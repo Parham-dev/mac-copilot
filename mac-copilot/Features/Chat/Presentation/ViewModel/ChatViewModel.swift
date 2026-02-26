@@ -3,6 +3,7 @@ import Combine
 
 extension Notification.Name {
     static let chatResponseDidFinish = Notification.Name("chatResponseDidFinish")
+    static let chatTitleDidUpdate = Notification.Name("chatTitleDidUpdate")
 }
 
 @MainActor
@@ -17,7 +18,7 @@ final class ChatViewModel: ObservableObject {
     @Published var selectedModel = ""
 
     let chatID: UUID
-    let chatTitle: String
+    @Published var chatTitle: String
     let projectPath: String
 
     let sendPromptUseCase: SendPromptUseCase

@@ -136,4 +136,21 @@ final class ShellViewModel: ObservableObject {
             expandedProjectIDs.insert(projectID)
         }
     }
+
+    func updateChatTitle(chatID: ChatThreadRef.ID, title: String) {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTitle.isEmpty else { return }
+
+        for projectID in projectChats.keys {
+            guard var chats = projectChats[projectID],
+                  let index = chats.firstIndex(where: { $0.id == chatID })
+            else {
+                continue
+            }
+
+            chats[index].title = normalizedTitle
+            projectChats[projectID] = chats
+            return
+        }
+    }
 }

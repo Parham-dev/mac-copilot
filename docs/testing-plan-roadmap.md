@@ -1,259 +1,332 @@
-# Testing Plan Roadmap
+# CopilotForge Testing Roadmap and Execution Checklist
 
-## Why now
+## Purpose
 
-CopilotForge just completed a stabilization and refactor cycle. This is the right time to lock behavior with tests before adding more product surface.
+This document is a handoff checklist for an independent agent to continue test authoring without prior conversation context.
 
-## Test pyramid target
+Primary goals:
+- Start from app-level coverage, then move feature-by-feature.
+- Follow test pyramid targets strictly.
+- Maintain deterministic, fast tests with focused runs.
+
+## Test pyramid and quotas
 
 - Unit tests: 70%
 - Integration tests: 20%
-- UI and E2E tests: 10%
-
-## Current testability assessment
-
-Mostly testable today:
-- Domain use cases and parsing logic are already easy to test.
-- Several services and managers are close to testable but need DI seams.
-- View behavior is testable at ViewModel and snapshot-style levels; full UI flow coverage is still thin.
-
-Gaps to fix first:
-- Sidecar lifecycle internals are concrete and time/process dependent.
-- Some network clients still rely on concrete URLSession usage patterns.
-- Git manager still executes real process commands directly.
-
-## Test doubles strategy (what to use where)
-
-- Fake: in-memory repositories and stores for fast deterministic flows.
-- Stub: fixed outputs for model list, sidecar health, git status, profile payloads.
-- Spy: verify calls, parameters, and call count for lifecycle and repository orchestration.
-- Mock: only for strict interaction sequencing tests (restart/retry sequences).
-
-Rule: prefer fake and stub first, then spy, then mock.
-
-## Phase 0 (required): Testability refactor
-
-Goal: add minimum seams so critical behavior can be tested without flaky process or UI timing.
-
-Scope:
-1. Sidecar lifecycle DI seams
-   - Extract protocols for preflight, runtime utilities, process controller, restart policy clock/sleeper.
-   - Inject these into SidecarManager via initializer defaults.
-2. Git process seam
-   - Introduce a GitCommandRunning protocol.
-   - LocalGitRepositoryManager depends on protocol, default implementation wraps Process.
-3. HTTP client seam
-   - Introduce a lightweight HTTP transport protocol for GET and POST.
-   - Copilot and sidecar clients use protocol with URLSession-backed default implementation.
-4. Time and async seam for retry logic
-   - Add delay scheduler abstraction where retries/backoff are asserted.
-5. Test fixtures and builders
-   - Add shared test builders for ChatMessage, GitFileChange, model catalog payloads, and sidecar health responses.
-
-Current status:
-- Implemented: shared fixture/builders for ChatMessage, model catalog payload JSON shapes, and sidecar health snapshots in `mac-copilotTests/Support/TestFixtures.swift`.
-- Implemented: fixture smoke tests in `mac-copilotTests/TestingPlanFixturesSmokeTests.swift`.
-- Pending: add shared GitFileChange fixture helper alongside upcoming Git-focused unit test phase.
-
-Exit criteria:
-- No behavior change.
-- All new seams covered by at least smoke-level tests.
-- CI remains green.
-
-### Final audit snapshot (2026-02-26)
-
-Implemented in Phase 0 so far:
-- Sidecar lifecycle DI seams (`SidecarManager` dependency injection for preflight/runtime/process/restart/log/scheduler).
-- Git command runner seam (`GitCommandRunning` + default `LocalGitCommandRunner`).
-- HTTP transport seam (`HTTPDataTransporting`) for model catalog and sidecar HTTP clients.
-- Sidecar health probe seams (`SidecarHealthDataFetching` + `BlockingDelaySleeping`).
-- Control Center runtime utility seams (`ControlCenterCommandRunning` + `ControlCenterFileManaging` + `DateProviding` + HTTP/delay injection).
-- Deterministic jitter seam (`SidecarRestartPolicy` `jitterProvider` injection).
-- Clock seam consistency (`ClockProviding` in sidecar runtime manager/probe decisions).
-- Async delay seam (`AsyncDelayScheduling`) for retry loops.
-- Control Center runtime manager process seams (`ControlCenterCommandStatusRunning` + injected clock/HTTP/delay for health polling and capture paths).
-- Sidecar runtime utility runner/sleep seams (`SidecarCommandRunning` + injected blocking sleeper).
-- Git filesystem check seam (`GitFileSystemChecking` in `LocalGitRepositoryManager`).
-- Simple HTML adapter filesystem seam (`ControlCenterFileManaging` injection).
-- Shared test fixtures/builders and fixture smoke tests.
-
-Remaining testability gaps to close before heavy Phase 1 test authoring:
-None.
-
----
-
-## Primary priority track (next 5 phases)
-
-### Phase 1: Sidecar lifecycle core unit tests
-
-Targets:
-- SidecarManager
-- SidecarStateMachine
-- SidecarRestartPolicy
-
-Cases:
-- Healthy reuse path when external sidecar exists.
-- Start ignored while already starting.
-- Replace stale process path.
-- Retry scheduling and guard trip behavior.
-- Termination handling for intentional vs crash.
-
-Exit criteria:
-- High confidence in start/reuse/retry state transitions.
-
-Current progress (2026-02-26):
-- Implemented `mac-copilotTests/SidecarLifecyclePhase1Tests.swift` for `SidecarRestartPolicy`, `SidecarStateMachine`, and `SidecarManager` core flows.
-- Added deterministic coverage for healthy reuse, stale handle clear/start, readiness failure retry scheduling, retry guard trip, and crash vs intentional termination behavior.
-- Focused run passed: `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS' -only-testing:mac-copilotTests/SidecarLifecyclePhase1Tests`.
-
-### Phase 2: Chat model and send flow unit tests
-
-Targets:
-- ChatViewModel plus SendFlow and ModelCatalog extensions.
-- CopilotModelCatalogClient decoding path.
-
-Cases:
-- Model catalog decode across multiple payload shapes.
-- Empty/error catalog handling without silent fallback.
-- Model reload triggers and selection retention.
-- Send flow state transitions, tool/status accumulation, completion/failure paths.
-
-Exit criteria:
-- Regressions around model loading and send flow are covered.
-
-### Phase 3: Git domain/data unit tests
-
-Targets:
-- LocalGitRepositoryParsing
-- LocalGitRepositoryManager with runner fake
-
-Cases:
-- Branch parsing edge cases.
-- Numstat aggregation and rename normalization.
-- File state mapping and line count fallback.
-- Commit flow: empty message, stage fail, commit fail.
-
-Exit criteria:
-- Git panel correctness no longer depends on manual validation.
-
-Current progress (2026-02-26):
-- Implemented `mac-copilotTests/GitDomainPhase3Tests.swift` covering `LocalGitRepositoryParsing` edge cases (branch parsing, file-state mapping, numstat aggregation, rename normalization).
-- Added `LocalGitRepositoryManager` behavior tests with fake command runner and filesystem seam for file-change mapping and text-file line-count fallback.
-- Added commit-flow failure coverage for empty message validation, stage failure, and commit failure paths.
-- Focused run passed: `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS,arch=arm64' -only-testing:mac-copilotTests/GitDomainPhase3Tests`.
-
-### Phase 4: Integration tests for persistence and sidecar payloads
-
-Targets:
-- SwiftData repositories for project/chat.
-- Companion chat store and persistence modules.
-- Copilot model fetch and prompt route payload contracts.
-
-Cases:
-- Import snapshot merge behavior.
-- Chat/message pagination and ordering.
-- Persist/load roundtrip integrity.
-
-Exit criteria:
-- Data integrity validated across read/write boundaries.
-
-Current progress (2026-02-26):
-- Implemented `mac-copilotTests/PersistencePhase4IntegrationTests.swift` for in-memory SwiftData roundtrip integrity across `SwiftDataProjectRepository` and `SwiftDataChatRepository`.
-- Added ordering/metadata/update/delete coverage for project/chat/message persistence behaviors.
-- Implemented `mac-copilotTests/PayloadContractsPhase4Tests.swift` for `/models` request contract, `/prompt` payload contract (including optional fields), and companion snapshot POST body contract.
-- Stabilized companion snapshot assertion to support URL loading bodies provided via `httpBody` or `httpBodyStream` in URLProtocol-captured requests.
-
-### Phase 5: Critical smoke UI and E2E tests
-
-### Phase 5: Critical smoke UI and E2E tests
-
-Targets:
-- App launch and auth gate.
-- Project create/open and chat selection.
-- Send prompt and streaming response appears.
-- Control Center start and logs visible.
-
-Cases:
-- One happy-path suite per major user journey.
-- One regression suite for previously fixed composer/scroll issues.
-
-Exit criteria:
-- Release-blocking flows are covered by automated smoke tests.
-
-Current progress (2026-02-26):
-- Started with `mac-copilotUITests/mac_copilotUITests.swift` smoke coverage for app launch path detection (onboarding/auth gate vs authenticated shell).
-- Added a guarded smoke assertion for chat-composer visibility when shell state is active; test skips explicitly when environment state is not yet deterministic.
-
----
-
-## Secondary priority track (additional 5 phases)
-
-### Secondary Phase 1: Component-level view model tests
-
-Targets:
-- ContextPaneViewModel
-- ControlCenterViewModel
-- ModelsManagementViewModel
-
-Focus:
-- Command enablement rules, loading flags, and error messaging.
-
-### Secondary Phase 2: Sidecar integration resilience tests
-
-Targets:
-- SidecarHTTPClient with controlled transport fake.
-
-Focus:
-- Recoverable error retry behavior.
-- Sidecar-not-ready escalation and user-safe messaging.
-
-### Secondary Phase 3: Prompt protocol and streaming contract tests
-
-Targets:
-- Prompt route and stream payload formatting.
-- Tool execution event transformation.
-
-Focus:
-- Data frame shape compatibility and done/error framing.
-
-### Secondary Phase 4: Broader UI regression suites
-
-Targets:
-- Sidebar project/chat operations.
-- Git panel interactions.
-- Models management sheet.
-
-Focus:
-- Accessibility labels, stable identifiers, and route/state restoration.
-
-### Secondary Phase 5: Non-functional quality gates
-
-Targets:
-- Performance and reliability checks in CI.
-
-Focus:
-- Startup timing budget guard.
-- Memory footprint checks for long chat transcripts.
-- Flake tracker and quarantine workflow.
-
----
-
-## Delivery cadence
-
-Recommended order:
-1. Complete Phase 0 first.
-2. Execute Primary Phases 1 to 5 in order.
-3. Then execute Secondary Phases 1 to 5.
-
-Suggested pacing:
-- Week 1: Phase 0 plus Primary Phase 1
-- Week 2: Primary Phases 2 and 3
-- Week 3: Primary Phases 4 and 5
-- Week 4+: Secondary phases in sequence
-
-## Definition of done per phase
-
-Each phase is done only when:
-- Test cases are implemented and green locally and in CI.
-- New tests are deterministic (no timing flake under normal CI load).
-- A short phase summary is added to PR description (scope, risk, follow-up).
+- UI/E2E smoke tests: 10%
+
+Working rule:
+- For every new UI test added, add 4-6 unit/integration tests in same or adjacent feature.
+
+## Current baseline (already implemented)
+
+Completed suites:
+- `mac-copilotTests/TestingPlanFixturesSmokeTests.swift`
+- `mac-copilotTests/SidecarLifecyclePhase1Tests.swift`
+- `mac-copilotTests/CopilotModelCatalogClientPhase2Tests.swift`
+- `mac-copilotTests/ChatViewModelPhase2Tests.swift`
+- `mac-copilotTests/GitDomainPhase3Tests.swift`
+- `mac-copilotTests/PersistencePhase4IntegrationTests.swift`
+- `mac-copilotTests/PayloadContractsPhase4Tests.swift`
+- `mac-copilotUITests/mac_copilotUITests.swift` (initial Phase 5 smoke)
+
+These should be kept green while expanding coverage.
+
+## Independent-agent operating protocol
+
+1. Work in this order:
+   - App and bootstrap
+   - Feature domain/data/viewmodel
+   - UI smoke and regression
+2. Add tests in focused files named by phase or feature scope.
+3. After each feature batch, run focused `xcodebuild -only-testing` for changed suites.
+4. If UI flow is non-deterministic, use `XCTSkip` with explicit reason instead of flaky assertions.
+5. Update this file after each feature batch.
+
+## Run commands (canonical)
+
+- Full unit/integration target:
+  - `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS,arch=arm64' -only-testing:mac-copilotTests`
+- UI smoke target:
+  - `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS,arch=arm64' -only-testing:mac-copilotUITests`
+- Single suite pattern:
+  - `xcodebuild test -project mac-copilot.xcodeproj -scheme mac-copilot -destination 'platform=macOS,arch=arm64' -only-testing:mac-copilotTests/<SuiteName>`
+
+## Master roadmap (execution order)
+
+### Phase A: App-level foundation (start here)
+
+Checklist:
+- [ ] App bootstraps onboarding vs authenticated shell deterministically.
+- [ ] Environment/container wiring verified for all injected dependencies.
+- [x] Persistent stores roundtrip correctly for model/tool preferences.
+
+Progress notes:
+- 2026-02-26: Added `mac-copilotTests/AppStoresPhaseAUnitTests.swift` covering `AppBootstrapService`, `ModelSelectionStore`, `MCPToolsStore`, and `CompanionStatusStore`. Focused run passed with `-only-testing:mac-copilotTests/AppStoresPhaseAUnitTests`.
+
+Target files:
+- `mac-copilot/App/Bootstrap/mac_copilotApp.swift`
+- `mac-copilot/App/Bootstrap/WindowFrameGuard.swift`
+- `mac-copilot/App/Environment/AppEnvironment.swift`
+- `mac-copilot/App/Environment/AppContainer.swift`
+- `mac-copilot/App/Environment/AppBootstrapService.swift`
+- `mac-copilot/App/Environment/AuthEnvironment.swift`
+- `mac-copilot/App/Environment/ShellEnvironment.swift`
+- `mac-copilot/App/Environment/CompanionEnvironment.swift`
+- `mac-copilot/App/Environment/ChatViewModelProvider.swift`
+- `mac-copilot/App/Environment/Stores/ModelSelectionStore.swift`
+- `mac-copilot/App/Environment/Stores/ModelSelectionPreferencesStore.swift`
+- `mac-copilot/App/Environment/Stores/MCPToolsStore.swift`
+- `mac-copilot/App/Environment/Stores/MCPToolsPreferencesStore.swift`
+- `mac-copilot/App/Environment/Stores/CompanionStatusStore.swift`
+
+Test types:
+- Unit: env and store behaviors.
+- Integration: bootstrap and persistence boundaries.
+- UI smoke: launch path assertions.
+
+### Phase B: Shared infrastructure
+
+Checklist:
+- [ ] HTTP transports have contract tests (status handling, payload pass-through).
+- [ ] Delay/clock seams are used in tests; no real sleeps in unit tests.
+- [ ] SwiftData stack fallback behavior is covered.
+
+Target files:
+- `mac-copilot/Shared/Data/Networking/HTTPDataTransport.swift`
+- `mac-copilot/Shared/Data/Networking/HTTPLineStreamTransport.swift`
+- `mac-copilot/Shared/Data/Async/AsyncDelayScheduler.swift`
+- `mac-copilot/Shared/Data/Time/ClockProvider.swift`
+- `mac-copilot/Shared/Data/Persistence/SwiftDataStack.swift`
+- `mac-copilot/Shared/Data/Persistence/SwiftDataStoreProviding.swift`
+
+### Phase C: Feature-by-feature checklist
+
+#### 1) Auth
+
+Checklist:
+- [ ] Device flow start/poll/sign-out state transitions.
+- [ ] Repository state publishing behavior.
+- [ ] Sidecar auth client request/response mapping and error handling.
+- [ ] Onboarding and auth viewmodel interaction state.
+
+Target files:
+- `mac-copilot/Features/Auth/Data/GitHubAuthRepository.swift`
+- `mac-copilot/Features/Auth/Data/GitHubAuthService.swift`
+- `mac-copilot/Features/Auth/Data/Support/SidecarAuthClient.swift`
+- `mac-copilot/Features/Auth/Data/Support/KeychainTokenStore.swift`
+- `mac-copilot/Features/Auth/Data/Support/AuthAPIModels.swift`
+- `mac-copilot/Features/Auth/Domain/Entities/AuthSessionState.swift`
+- `mac-copilot/Features/Auth/Domain/UseCases/AuthUseCases.swift`
+- `mac-copilot/Features/Auth/Presentation/AuthViewModel.swift`
+- `mac-copilot/Features/Auth/Presentation/AuthView.swift`
+- `mac-copilot/Features/Auth/Presentation/OnboardingRootView.swift`
+
+#### 2) Chat
+
+Checklist:
+- [x] Model catalog and send-flow core coverage.
+- [ ] Chat session coordinator persistence behavior.
+- [ ] Transcript/composer state behavior around metadata/status/tool chips.
+- [ ] Prompt stream protocol edge cases and marker filtering.
+- [ ] SwiftData chat repo decode/invalid-role resilience.
+
+Target files:
+- `mac-copilot/Features/Chat/Data/CopilotAPIService.swift`
+- `mac-copilot/Features/Chat/Data/CopilotModelCatalogClient.swift`
+- `mac-copilot/Features/Chat/Data/CopilotPromptStreamClient.swift`
+- `mac-copilot/Features/Chat/Data/CopilotPromptRepository.swift`
+- `mac-copilot/Features/Chat/Data/Local/SwiftDataChatRepository.swift`
+- `mac-copilot/Features/Chat/Data/Local/Models/ChatThreadEntity.swift`
+- `mac-copilot/Features/Chat/Data/Local/Models/ChatMessageEntity.swift`
+- `mac-copilot/Features/Chat/Domain/UseCases/SendPromptUseCase.swift`
+- `mac-copilot/Features/Chat/Domain/UseCases/FetchModelsUseCase.swift`
+- `mac-copilot/Features/Chat/Domain/UseCases/FetchModelCatalogUseCase.swift`
+- `mac-copilot/Features/Chat/Presentation/ViewModel/ChatViewModel.swift`
+- `mac-copilot/Features/Chat/Presentation/ViewModel/ChatViewModel+SendFlow.swift`
+- `mac-copilot/Features/Chat/Presentation/ViewModel/ChatViewModel+ModelCatalog.swift`
+- `mac-copilot/Features/Chat/Presentation/ViewModel/ChatViewModel+Metadata.swift`
+- `mac-copilot/Features/Chat/Presentation/Support/ChatSessionCoordinator.swift`
+- `mac-copilot/Features/Chat/Presentation/ChatView.swift`
+- `mac-copilot/Features/Chat/Presentation/Components/ChatComposerView.swift`
+- `mac-copilot/Features/Chat/Presentation/Components/ChatTranscriptView.swift`
+- `mac-copilot/Features/Chat/Support/PromptTrace.swift`
+
+#### 3) Sidecar
+
+Checklist:
+- [x] Lifecycle policy/state machine baseline complete.
+- [ ] Preflight and node/runtime resolution negative paths.
+- [ ] Health probe and HTTP client retry/escalation matrix.
+- [ ] Runtime utilities process command and stale-process handling.
+
+Target files:
+- `mac-copilot/Features/Sidecar/Data/Lifecycle/SidecarManager.swift`
+- `mac-copilot/Features/Sidecar/Data/Lifecycle/SidecarStateMachine.swift`
+- `mac-copilot/Features/Sidecar/Data/Lifecycle/SidecarRestartPolicy.swift`
+- `mac-copilot/Features/Sidecar/Data/Runtime/SidecarPreflight.swift`
+- `mac-copilot/Features/Sidecar/Data/Runtime/SidecarHealthProbe.swift`
+- `mac-copilot/Features/Sidecar/Data/Runtime/SidecarRuntimeUtilities.swift`
+- `mac-copilot/Features/Sidecar/Data/Runtime/SidecarNodeRuntimeResolver.swift`
+- `mac-copilot/Features/Sidecar/Data/Runtime/SidecarScriptResolver.swift`
+- `mac-copilot/Features/Sidecar/Data/Runtime/SidecarReusePolicy.swift`
+- `mac-copilot/Features/Sidecar/Data/Support/SidecarHTTPClient.swift`
+- `mac-copilot/Features/Sidecar/Data/Process/SidecarProcessController.swift`
+- `mac-copilot/Features/Sidecar/Data/Process/SidecarCommandRunner.swift`
+
+#### 4) Shell + Git + Layout
+
+Checklist:
+- [x] Git parser/manager baseline complete.
+- [ ] Shell selection, chat creation/deletion, project expansion state.
+- [ ] Context pane routing and refresh behavior.
+- [ ] Models/MCP management viewmodel command-state logic.
+
+Target files:
+- `mac-copilot/Features/Shell/Presentation/ShellViewModel.swift`
+- `mac-copilot/Features/Shell/Presentation/Support/ShellWorkspaceCoordinator.swift`
+- `mac-copilot/Features/Shell/Presentation/Support/ProjectCreationService.swift`
+- `mac-copilot/Features/Shell/Presentation/ContextPaneViewModel.swift`
+- `mac-copilot/Features/Shell/Presentation/ContentView.swift`
+- `mac-copilot/Features/Shell/Presentation/Components/Layout/ShellDetailPaneView.swift`
+- `mac-copilot/Features/Shell/Presentation/Components/Layout/ShellSidebarView.swift`
+- `mac-copilot/Features/Shell/Presentation/Components/Layout/ShellSidebarBottomBarView.swift`
+- `mac-copilot/Features/Shell/Presentation/Components/Layout/ShellSidebarProjectsHeaderView.swift`
+- `mac-copilot/Features/Shell/Presentation/Components/Layout/ControlCenterView.swift`
+- `mac-copilot/Features/Shell/Presentation/Components/Layout/ControlCenterViewModel.swift`
+- `mac-copilot/Features/Shell/Data/LocalGitRepositoryManager.swift`
+- `mac-copilot/Features/Shell/Data/LocalGitRepositoryParsing.swift`
+- `mac-copilot/Features/Shell/Data/LocalGitCommandRunner.swift`
+
+#### 5) Control Center
+
+Checklist:
+- [ ] Project adapter resolution precedence by project shape.
+- [ ] Runtime manager start/stop/refresh state transitions.
+- [ ] Runtime diagnostics/logging behavior across adapters.
+- [ ] Utility command/file/network/delay seams covered.
+
+Target files:
+- `mac-copilot/Features/ControlCenter/Domain/UseCases/ProjectControlCenterResolver.swift`
+- `mac-copilot/Features/ControlCenter/Data/RuntimeManager/ControlCenterRuntimeManager.swift`
+- `mac-copilot/Features/ControlCenter/Data/RuntimeManager/ControlCenterRuntimeManager+Startup.swift`
+- `mac-copilot/Features/ControlCenter/Data/RuntimeManager/ControlCenterRuntimeManager+Process.swift`
+- `mac-copilot/Features/ControlCenter/Data/RuntimeManager/ControlCenterRuntimeManager+Logging.swift`
+- `mac-copilot/Features/ControlCenter/Data/RuntimeManager/ControlCenterRuntimeManager+Diagnostics.swift`
+- `mac-copilot/Features/ControlCenter/Data/ControlCenterRuntimeUtilities.swift`
+- `mac-copilot/Features/ControlCenter/Data/Adapters/Project/NodeControlCenterAdapter.swift`
+- `mac-copilot/Features/ControlCenter/Data/Adapters/Project/PythonProjectControlCenterAdapter.swift`
+- `mac-copilot/Features/ControlCenter/Data/Adapters/Project/SimpleHTMLControlCenterAdapter.swift`
+- `mac-copilot/Features/ControlCenter/Data/Adapters/Runtime/NodeRuntimeAdapter.swift`
+- `mac-copilot/Features/ControlCenter/Data/Adapters/Runtime/PythonRuntimeAdapter.swift`
+- `mac-copilot/Features/ControlCenter/Data/Adapters/Runtime/SimpleHTMLRuntimeAdapter.swift`
+
+#### 6) Project
+
+Checklist:
+- [ ] Project creation/fetch ordering and mapping.
+- [ ] SwiftData project persistence error handling.
+
+Target files:
+- `mac-copilot/Features/Project/Data/Local/SwiftDataProjectRepository.swift`
+- `mac-copilot/Features/Project/Data/Local/Models/ProjectEntity.swift`
+- `mac-copilot/Features/Project/Domain/UseCases/ProjectUseCases.swift`
+
+#### 7) Profile
+
+Checklist:
+- [ ] Profile fetch happy/failure mapping.
+- [ ] ViewModel loading/error state transitions.
+- [ ] Endpoint and Copilot status card rendering logic.
+
+Target files:
+- `mac-copilot/Features/Profile/Data/GitHubProfileRepository.swift`
+- `mac-copilot/Features/Profile/Domain/UseCases/FetchProfileUseCase.swift`
+- `mac-copilot/Features/Profile/Presentation/ProfileViewModel.swift`
+- `mac-copilot/Features/Profile/Presentation/ProfileView.swift`
+- `mac-copilot/Features/Profile/Presentation/Components/CopilotStatusCardView.swift`
+- `mac-copilot/Features/Profile/Presentation/Components/EndpointCheckCardView.swift`
+- `mac-copilot/Features/Profile/Presentation/Components/UserProfileSummaryView.swift`
+
+#### 8) Companion
+
+Checklist:
+- [x] Snapshot payload contract baseline complete.
+- [ ] Connection service lifecycle + polling/error paths.
+- [ ] Companion client decode/error handling matrix.
+- [ ] In-memory service parity tests against expected API.
+
+Target files:
+- `mac-copilot/Features/Companion/Data/SidecarCompanionConnectionService.swift`
+- `mac-copilot/Features/Companion/Data/Support/SidecarCompanionClient.swift`
+- `mac-copilot/Features/Companion/Data/SidecarCompanionWorkspaceSyncService.swift`
+- `mac-copilot/Features/Companion/Data/InMemoryCompanionConnectionService.swift`
+
+### Phase D: Sidecar TypeScript contract and persistence tests
+
+Checklist:
+- [ ] Companion store snapshot merge and pagination.
+- [ ] Companion persistence read/write fallback behavior.
+- [ ] Prompt route framing and protocol markup integrity.
+- [ ] Model catalog and session manager contract behavior.
+
+Target files:
+- `sidecar/src/companion/chatStore.ts`
+- `sidecar/src/companion/chatStorePersistence.ts`
+- `sidecar/src/companion/persistence.ts`
+- `sidecar/src/companion/routes.ts`
+- `sidecar/src/companion/store.ts`
+- `sidecar/src/promptRoute.ts`
+- `sidecar/src/promptStreaming/protocolMarkup.ts`
+- `sidecar/src/promptStreaming/toolExecution.ts`
+- `sidecar/src/copilot/copilotModelCatalog.ts`
+- `sidecar/src/copilot/copilotPromptStreaming.ts`
+- `sidecar/src/copilot/copilotSessionManager.ts`
+- `sidecar/src/sidecarRuntime.ts`
+- `sidecar/src/index.ts`
+
+## UI smoke/E2E checklist (Phase 5 target)
+
+Current:
+- [x] Launch path smoke (`onboarding` vs `shell`) in `mac-copilotUITests/mac_copilotUITests.swift`
+- [x] Guarded chat composer smoke in `mac-copilotUITests/mac_copilotUITests.swift`
+
+Remaining:
+- [ ] Project create/open smoke (stable deterministic fixture project)
+- [ ] Chat select + send smoke (assert streamed assistant text appears)
+- [ ] Control Center start/open/logs smoke
+- [ ] Regression smoke for composer growth and transcript auto-scroll anchor
+
+UI files:
+- `mac-copilotUITests/mac_copilotUITests.swift`
+- `mac-copilotUITests/mac_copilotUITestsLaunchTests.swift`
+
+## Definition of done (per feature batch)
+
+A batch is complete only when all are true:
+- [ ] New tests pass in focused local run.
+- [ ] Existing related suites remain green.
+- [ ] No new flaky waits/sleeps; deterministic assertions only.
+- [ ] This checklist is updated with `[x]` statuses and notes.
+
+## Naming conventions for new tests
+
+- Unit suites: `<Feature><Scope>UnitTests.swift`
+- Integration suites: `<Feature><Scope>IntegrationTests.swift`
+- UI suites: `<Feature><Scope>UITests.swift`
+
+Examples:
+- `AuthViewModelUnitTests.swift`
+- `ControlCenterRuntimeManagerIntegrationTests.swift`
+- `ShellSmokeUITests.swift`
+
+## Suggested next 3 concrete batches
+
+1) App + stores batch
+- [x] Add tests for `AppBootstrapService`, `ModelSelectionStore`, `MCPToolsStore`, `CompanionStatusStore`.
+
+2) Auth + Profile batch
+- Add repository/use-case/viewmodel unit tests.
+
+3) Control Center batch
+- Add resolver/runtime manager integration tests with fake command runner and health transport.

@@ -12,8 +12,25 @@ extension ChatViewModel {
         guard !isSending else { return }
 
         isSending = true
+        let hadUserMessageBeforeSend = messages.contains(where: { $0.role == .user })
         let userMessage = sessionCoordinator.appendUserMessage(chatID: chatID, text: text)
         messages.append(userMessage)
+
+        if let updatedTitle = sessionCoordinator.updateChatTitleFromFirstUserMessageIfNeeded(
+            chatID: chatID,
+            promptText: text,
+            hadUserMessageBeforeSend: hadUserMessageBeforeSend
+        ) {
+            chatTitle = updatedTitle
+            NotificationCenter.default.post(
+                name: .chatTitleDidUpdate,
+                object: nil,
+                userInfo: [
+                    "chatID": chatID,
+                    "title": updatedTitle,
+                ]
+            )
+        }
 
         let assistantIndex = messages.count
         let assistantMessage = sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)

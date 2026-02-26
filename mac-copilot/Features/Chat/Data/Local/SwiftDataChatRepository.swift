@@ -8,6 +8,8 @@ final class SwiftDataChatRepository: ChatRepository {
         case createChatSaveFailed(String)
         case deleteChatFetchFailed(String)
         case deleteChatSaveFailed(String)
+        case updateChatTitleFetchFailed(String)
+        case updateChatTitleSaveFailed(String)
         case fetchMessagesFailed(String)
         case saveMessageFailed(String)
         case updateMessageFetchFailed(String)
@@ -27,6 +29,10 @@ final class SwiftDataChatRepository: ChatRepository {
                 return "Delete chat fetch failed: \(details)"
             case .deleteChatSaveFailed(let details):
                 return "Delete chat save failed: \(details)"
+            case .updateChatTitleFetchFailed(let details):
+                return "Update chat title fetch failed: \(details)"
+            case .updateChatTitleSaveFailed(let details):
+                return "Update chat title save failed: \(details)"
             case .fetchMessagesFailed(let details):
                 return "Fetch messages failed: \(details)"
             case .saveMessageFailed(let details):
@@ -112,6 +118,36 @@ final class SwiftDataChatRepository: ChatRepository {
             try context.save()
         } catch {
             log(.deleteChatSaveFailed(error.localizedDescription))
+        }
+    }
+
+    func updateChatTitle(chatID: UUID, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let predicateChatID = chatID
+        let descriptor = FetchDescriptor<ChatThreadEntity>(
+            predicate: #Predicate { $0.id == predicateChatID }
+        )
+
+        let entity: ChatThreadEntity?
+        do {
+            entity = try context.fetch(descriptor).first
+        } catch {
+            log(.updateChatTitleFetchFailed(error.localizedDescription))
+            return
+        }
+
+        guard let entity else {
+            return
+        }
+
+        entity.title = trimmed
+
+        do {
+            try context.save()
+        } catch {
+            log(.updateChatTitleSaveFailed(error.localizedDescription))
         }
     }
 

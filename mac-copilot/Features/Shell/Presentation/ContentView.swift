@@ -73,6 +73,15 @@ struct ContentView: View {
         .onChange(of: shellViewModel.selectedItem) { _, newValue in
             shellViewModel.didSelectSidebarItem(newValue)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .chatTitleDidUpdate)) { notification in
+            guard let chatID = notification.userInfo?["chatID"] as? UUID,
+                  let title = notification.userInfo?["title"] as? String
+            else {
+                return
+            }
+
+            shellViewModel.updateChatTitle(chatID: chatID, title: title)
+        }
         .alert("Could not create project", isPresented: projectCreationAlertBinding) {
             Button("OK", role: .cancel) {
                 projectCreationError = nil

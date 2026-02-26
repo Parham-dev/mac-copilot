@@ -106,6 +106,22 @@ struct ChatViewModelPhase2Tests {
 
         #expect(promptRepo.lastRequest?.allowedTools == ["list_dir", "read_file"])
     }
+
+    @Test func send_firstPromptUpdatesChatTitleUsingTruncatedText() async {
+        let promptRepo = FakePromptStreamingRepository(streamEvents: [.textDelta("ok")])
+        let chatRepo = InMemoryChatRepository()
+        let viewModel = makeViewModel(promptRepo: promptRepo, chatRepo: chatRepo)
+        let longPrompt = "Build a robust sidebar synchronization strategy for dynamic chat title updates after first prompt"
+
+        await viewModel.send(prompt: longPrompt)
+
+        let updatedTitle = try? #require(chatRepo.updatedChatTitles[viewModel.chatID])
+        #expect(updatedTitle != nil)
+        #expect((updatedTitle?.count ?? 0) <= 48)
+        #expect(updatedTitle?.hasSuffix("...") == true)
+        #expect(updatedTitle?.hasPrefix("Build a robust sidebar synchronization") == true)
+        #expect(viewModel.chatTitle == updatedTitle)
+    }
 }
 
 @MainActor
@@ -191,6 +207,7 @@ private final class InMemoryChatRepository: ChatRepository {
     private(set) var chatsByProject: [UUID: [ChatThreadRef]] = [:]
     private(set) var messagesByChat: [UUID: [ChatMessage]] = [:]
     private(set) var updatedMessages: [UUID: (text: String, metadata: ChatMessage.Metadata?)] = [:]
+    private(set) var updatedChatTitles: [UUID: String] = [:]
 
     func fetchChats(projectID: UUID) -> [ChatThreadRef] {
         chatsByProject[projectID] ?? []
@@ -208,6 +225,22 @@ private final class InMemoryChatRepository: ChatRepository {
             chatsByProject[key]?.removeAll(where: { $0.id == chatID })
         }
         messagesByChat.removeValue(forKey: chatID)
+    }
+
+    func updateChatTitle(chatID: UUID, title: String) {
+        updatedChatTitles[chatID] = title
+
+        for key in chatsByProject.keys {
+            guard var chats = chatsByProject[key],
+                  let index = chats.firstIndex(where: { $0.id == chatID })
+            else {
+                continue
+            }
+
+            chats[index].title = title
+            chatsByProject[key] = chats
+            break
+        }
     }
 
     func loadMessages(chatID: UUID) -> [ChatMessage] {

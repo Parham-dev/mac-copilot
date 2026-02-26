@@ -275,6 +275,11 @@ private final class FixedChatRepository: ChatRepository {
         _ = chatID
     }
 
+    func updateChatTitle(chatID: UUID, title: String) {
+        _ = chatID
+        _ = title
+    }
+
     func loadMessages(chatID: UUID) -> [ChatMessage] {
         messagesByChatID[chatID] ?? []
     }

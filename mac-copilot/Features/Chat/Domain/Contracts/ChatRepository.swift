@@ -8,6 +8,7 @@ protocol ChatRepository {
     func createChat(projectID: UUID, title: String) -> ChatThreadRef
 
     func deleteChat(chatID: UUID)
+    func updateChatTitle(chatID: UUID, title: String)
 
     func loadMessages(chatID: UUID) -> [ChatMessage]
     func saveMessage(chatID: UUID, message: ChatMessage)
