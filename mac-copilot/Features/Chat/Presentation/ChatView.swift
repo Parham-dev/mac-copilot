@@ -40,20 +40,24 @@ struct ChatView: View {
 
             Divider()
 
-            if let persistenceError = viewModel.messagePersistenceErrorMessage,
-               !persistenceError.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    Text(persistenceError)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer()
+            if hasWarningBanner {
+                VStack(spacing: 0) {
+                    if let modelCatalogWarning = viewModel.modelCatalogErrorMessage,
+                       !modelCatalogWarning.isEmpty {
+                        warningBannerRow(
+                            message: modelCatalogWarning,
+                            onDismiss: { viewModel.clearModelCatalogErrorMessage() }
+                        )
+                    }
+
+                    if let persistenceWarning = viewModel.messagePersistenceErrorMessage,
+                       !persistenceWarning.isEmpty {
+                        warningBannerRow(
+                            message: persistenceWarning,
+                            onDismiss: { viewModel.clearMessagePersistenceErrorMessage() }
+                        )
+                    }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
 
                 Divider()
             }
@@ -83,6 +87,32 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    private var hasWarningBanner: Bool {
+        (viewModel.modelCatalogErrorMessage?.isEmpty == false)
+            || (viewModel.messagePersistenceErrorMessage?.isEmpty == false)
+    }
+
+    private func warningBannerRow(message: String, onDismiss: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Spacer(minLength: 8)
+
+            Button("Dismiss", action: onDismiss)
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
     }
 }
 

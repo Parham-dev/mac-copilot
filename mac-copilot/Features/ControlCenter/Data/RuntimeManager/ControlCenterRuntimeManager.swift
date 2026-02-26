@@ -155,7 +155,8 @@ final class ControlCenterRuntimeManager: ObservableObject {
 
     private func scheduleForceKillIfNeeded(for runningProcess: Process) {
         let targetPID = runningProcess.processIdentifier
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             try? await delayScheduler.sleep(seconds: gracefulStopTimeout)
 
             guard isStopRequested,

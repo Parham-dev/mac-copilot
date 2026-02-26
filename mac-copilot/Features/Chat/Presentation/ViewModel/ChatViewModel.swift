@@ -54,9 +54,17 @@ final class ChatViewModel: ObservableObject {
             bootstrappedMessages = try sessionCoordinator.bootstrapMessages(chatID: chatID)
         } catch {
             bootstrappedMessages = []
-            self.messagePersistenceErrorMessage = "Could not load previous messages. \(error.localizedDescription)"
+            self.messagePersistenceErrorMessage = "Some local chat history is unavailable right now."
         }
         self.messages = bootstrappedMessages
         hydrateMetadata(from: bootstrappedMessages)
+    }
+
+    func clearModelCatalogErrorMessage() {
+        modelCatalogErrorMessage = nil
+    }
+
+    func clearMessagePersistenceErrorMessage() {
+        messagePersistenceErrorMessage = nil
     }
 }

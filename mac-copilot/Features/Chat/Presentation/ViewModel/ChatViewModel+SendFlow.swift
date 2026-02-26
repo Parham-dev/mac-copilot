@@ -19,7 +19,7 @@ extension ChatViewModel {
             userMessage = try sessionCoordinator.appendUserMessage(chatID: chatID, text: text)
         } catch {
             isSending = false
-            messagePersistenceErrorMessage = "Could not save your message locally. \(error.localizedDescription)"
+            messagePersistenceErrorMessage = "Could not save your message locally."
             return
         }
         messages.append(userMessage)
@@ -41,7 +41,7 @@ extension ChatViewModel {
                 )
             }
         } catch {
-            messagePersistenceErrorMessage = "Message saved, but title update failed. \(error.localizedDescription)"
+            messagePersistenceErrorMessage = "Message was saved, but chat title update failed."
         }
 
         let assistantIndex = messages.count
@@ -50,7 +50,7 @@ extension ChatViewModel {
             assistantMessage = try sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)
         } catch {
             isSending = false
-            messagePersistenceErrorMessage = "Could not create assistant reply placeholder. \(error.localizedDescription)"
+            messagePersistenceErrorMessage = "Could not prepare a local placeholder for the assistant response."
             return
         }
         messages.append(assistantMessage)
@@ -182,7 +182,7 @@ extension ChatViewModel {
                 metadata: metadata(for: assistantMessage.id)
             )
         } catch {
-            messagePersistenceErrorMessage = "Response shown, but local save failed. \(error.localizedDescription)"
+            messagePersistenceErrorMessage = "Response is shown, but local save failed."
         }
 
         streamingAssistantMessageID = nil

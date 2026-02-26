@@ -36,79 +36,7 @@ struct ShellSidebarView: View {
             } message: {
                 Text("Update action placeholder. I’ll wire the real behavior next.")
             }
-            .alert("Workspace data unavailable", isPresented: workspaceLoadErrorAlertBinding) {
-                Button("OK", role: .cancel) {
-                    shellViewModel.clearWorkspaceLoadError()
-                }
-            } message: {
-                Text(shellViewModel.workspaceLoadError ?? "Unknown error")
-            }
-            .alert("Could not create chat", isPresented: chatCreationErrorAlertBinding) {
-                Button("OK", role: .cancel) {
-                    shellViewModel.clearChatCreationError()
-                }
-            } message: {
-                Text(shellViewModel.chatCreationError ?? "Unknown error")
-            }
-            .alert("Could not delete chat", isPresented: chatDeletionErrorAlertBinding) {
-                Button("OK", role: .cancel) {
-                    shellViewModel.clearChatDeletionError()
-                }
-            } message: {
-                Text(shellViewModel.chatDeletionError ?? "Unknown error")
-            }
-            .alert("Could not delete project", isPresented: projectDeletionErrorAlertBinding) {
-                Button("OK", role: .cancel) {
-                    shellViewModel.clearProjectDeletionError()
-                }
-            } message: {
-                Text(shellViewModel.projectDeletionError ?? "Unknown error")
-            }
         }
-    }
-
-    private var chatCreationErrorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { shellViewModel.chatCreationError != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    shellViewModel.clearChatCreationError()
-                }
-            }
-        )
-    }
-
-    private var workspaceLoadErrorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { shellViewModel.workspaceLoadError != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    shellViewModel.clearWorkspaceLoadError()
-                }
-            }
-        )
-    }
-
-    private var projectDeletionErrorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { shellViewModel.projectDeletionError != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    shellViewModel.clearProjectDeletionError()
-                }
-            }
-        )
-    }
-
-    private var chatDeletionErrorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { shellViewModel.chatDeletionError != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    shellViewModel.clearChatDeletionError()
-                }
-            }
-        )
     }
 
     private func bottomProfileBar(sidebarWidth: CGFloat) -> some View {

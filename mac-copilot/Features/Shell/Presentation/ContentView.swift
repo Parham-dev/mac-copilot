@@ -64,13 +64,6 @@ struct ContentView: View {
 
             shellViewModel.updateChatTitle(chatID: chatID, title: title)
         }
-        .alert("Could not create project", isPresented: projectCreationAlertBinding) {
-            Button("OK", role: .cancel) {
-                projectCreationError = nil
-            }
-        } message: {
-            Text(projectCreationError ?? "Unknown error")
-        }
         .sheet(isPresented: $showsCompanionSheet) {
             CompanionManagementSheet(
                 isPresented: $showsCompanionSheet,
@@ -93,17 +86,77 @@ struct ContentView: View {
             )
             .frame(minWidth: 980, minHeight: 640)
         }
+        .safeAreaInset(edge: .top) {
+            if let warningMessage = activeWarningMessage {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+
+                    Text(warningMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+
+                    Button("Dismiss") {
+                        dismissActiveWarning()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+            }
+        }
     }
 
-    private var projectCreationAlertBinding: Binding<Bool> {
-        Binding(
-            get: { projectCreationError != nil },
-            set: { shouldShow in
-                if !shouldShow {
-                    projectCreationError = nil
-                }
-            }
-        )
+    private var activeWarningMessage: String? {
+        if let workspaceLoadError = shellViewModel.workspaceLoadError,
+           !workspaceLoadError.isEmpty {
+            return workspaceLoadError
+        }
+        if let projectCreationError,
+           !projectCreationError.isEmpty {
+            return projectCreationError
+        }
+        if let chatCreationError = shellViewModel.chatCreationError,
+           !chatCreationError.isEmpty {
+            return chatCreationError
+        }
+        if let chatDeletionError = shellViewModel.chatDeletionError,
+           !chatDeletionError.isEmpty {
+            return chatDeletionError
+        }
+        if let projectDeletionError = shellViewModel.projectDeletionError,
+           !projectDeletionError.isEmpty {
+            return projectDeletionError
+        }
+
+        return nil
+    }
+
+    private func dismissActiveWarning() {
+        if shellViewModel.workspaceLoadError != nil {
+            shellViewModel.clearWorkspaceLoadError()
+            return
+        }
+        if projectCreationError != nil {
+            projectCreationError = nil
+            return
+        }
+        if shellViewModel.chatCreationError != nil {
+            shellViewModel.clearChatCreationError()
+            return
+        }
+        if shellViewModel.chatDeletionError != nil {
+            shellViewModel.clearChatDeletionError()
+            return
+        }
+        if shellViewModel.projectDeletionError != nil {
+            shellViewModel.clearProjectDeletionError()
+        }
     }
 
     private var navigationHeaderState: ShellNavigationHeaderState {
@@ -118,7 +171,9 @@ struct ContentView: View {
 
             try shellViewModel.addProject(name: created.name, localPath: created.localPath)
         } catch {
-            projectCreationError = error.localizedDescription
+            let fallbackMessage = "Could not create project right now."
+            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            projectCreationError = message.isEmpty ? fallbackMessage : message
         }
     }
 
@@ -130,7 +185,9 @@ struct ContentView: View {
 
             try shellViewModel.addProject(name: opened.name, localPath: opened.localPath)
         } catch {
-            projectCreationError = error.localizedDescription
+            let fallbackMessage = "Could not open project right now."
+            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            projectCreationError = message.isEmpty ? fallbackMessage : message
         }
     }
 }

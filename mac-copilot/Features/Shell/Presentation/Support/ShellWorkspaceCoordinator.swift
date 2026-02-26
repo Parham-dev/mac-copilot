@@ -42,18 +42,23 @@ final class ShellWorkspaceCoordinator {
         self.chatRepository = chatRepository
     }
 
+    private func userFacingWorkspaceLoadMessage(_ error: Error) -> String {
+        "Some local workspace data could not be loaded."
+    }
+
     func makeBootstrapState() -> BootstrapState {
         let projects: [ProjectRef]
         do {
             projects = try projectRepository.fetchProjects()
         } catch {
+            NSLog("[CopilotForge][Workspace] project bootstrap load failed: %@", error.localizedDescription)
             return BootstrapState(
                 projects: [],
                 projectChats: [:],
                 expandedProjectIDs: [],
                 activeProjectID: nil,
                 selectedItem: nil,
-                loadErrorMessage: "Could not load projects from local storage. \(error.localizedDescription)"
+                loadErrorMessage: userFacingWorkspaceLoadMessage(error)
             )
         }
 
@@ -67,7 +72,7 @@ final class ShellWorkspaceCoordinator {
                 NSLog("[CopilotForge][Workspace] project chat load failed for %@: %@", project.name, error.localizedDescription)
                 chats = []
                 if loadErrorMessage == nil {
-                    loadErrorMessage = "Some chat history could not be loaded."
+                    loadErrorMessage = userFacingWorkspaceLoadMessage(error)
                 }
             }
 

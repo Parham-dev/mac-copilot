@@ -26,7 +26,7 @@ extension ControlCenterRuntimeManager {
                 return
             }
 
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.appendLog(text, phase: .runtime, stream: .stdout)
             }
         }
@@ -39,13 +39,13 @@ extension ControlCenterRuntimeManager {
                 return
             }
 
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.appendLog(text, phase: .runtime, stream: .stderr)
             }
         }
 
         process.terminationHandler = { [weak self] terminated in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 let wasStopRequested = self?.isStopRequested ?? false
                 let resetUIAfterStop = self?.shouldResetUIAfterStop ?? false
                 let clearLogsAfterStop = self?.shouldClearLogsAfterStop ?? false
