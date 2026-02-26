@@ -56,12 +56,36 @@ final class SidecarCompanionWorkspaceSyncService: CompanionWorkspaceSyncing {
 
 private extension SidecarCompanionWorkspaceSyncService {
     func buildSnapshot() -> CompanionWorkspaceSnapshot {
-        let projects = projectRepository.fetchProjects()
+        let projects: [ProjectRef]
+        do {
+            projects = try projectRepository.fetchProjects()
+        } catch {
+            NSLog("[CopilotForge][CompanionSync] project snapshot build failed: %@", error.localizedDescription)
+            SentryMonitoring.captureError(
+                error,
+                category: "companion_sync",
+                throttleKey: "project_fetch_failed"
+            )
+            return CompanionWorkspaceSnapshot(projects: [], chats: [], messages: [])
+        }
+
         var chats: [CompanionWorkspaceSnapshot.Chat] = []
         var messages: [CompanionWorkspaceSnapshot.Message] = []
 
         for project in projects {
-            let projectChats = chatRepository.fetchChats(projectID: project.id)
+            let projectChats: [ChatThreadRef]
+            do {
+                projectChats = try chatRepository.fetchChats(projectID: project.id)
+            } catch {
+                NSLog("[CopilotForge][CompanionSync] chat snapshot build failed for project %@: %@", project.name, error.localizedDescription)
+                SentryMonitoring.captureError(
+                    error,
+                    category: "companion_sync",
+                    throttleKey: "chat_fetch_failed"
+                )
+                continue
+            }
+
             chats.append(contentsOf: projectChats.map {
                 CompanionWorkspaceSnapshot.Chat(
                     id: $0.id.uuidString,
@@ -72,7 +96,19 @@ private extension SidecarCompanionWorkspaceSyncService {
             })
 
             for chat in projectChats {
-                let chatMessages = chatRepository.loadMessages(chatID: chat.id)
+                let chatMessages: [ChatMessage]
+                do {
+                    chatMessages = try chatRepository.loadMessages(chatID: chat.id)
+                } catch {
+                    NSLog("[CopilotForge][CompanionSync] message snapshot build failed for chat %@: %@", chat.id.uuidString, error.localizedDescription)
+                    SentryMonitoring.captureError(
+                        error,
+                        category: "companion_sync",
+                        throttleKey: "message_fetch_failed"
+                    )
+                    continue
+                }
+
                 messages.append(contentsOf: chatMessages.map {
                     CompanionWorkspaceSnapshot.Message(
                         id: $0.id.uuidString,

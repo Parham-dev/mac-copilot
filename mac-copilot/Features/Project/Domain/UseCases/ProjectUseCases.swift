@@ -8,8 +8,8 @@ struct FetchProjectsUseCase {
         self.repository = repository
     }
 
-    func execute() -> [ProjectRef] {
-        repository.fetchProjects()
+    func execute() throws -> [ProjectRef] {
+        try repository.fetchProjects()
     }
 }
 

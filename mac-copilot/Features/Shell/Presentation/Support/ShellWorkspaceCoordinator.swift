@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class ShellWorkspaceCoordinator {
     enum CoordinatorError: LocalizedError {
+        case bootstrapLoadFailed(String)
         case chatCreationFailed
         case projectCreationFailed(String)
         case chatDeletionFailed(String)
@@ -10,6 +11,8 @@ final class ShellWorkspaceCoordinator {
 
         var errorDescription: String? {
             switch self {
+            case .bootstrapLoadFailed(let message):
+                return message
             case .chatCreationFailed:
                 return "Could not create chat thread. Please try again."
             case .projectCreationFailed(let message):
@@ -28,6 +31,7 @@ final class ShellWorkspaceCoordinator {
         let expandedProjectIDs: Set<ProjectRef.ID>
         let activeProjectID: ProjectRef.ID?
         let selectedItem: ShellViewModel.SidebarItem?
+        let loadErrorMessage: String?
     }
 
     private let projectRepository: ProjectRepository
@@ -39,11 +43,34 @@ final class ShellWorkspaceCoordinator {
     }
 
     func makeBootstrapState() -> BootstrapState {
-        let projects = projectRepository.fetchProjects()
+        let projects: [ProjectRef]
+        do {
+            projects = try projectRepository.fetchProjects()
+        } catch {
+            return BootstrapState(
+                projects: [],
+                projectChats: [:],
+                expandedProjectIDs: [],
+                activeProjectID: nil,
+                selectedItem: nil,
+                loadErrorMessage: "Could not load projects from local storage. \(error.localizedDescription)"
+            )
+        }
 
         var projectChats: [ProjectRef.ID: [ChatThreadRef]] = [:]
+        var loadErrorMessage: String?
         for project in projects {
-            var chats = chatRepository.fetchChats(projectID: project.id)
+            var chats: [ChatThreadRef]
+            do {
+                chats = try chatRepository.fetchChats(projectID: project.id)
+            } catch {
+                NSLog("[CopilotForge][Workspace] project chat load failed for %@: %@", project.name, error.localizedDescription)
+                chats = []
+                if loadErrorMessage == nil {
+                    loadErrorMessage = "Some chat history could not be loaded."
+                }
+            }
+
             if chats.isEmpty {
                 do {
                     chats = [try chatRepository.createChat(projectID: project.id, title: "General")]
@@ -69,14 +96,15 @@ final class ShellWorkspaceCoordinator {
             projectChats: projectChats,
             expandedProjectIDs: Set(projects.map(\.id)),
             activeProjectID: activeProjectID,
-            selectedItem: selectedItem
+            selectedItem: selectedItem,
+            loadErrorMessage: loadErrorMessage
         )
     }
 
     func createChat(projectID: UUID, existingCount: Int) throws -> ChatThreadRef {
         let title = "Chat \(existingCount + 1)"
         let created = try chatRepository.createChat(projectID: projectID, title: title)
-        let persisted = chatRepository.fetchChats(projectID: projectID)
+        let persisted = try chatRepository.fetchChats(projectID: projectID)
 
         guard persisted.contains(where: { $0.id == created.id }) else {
             throw CoordinatorError.chatCreationFailed
@@ -103,7 +131,12 @@ final class ShellWorkspaceCoordinator {
         } catch {
             throw CoordinatorError.chatDeletionFailed(error.localizedDescription)
         }
-        return chatRepository.fetchChats(projectID: projectID)
+
+        do {
+            return try chatRepository.fetchChats(projectID: projectID)
+        } catch {
+            throw CoordinatorError.chatDeletionFailed(error.localizedDescription)
+        }
     }
 
     func deleteProject(projectID: UUID) throws -> BootstrapState {

@@ -8,8 +8,8 @@ final class ChatSessionCoordinator {
         self.chatRepository = chatRepository
     }
 
-    func bootstrapMessages(chatID: UUID) -> [ChatMessage] {
-        let existingMessages = chatRepository.loadMessages(chatID: chatID)
+    func bootstrapMessages(chatID: UUID) throws -> [ChatMessage] {
+        let existingMessages = try chatRepository.loadMessages(chatID: chatID)
         return existingMessages
     }
 

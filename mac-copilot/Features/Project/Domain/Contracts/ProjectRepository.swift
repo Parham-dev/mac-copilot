@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 protocol ProjectRepository {
-    func fetchProjects() -> [ProjectRef]
+    func fetchProjects() throws -> [ProjectRef]
 
     @discardableResult
     func createProject(name: String, localPath: String) throws -> ProjectRef

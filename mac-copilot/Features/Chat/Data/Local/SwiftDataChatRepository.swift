@@ -59,7 +59,7 @@ final class SwiftDataChatRepository: ChatRepository {
         self.context = context
     }
 
-    func fetchChats(projectID: UUID) -> [ChatThreadRef] {
+    func fetchChats(projectID: UUID) throws -> [ChatThreadRef] {
         let predicateProjectID = projectID
         let descriptor = FetchDescriptor<ChatThreadEntity>(
             predicate: #Predicate { $0.projectID == predicateProjectID },
@@ -70,8 +70,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             entities = try context.fetch(descriptor)
         } catch {
-            log(.fetchChatsFailed(error.localizedDescription))
-            return []
+            let wrapped = RepositoryError.fetchChatsFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         return entities.map {
@@ -159,7 +160,7 @@ final class SwiftDataChatRepository: ChatRepository {
         }
     }
 
-    func loadMessages(chatID: UUID) -> [ChatMessage] {
+    func loadMessages(chatID: UUID) throws -> [ChatMessage] {
         let predicateChatID = chatID
         let descriptor = FetchDescriptor<ChatMessageEntity>(
             predicate: #Predicate { $0.chatID == predicateChatID },
@@ -170,8 +171,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             entities = try context.fetch(descriptor)
         } catch {
-            log(.fetchMessagesFailed(error.localizedDescription))
-            return []
+            let wrapped = RepositoryError.fetchMessagesFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         return entities.compactMap { entity in

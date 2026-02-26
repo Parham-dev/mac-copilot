@@ -29,7 +29,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
         self.context = context
     }
 
-    func fetchProjects() -> [ProjectRef] {
+    func fetchProjects() throws -> [ProjectRef] {
         let descriptor = FetchDescriptor<ProjectEntity>(
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
@@ -38,8 +38,9 @@ final class SwiftDataProjectRepository: ProjectRepository {
         do {
             entities = try context.fetch(descriptor)
         } catch {
-            log(.fetchFailed(error.localizedDescription))
-            return []
+            let wrapped = RepositoryError.fetchFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         return entities.map {

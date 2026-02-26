@@ -21,6 +21,7 @@ final class ShellViewModel: ObservableObject {
     @Published var selectedItem: SidebarItem?
     @Published var selectedContextTab: ContextTab = .controlCenter
     @Published var activeProjectID: ProjectRef.ID?
+    @Published private(set) var workspaceLoadError: String?
     @Published private(set) var chatCreationError: String?
     @Published private(set) var chatDeletionError: String?
     @Published private(set) var projectDeletionError: String?
@@ -37,6 +38,7 @@ final class ShellViewModel: ObservableObject {
         self.expandedProjectIDs = bootstrap.expandedProjectIDs
         self.activeProjectID = bootstrap.activeProjectID
         self.selectedItem = bootstrap.selectedItem
+        self.workspaceLoadError = bootstrap.loadErrorMessage
     }
 
     var activeProject: ProjectRef? {
@@ -125,6 +127,10 @@ final class ShellViewModel: ObservableObject {
         chatCreationError = nil
     }
 
+    func clearWorkspaceLoadError() {
+        workspaceLoadError = nil
+    }
+
     func clearChatDeletionError() {
         chatDeletionError = nil
     }
@@ -196,6 +202,7 @@ final class ShellViewModel: ObservableObject {
         expandedProjectIDs = bootstrap.expandedProjectIDs
         activeProjectID = bootstrap.activeProjectID
         selectedItem = bootstrap.selectedItem
+        workspaceLoadError = bootstrap.loadErrorMessage
         projectDeletionError = nil
     }
 }

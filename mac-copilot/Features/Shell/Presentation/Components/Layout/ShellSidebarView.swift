@@ -36,6 +36,13 @@ struct ShellSidebarView: View {
             } message: {
                 Text("Update action placeholder. I’ll wire the real behavior next.")
             }
+            .alert("Workspace data unavailable", isPresented: workspaceLoadErrorAlertBinding) {
+                Button("OK", role: .cancel) {
+                    shellViewModel.clearWorkspaceLoadError()
+                }
+            } message: {
+                Text(shellViewModel.workspaceLoadError ?? "Unknown error")
+            }
             .alert("Could not create chat", isPresented: chatCreationErrorAlertBinding) {
                 Button("OK", role: .cancel) {
                     shellViewModel.clearChatCreationError()
@@ -66,6 +73,17 @@ struct ShellSidebarView: View {
             set: { shouldShow in
                 if !shouldShow {
                     shellViewModel.clearChatCreationError()
+                }
+            }
+        )
+    }
+
+    private var workspaceLoadErrorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { shellViewModel.workspaceLoadError != nil },
+            set: { shouldShow in
+                if !shouldShow {
+                    shellViewModel.clearWorkspaceLoadError()
                 }
             }
         )

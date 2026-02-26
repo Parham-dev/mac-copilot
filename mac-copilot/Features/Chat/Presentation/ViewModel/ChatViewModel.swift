@@ -49,7 +49,13 @@ final class ChatViewModel: ObservableObject {
         self.modelSelectionStore = modelSelectionStore
         self.mcpToolsStore = mcpToolsStore
         self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
-        let bootstrappedMessages = sessionCoordinator.bootstrapMessages(chatID: chatID)
+        let bootstrappedMessages: [ChatMessage]
+        do {
+            bootstrappedMessages = try sessionCoordinator.bootstrapMessages(chatID: chatID)
+        } catch {
+            bootstrappedMessages = []
+            self.messagePersistenceErrorMessage = "Could not load previous messages. \(error.localizedDescription)"
+        }
         self.messages = bootstrappedMessages
         hydrateMetadata(from: bootstrappedMessages)
     }
