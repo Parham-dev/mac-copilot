@@ -51,6 +51,17 @@ jobs:
 
           security find-identity -v -p codesigning
 
+      - name: Install sidecar dependencies
+        run: |
+          set -euo pipefail
+          cd sidecar
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+          npm run build
+
       - name: Build signed app
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
