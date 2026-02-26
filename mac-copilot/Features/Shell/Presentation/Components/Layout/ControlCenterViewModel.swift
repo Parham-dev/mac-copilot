@@ -90,7 +90,7 @@ final class ControlCenterViewModel: ObservableObject {
     }
 
     var canRequestFix: Bool {
-        onFixLogsRequest != nil && !runtimeManager.isBusy
+        onFixLogsRequest != nil && !runtimeManager.isBusy && !runtimeManager.logs.isEmpty
     }
 
     var canCopyLogs: Bool {
