@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build-sign-notarize:
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       APP_NAME: mac-copilot
       PROJECT_PATH: mac-copilot.xcodeproj
