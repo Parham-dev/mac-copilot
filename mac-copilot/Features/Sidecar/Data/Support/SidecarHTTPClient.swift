@@ -28,6 +28,7 @@ final class SidecarHTTPClient {
     private let sidecarLifecycle: SidecarLifecycleManaging
     private let transport: HTTPDataTransporting
     private let delayScheduler: AsyncDelayScheduling
+    private let loggerPrefix = "[CopilotForge][SidecarHTTP]"
 
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
@@ -74,23 +75,40 @@ final class SidecarHTTPClient {
     }
 
     private func sendWithRetry(request: URLRequest) async throws -> SidecarHTTPResponse {
-        await ensureSidecarStartedIfUnavailable()
-        _ = await waitForSidecarReadyInternal(maxAttempts: 3, delaySeconds: 0.25)
+        let requestPath = request.url?.path ?? "<unknown>"
+
+        await ensureSidecarStartedIfUnavailable(requestPath: requestPath)
+        let initialReady = await waitForSidecarReadyInternal(maxAttempts: 12, delaySeconds: 0.25)
+        if !initialReady {
+            NSLog("%@ preflight wait timed out path=%@", loggerPrefix, requestPath)
+        }
 
         var lastError: Error?
-        for attempt in 0 ... 1 {
+        for attempt in 0 ... 2 {
             do {
                 return try await perform(request: request)
             } catch {
                 lastError = error
-                if isRecoverableConnectionError(error), attempt == 0 {
-                    await ensureSidecarStartedIfUnavailable(force: true)
-                    let ready = await waitForSidecarReadyInternal(maxAttempts: 8, delaySeconds: 0.30)
+                let recoverable = isRecoverableConnectionError(error)
+
+                if recoverable, attempt < 2 {
+                    await ensureSidecarStartedIfUnavailable(force: true, requestPath: requestPath)
+                    let ready = await waitForSidecarReadyInternal(maxAttempts: 16, delaySeconds: 0.30)
                     if !ready {
+                        NSLog("%@ sidecar not ready after retry wait path=%@", loggerPrefix, requestPath)
                         throw SidecarHTTPClientError.sidecarNotReady
                     }
                     continue
                 }
+
+                NSLog(
+                    "%@ request failure path=%@ attempt=%d recoverable=%@ error=%@",
+                    loggerPrefix,
+                    requestPath,
+                    attempt + 1,
+                    recoverable ? "true" : "false",
+                    error.localizedDescription
+                )
 
                 throw error
             }
@@ -99,11 +117,14 @@ final class SidecarHTTPClient {
         throw lastError ?? SidecarHTTPClientError.unknownFailure
     }
 
-    private func ensureSidecarStartedIfUnavailable(force: Bool = false) async {
+    private func ensureSidecarStartedIfUnavailable(force: Bool = false, requestPath: String = "<unknown>") async {
         if !force, await pingHealth() {
             return
         }
 
+        if force {
+            NSLog("%@ startIfNeeded requested path=%@ force=true", loggerPrefix, requestPath)
+        }
         sidecarLifecycle.startIfNeeded()
     }
 

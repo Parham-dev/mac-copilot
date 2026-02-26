@@ -156,17 +156,33 @@ final class CopilotPromptStreamClient {
 
 private extension CopilotPromptStreamClient {
     func connectWithRetry(request: URLRequest) async throws -> HTTPLineStreamResponse {
-        do {
-            return try await lineStreamTransport.openLineStream(for: request)
-        } catch {
-            guard shouldRetryConnection(error) else {
-                throw error
-            }
+        let requestPath = request.url?.path ?? "<unknown>"
 
-            NSLog("[CopilotForge][Prompt] sidecar not ready, retrying connection once")
-            try? await delayScheduler.sleep(seconds: 0.45)
-            return try await lineStreamTransport.openLineStream(for: request)
+        for attempt in 1 ... 5 {
+            do {
+                return try await lineStreamTransport.openLineStream(for: request)
+            } catch {
+                let recoverable = shouldRetryConnection(error)
+
+                guard recoverable, attempt < 5 else {
+                    NSLog(
+                        "[CopilotForge][Prompt] stream connect failed path=%@ attempts=%d recoverable=%@ error=%@",
+                        requestPath,
+                        attempt,
+                        recoverable ? "true" : "false",
+                        error.localizedDescription
+                    )
+                    throw error
+                }
+
+                ensureSidecarRunning()
+
+                let delay = min(0.25 * Double(attempt), 1.0)
+                try? await delayScheduler.sleep(seconds: delay)
+            }
         }
+
+        throw PromptStreamError(message: "Unable to establish stream")
     }
 
     func shouldRetryConnection(_ error: Error) -> Bool {

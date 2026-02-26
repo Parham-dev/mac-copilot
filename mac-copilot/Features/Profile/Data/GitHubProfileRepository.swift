@@ -2,7 +2,13 @@ import Foundation
 
 final class GitHubProfileRepository: ProfileRepository {
     private let baseURL = URL(string: "https://api.github.com")!
-    private let localBaseURL = URL(string: "http://localhost:7878")!
+    private let localBaseURL = URL(string: "http://127.0.0.1:7878")!
+    private let sidecarAuthClient: SidecarAuthClient?
+
+    @MainActor
+    init(sidecarAuthClient: SidecarAuthClient? = nil) {
+        self.sidecarAuthClient = sidecarAuthClient
+    }
 
     func fetchProfile(accessToken: String) async throws -> ProfileSnapshot {
         let userResult = try await request(path: "user", token: accessToken)
@@ -29,7 +35,30 @@ final class GitHubProfileRepository: ProfileRepository {
             )
         )
 
-        let copilotResult = try await requestLocal(path: "copilot/report")
+        var copilotResult = try await requestLocal(path: "copilot/report")
+        var copilotReport = parseCopilotReport(from: copilotResult.data)
+
+        if let client = sidecarAuthClient,
+           shouldReauthorizeSidecar(using: copilotReport) {
+            NSLog(
+                "[CopilotForge][Profile] copilot report stale, reauth sidecar (sessionReady=%@ usingGitHubToken=%@)",
+                (copilotReport?.sessionReady == true) ? "true" : "false",
+                (copilotReport?.usingGitHubToken == true) ? "true" : "false"
+            )
+            do {
+                _ = try await client.authorize(token: accessToken)
+                copilotResult = try await requestLocal(path: "copilot/report")
+                copilotReport = parseCopilotReport(from: copilotResult.data)
+            } catch {
+                NSLog("[CopilotForge][Profile] sidecar reauth failed: %@", error.localizedDescription)
+                SentryMonitoring.captureError(
+                    error,
+                    category: "profile_copilot_reauth",
+                    throttleKey: "reauth_failed"
+                )
+            }
+        }
+
         builtChecks.append(
             EndpointCheck(
                 name: "Copilot SDK Session Report",
@@ -42,10 +71,18 @@ final class GitHubProfileRepository: ProfileRepository {
 
         return ProfileSnapshot(
             userProfile: parseUserProfile(from: userResult.data),
-            copilotReport: parseCopilotReport(from: copilotResult.data),
+            copilotReport: copilotReport,
             rawUserJSON: rawUserJSON,
             checks: builtChecks
         )
+    }
+
+    private func shouldReauthorizeSidecar(using report: CopilotReport?) -> Bool {
+        guard let report else {
+            return true
+        }
+
+        return !report.sessionReady || !report.usingGitHubToken
     }
 
     private func request(path: String, token: String) async throws -> (statusCode: Int, data: Data) {

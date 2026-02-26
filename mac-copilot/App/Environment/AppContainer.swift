@@ -117,7 +117,9 @@ extension Container {
     }
 
     var profileRepository: Factory<any ProfileRepository> {
-        self { @MainActor in GitHubProfileRepository() }
+        self { @MainActor in
+            GitHubProfileRepository(sidecarAuthClient: SidecarAuthClient(sidecarLifecycle: self.sidecarLifecycleManager()))
+        }
             .singleton
     }
 

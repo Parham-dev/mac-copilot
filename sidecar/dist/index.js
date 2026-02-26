@@ -25,14 +25,19 @@ app.get("/doctor", async (_req, res) => {
     const report = await buildDoctorReport();
     res.status(report.ok ? 200 : 500).json(report);
 });
-app.get("/copilot/report", (_req, res) => {
-    const report = {
-        ok: true,
-        oauthScope: lastOAuthScope,
-        ...getCopilotReport(),
-    };
-    console.log("[CopilotForge][Sidecar] /copilot/report", JSON.stringify(report));
-    res.json(report);
+app.get("/copilot/report", async (_req, res) => {
+    try {
+        const report = {
+            ok: true,
+            oauthScope: lastOAuthScope,
+            ...(await getCopilotReport()),
+        };
+        console.log("[CopilotForge][Sidecar] /copilot/report", JSON.stringify(report));
+        res.json(report);
+    }
+    catch (error) {
+        res.status(500).json({ ok: false, error: String(error) });
+    }
 });
 app.get("/models", async (_req, res) => {
     try {

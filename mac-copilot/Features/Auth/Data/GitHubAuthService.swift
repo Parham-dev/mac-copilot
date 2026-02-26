@@ -33,9 +33,12 @@ final class GitHubAuthService: ObservableObject {
         defer { isRestoring = false }
 
         guard let token = keychain.readToken() else {
+            exportTokenToProcessEnvironment(nil)
             statusMessage = "Sign in required"
             return
         }
+
+        exportTokenToProcessEnvironment(token)
 
         statusMessage = "Restoring session…"
         errorMessage = nil
@@ -71,6 +74,7 @@ final class GitHubAuthService: ObservableObject {
                 }
 
                 keychain.deleteToken()
+                exportTokenToProcessEnvironment(nil)
                 isAuthenticated = false
                 statusMessage = "Session expired. Please sign in again."
                 errorMessage = error.localizedDescription
@@ -136,6 +140,7 @@ final class GitHubAuthService: ObservableObject {
                         throw AuthError.missingToken
                     }
                     try keychain.saveToken(token)
+                    exportTokenToProcessEnvironment(token)
                     isAuthenticated = true
                     statusMessage = "Signed in"
                     isLoading = false
@@ -172,6 +177,7 @@ final class GitHubAuthService: ObservableObject {
 
     func signOut() {
         keychain.deleteToken()
+        exportTokenToProcessEnvironment(nil)
         isAuthenticated = false
         userCode = nil
         verificationURI = nil
@@ -187,5 +193,14 @@ final class GitHubAuthService: ObservableObject {
     private func waitForPoll(seconds: Int) async throws {
         let clamped = max(seconds, 1)
         try await Task.sleep(nanoseconds: UInt64(clamped) * 1_000_000_000)
+    }
+
+    private func exportTokenToProcessEnvironment(_ token: String?) {
+        if let token, !token.isEmpty {
+            setenv("GITHUB_TOKEN", token, 1)
+            return
+        }
+
+        unsetenv("GITHUB_TOKEN")
     }
 }
