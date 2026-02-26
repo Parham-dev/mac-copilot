@@ -18,6 +18,7 @@ final class ChatViewModel: ObservableObject {
     @Published var availableModels: [String] = []
     @Published var selectedModel = ""
     @Published var modelCatalogErrorMessage: String?
+    @Published var messagePersistenceErrorMessage: String?
 
     let chatID: UUID
     @Published var chatTitle: String

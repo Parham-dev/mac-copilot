@@ -40,6 +40,24 @@ struct ChatView: View {
 
             Divider()
 
+            if let persistenceError = viewModel.messagePersistenceErrorMessage,
+               !persistenceError.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                    Text(persistenceError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+
+                Divider()
+            }
+
             ChatComposerView(
                 draftPrompt: $viewModel.draftPrompt,
                 selectedModel: $viewModel.selectedModel,

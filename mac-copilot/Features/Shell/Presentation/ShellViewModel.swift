@@ -22,6 +22,7 @@ final class ShellViewModel: ObservableObject {
     @Published var selectedContextTab: ContextTab = .controlCenter
     @Published var activeProjectID: ProjectRef.ID?
     @Published private(set) var chatCreationError: String?
+    @Published private(set) var chatDeletionError: String?
     @Published private(set) var projectDeletionError: String?
 
     private let workspaceCoordinator: ShellWorkspaceCoordinator
@@ -96,7 +97,14 @@ final class ShellViewModel: ObservableObject {
     }
 
     func deleteChat(chatID: ChatThreadRef.ID, in projectID: ProjectRef.ID) {
-        let updatedChats = workspaceCoordinator.deleteChat(projectID: projectID, chatID: chatID)
+        let updatedChats: [ChatThreadRef]
+        do {
+            updatedChats = try workspaceCoordinator.deleteChat(projectID: projectID, chatID: chatID)
+        } catch {
+            chatDeletionError = error.localizedDescription
+            return
+        }
+
         let replacementSelection: SidebarItem?
         if selectedItem == .chat(projectID, chatID) {
             if let replacement = updatedChats.first {
@@ -110,10 +118,15 @@ final class ShellViewModel: ObservableObject {
 
         selectedItem = replacementSelection
         projectChats[projectID] = updatedChats
+        chatDeletionError = nil
     }
 
     func clearChatCreationError() {
         chatCreationError = nil
+    }
+
+    func clearChatDeletionError() {
+        chatDeletionError = nil
     }
 
     func clearProjectDeletionError() {
@@ -170,7 +183,14 @@ final class ShellViewModel: ObservableObject {
             return
         }
 
-        let bootstrap = workspaceCoordinator.deleteProject(projectID: projectID)
+        let bootstrap: ShellWorkspaceCoordinator.BootstrapState
+        do {
+            bootstrap = try workspaceCoordinator.deleteProject(projectID: projectID)
+        } catch {
+            projectDeletionError = error.localizedDescription
+            return
+        }
+
         projects = bootstrap.projects
         projectChats = bootstrap.projectChats
         expandedProjectIDs = bootstrap.expandedProjectIDs

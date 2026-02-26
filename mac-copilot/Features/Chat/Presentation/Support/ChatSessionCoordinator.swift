@@ -14,24 +14,24 @@ final class ChatSessionCoordinator {
     }
 
     @discardableResult
-    func appendUserMessage(chatID: UUID, text: String) -> ChatMessage {
+    func appendUserMessage(chatID: UUID, text: String) throws -> ChatMessage {
         let message = ChatMessage(role: .user, text: text)
-        chatRepository.saveMessage(chatID: chatID, message: message)
+        try chatRepository.saveMessage(chatID: chatID, message: message)
         return message
     }
 
     @discardableResult
-    func appendAssistantPlaceholder(chatID: UUID) -> ChatMessage {
+    func appendAssistantPlaceholder(chatID: UUID) throws -> ChatMessage {
         let message = ChatMessage(role: .assistant, text: "")
-        chatRepository.saveMessage(chatID: chatID, message: message)
+        try chatRepository.saveMessage(chatID: chatID, message: message)
         return message
     }
 
-    func persistAssistantContent(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) {
-        chatRepository.updateMessage(chatID: chatID, messageID: messageID, text: text, metadata: metadata)
+    func persistAssistantContent(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) throws {
+        try chatRepository.updateMessage(chatID: chatID, messageID: messageID, text: text, metadata: metadata)
     }
 
-    func updateChatTitleFromFirstUserMessageIfNeeded(chatID: UUID, promptText: String, hadUserMessageBeforeSend: Bool) -> String? {
+    func updateChatTitleFromFirstUserMessageIfNeeded(chatID: UUID, promptText: String, hadUserMessageBeforeSend: Bool) throws -> String? {
         guard !hadUserMessageBeforeSend else {
             return nil
         }
@@ -40,7 +40,7 @@ final class ChatSessionCoordinator {
             return nil
         }
 
-        chatRepository.updateChatTitle(chatID: chatID, title: nextTitle)
+        try chatRepository.updateChatTitle(chatID: chatID, title: nextTitle)
         return nextTitle
     }
 

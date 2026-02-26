@@ -5,12 +5,18 @@ final class ShellWorkspaceCoordinator {
     enum CoordinatorError: LocalizedError {
         case chatCreationFailed
         case projectCreationFailed(String)
+        case chatDeletionFailed(String)
+        case projectDeletionFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .chatCreationFailed:
                 return "Could not create chat thread. Please try again."
             case .projectCreationFailed(let message):
+                return message
+            case .chatDeletionFailed(let message):
+                return message
+            case .projectDeletionFailed(let message):
                 return message
             }
         }
@@ -91,13 +97,21 @@ final class ShellWorkspaceCoordinator {
         return (project, defaultChat)
     }
 
-    func deleteChat(projectID: UUID, chatID: UUID) -> [ChatThreadRef] {
-        chatRepository.deleteChat(chatID: chatID)
+    func deleteChat(projectID: UUID, chatID: UUID) throws -> [ChatThreadRef] {
+        do {
+            try chatRepository.deleteChat(chatID: chatID)
+        } catch {
+            throw CoordinatorError.chatDeletionFailed(error.localizedDescription)
+        }
         return chatRepository.fetchChats(projectID: projectID)
     }
 
-    func deleteProject(projectID: UUID) -> BootstrapState {
-        projectRepository.deleteProject(projectID: projectID)
+    func deleteProject(projectID: UUID) throws -> BootstrapState {
+        do {
+            try projectRepository.deleteProject(projectID: projectID)
+        } catch {
+            throw CoordinatorError.projectDeletionFailed(error.localizedDescription)
+        }
         return makeBootstrapState()
     }
 }

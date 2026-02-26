@@ -12,28 +12,47 @@ extension ChatViewModel {
         guard !isSending else { return }
 
         isSending = true
+        messagePersistenceErrorMessage = nil
         let hadUserMessageBeforeSend = messages.contains(where: { $0.role == .user })
-        let userMessage = sessionCoordinator.appendUserMessage(chatID: chatID, text: text)
+        let userMessage: ChatMessage
+        do {
+            userMessage = try sessionCoordinator.appendUserMessage(chatID: chatID, text: text)
+        } catch {
+            isSending = false
+            messagePersistenceErrorMessage = "Could not save your message locally. \(error.localizedDescription)"
+            return
+        }
         messages.append(userMessage)
 
-        if let updatedTitle = sessionCoordinator.updateChatTitleFromFirstUserMessageIfNeeded(
-            chatID: chatID,
-            promptText: text,
-            hadUserMessageBeforeSend: hadUserMessageBeforeSend
-        ) {
-            chatTitle = updatedTitle
-            NotificationCenter.default.post(
-                name: .chatTitleDidUpdate,
-                object: nil,
-                userInfo: [
-                    "chatID": chatID,
-                    "title": updatedTitle,
-                ]
-            )
+        do {
+            if let updatedTitle = try sessionCoordinator.updateChatTitleFromFirstUserMessageIfNeeded(
+                chatID: chatID,
+                promptText: text,
+                hadUserMessageBeforeSend: hadUserMessageBeforeSend
+            ) {
+                chatTitle = updatedTitle
+                NotificationCenter.default.post(
+                    name: .chatTitleDidUpdate,
+                    object: nil,
+                    userInfo: [
+                        "chatID": chatID,
+                        "title": updatedTitle,
+                    ]
+                )
+            }
+        } catch {
+            messagePersistenceErrorMessage = "Message saved, but title update failed. \(error.localizedDescription)"
         }
 
         let assistantIndex = messages.count
-        let assistantMessage = sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)
+        let assistantMessage: ChatMessage
+        do {
+            assistantMessage = try sessionCoordinator.appendAssistantPlaceholder(chatID: chatID)
+        } catch {
+            isSending = false
+            messagePersistenceErrorMessage = "Could not create assistant reply placeholder. \(error.localizedDescription)"
+            return
+        }
         messages.append(assistantMessage)
         statusChipsByMessageID[assistantMessage.id] = ["Queued"]
         toolExecutionsByMessageID[assistantMessage.id] = []
@@ -155,12 +174,16 @@ extension ChatViewModel {
             inlineSegmentsByMessageID[assistantMessage.id] = [.text(messages[assistantIndex].text)]
         }
 
-        sessionCoordinator.persistAssistantContent(
-            chatID: chatID,
-            messageID: assistantMessage.id,
-            text: messages[assistantIndex].text,
-            metadata: metadata(for: assistantMessage.id)
-        )
+        do {
+            try sessionCoordinator.persistAssistantContent(
+                chatID: chatID,
+                messageID: assistantMessage.id,
+                text: messages[assistantIndex].text,
+                metadata: metadata(for: assistantMessage.id)
+            )
+        } catch {
+            messagePersistenceErrorMessage = "Response shown, but local save failed. \(error.localizedDescription)"
+        }
 
         streamingAssistantMessageID = nil
         isSending = false

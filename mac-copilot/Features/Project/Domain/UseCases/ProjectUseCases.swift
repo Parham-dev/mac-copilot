@@ -35,7 +35,7 @@ struct DeleteProjectUseCase {
         self.repository = repository
     }
 
-    func execute(projectID: UUID) {
-        repository.deleteProject(projectID: projectID)
+    func execute(projectID: UUID) throws {
+        try repository.deleteProject(projectID: projectID)
     }
 }

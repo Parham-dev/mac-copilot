@@ -96,7 +96,7 @@ final class SwiftDataChatRepository: ChatRepository {
         return ref
     }
 
-    func deleteChat(chatID: UUID) {
+    func deleteChat(chatID: UUID) throws {
         let predicateChatID = chatID
         let descriptor = FetchDescriptor<ChatThreadEntity>(
             predicate: #Predicate { $0.id == predicateChatID }
@@ -106,8 +106,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             entity = try context.fetch(descriptor).first
         } catch {
-            log(.deleteChatFetchFailed(error.localizedDescription))
-            return
+            let wrapped = RepositoryError.deleteChatFetchFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         guard let entity else {
@@ -119,11 +120,13 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             try context.save()
         } catch {
-            log(.deleteChatSaveFailed(error.localizedDescription))
+            let wrapped = RepositoryError.deleteChatSaveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
     }
 
-    func updateChatTitle(chatID: UUID, title: String) {
+    func updateChatTitle(chatID: UUID, title: String) throws {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -136,8 +139,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             entity = try context.fetch(descriptor).first
         } catch {
-            log(.updateChatTitleFetchFailed(error.localizedDescription))
-            return
+            let wrapped = RepositoryError.updateChatTitleFetchFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         guard let entity else {
@@ -149,7 +153,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             try context.save()
         } catch {
-            log(.updateChatTitleSaveFailed(error.localizedDescription))
+            let wrapped = RepositoryError.updateChatTitleSaveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
     }
 
@@ -178,7 +184,7 @@ final class SwiftDataChatRepository: ChatRepository {
         }
     }
 
-    func saveMessage(chatID: UUID, message: ChatMessage) {
+    func saveMessage(chatID: UUID, message: ChatMessage) throws {
         let entity = ChatMessageEntity(
             id: message.id,
             chatID: chatID,
@@ -193,11 +199,13 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             try context.save()
         } catch {
-            log(.saveMessageFailed(error.localizedDescription))
+            let wrapped = RepositoryError.saveMessageFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
     }
 
-    func updateMessage(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) {
+    func updateMessage(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) throws {
         let predicateMessageID = messageID
         let descriptor = FetchDescriptor<ChatMessageEntity>(
             predicate: #Predicate { $0.id == predicateMessageID }
@@ -207,8 +215,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             entity = try context.fetch(descriptor).first
         } catch {
-            log(.updateMessageFetchFailed(error.localizedDescription))
-            return
+            let wrapped = RepositoryError.updateMessageFetchFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         guard let entity else {
@@ -221,7 +230,9 @@ final class SwiftDataChatRepository: ChatRepository {
         do {
             try context.save()
         } catch {
-            log(.updateMessageSaveFailed(error.localizedDescription))
+            let wrapped = RepositoryError.updateMessageSaveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
     }
 

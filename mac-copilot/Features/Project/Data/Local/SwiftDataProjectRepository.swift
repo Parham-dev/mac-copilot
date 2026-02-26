@@ -64,7 +64,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
         return ref
     }
 
-    func deleteProject(projectID: UUID) {
+    func deleteProject(projectID: UUID) throws {
         let predicateProjectID = projectID
         let descriptor = FetchDescriptor<ProjectEntity>(
             predicate: #Predicate { $0.id == predicateProjectID }
@@ -74,8 +74,9 @@ final class SwiftDataProjectRepository: ProjectRepository {
         do {
             entity = try context.fetch(descriptor).first
         } catch {
-            log(.deleteFetchFailed(error.localizedDescription))
-            return
+            let wrapped = RepositoryError.deleteFetchFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
 
         guard let entity else {
@@ -87,7 +88,9 @@ final class SwiftDataProjectRepository: ProjectRepository {
         do {
             try context.save()
         } catch {
-            log(.deleteSaveFailed(error.localizedDescription))
+            let wrapped = RepositoryError.deleteSaveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
         }
     }
 

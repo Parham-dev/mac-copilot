@@ -7,5 +7,5 @@ protocol ProjectRepository {
     @discardableResult
     func createProject(name: String, localPath: String) throws -> ProjectRef
 
-    func deleteProject(projectID: UUID)
+    func deleteProject(projectID: UUID) throws
 }
