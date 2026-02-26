@@ -39,10 +39,24 @@ final class ControlCenterRuntimeUtilities {
 
     func resolveExecutable(candidates: [String]) -> String? {
         for candidate in candidates {
+            if candidate.contains("/") {
+                let expanded = (candidate as NSString).expandingTildeInPath
+                if fileManager.isExecutableFile(atPath: expanded) {
+                    return expanded
+                }
+            }
+
             let output = runCommand(executable: "/usr/bin/which", arguments: [candidate])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !output.isEmpty {
-                return candidate
+                return output
+            }
+
+            for prefix in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"] {
+                let path = "\(prefix)/\(candidate)"
+                if fileManager.isExecutableFile(atPath: path) {
+                    return path
+                }
             }
         }
         return nil
@@ -70,6 +84,36 @@ final class ControlCenterRuntimeUtilities {
 
     func reservePortTemporarily(_ port: Int, ttlSeconds: TimeInterval) {
         Self.reservedPorts[port] = Date().addingTimeInterval(ttlSeconds)
+    }
+
+    func isLocalPortListening(_ port: Int) -> Bool {
+        isPortInUse(port)
+    }
+
+    func freeLocalPortIfNeeded(_ port: Int) -> (freed: Bool, details: String) {
+        let pids = processIDsListening(on: port)
+        guard !pids.isEmpty else {
+            return (true, "No running process was holding port \(port).")
+        }
+
+        for pid in pids {
+            _ = runCommand(executable: "/bin/kill", arguments: ["-TERM", String(pid)])
+        }
+
+        if waitForPortToClose(port, timeoutSeconds: 1.8) {
+            return (true, "Stopped process(es) \(pids.map(String.init).joined(separator: ", ")) on port \(port).")
+        }
+
+        let remaining = processIDsListening(on: port)
+        for pid in remaining {
+            _ = runCommand(executable: "/bin/kill", arguments: ["-KILL", String(pid)])
+        }
+
+        if waitForPortToClose(port, timeoutSeconds: 1.2) {
+            return (true, "Force-stopped process(es) \(remaining.map(String.init).joined(separator: ", ")) on port \(port).")
+        }
+
+        return (false, "Could not free port \(port). Processes still listening: \(processIDsListening(on: port).map(String.init).joined(separator: ", ")).")
     }
 
     func waitForHealthyURL(_ url: URL, timeoutSeconds: TimeInterval) async -> Bool {
@@ -113,6 +157,40 @@ final class ControlCenterRuntimeUtilities {
             arguments: ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"]
         )
         return !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func processIDsListening(on port: Int) -> [Int] {
+        let output = runCommand(
+            executable: "/usr/sbin/lsof",
+            arguments: ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"]
+        )
+
+        let parsed = output
+            .split(separator: "\n")
+            .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+
+        var unique: [Int] = []
+        var seen: Set<Int> = []
+        for pid in parsed where !seen.contains(pid) {
+            seen.insert(pid)
+            unique.append(pid)
+        }
+
+        return unique
+    }
+
+    private func waitForPortToClose(_ port: Int, timeoutSeconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+
+        while Date() < deadline {
+            if !isPortInUse(port) {
+                return true
+            }
+
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+
+        return !isPortInUse(port)
     }
 
     private func runCommand(executable: String, arguments: [String]) -> String {

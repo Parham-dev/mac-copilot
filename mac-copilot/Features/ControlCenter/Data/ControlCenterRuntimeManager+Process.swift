@@ -91,6 +91,18 @@ extension ControlCenterRuntimeManager {
     func waitForHealthyURLOrEarlyFailure(_ url: URL, timeoutSeconds: TimeInterval) async -> Bool {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
 
+        guard let port = url.port else {
+            appendLog("Health URL has no explicit port: \(url.absoluteString)", phase: .health, stream: .stderr)
+            return false
+        }
+
+        let listening = await waitForListeningPortOrEarlyFailure(port: port, deadline: deadline)
+        if !listening {
+            return false
+        }
+
+        let probeSession = URLSession(configuration: .ephemeral)
+
         while Date() < deadline {
             if !isProcessActive {
                 appendLog("Server process ended before health check succeeded", phase: .health, stream: .stderr)
@@ -102,7 +114,7 @@ extension ControlCenterRuntimeManager {
             request.timeoutInterval = 1.2
 
             do {
-                let (_, response) = try await URLSession.shared.data(for: request)
+                let (_, response) = try await probeSession.data(for: request)
                 if let http = response as? HTTPURLResponse,
                    (200 ... 499).contains(http.statusCode) {
                     return true
@@ -111,9 +123,28 @@ extension ControlCenterRuntimeManager {
                 // keep polling
             }
 
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(nanoseconds: 800_000_000)
         }
 
+        return false
+    }
+
+    func waitForListeningPortOrEarlyFailure(port: Int, deadline: Date) async -> Bool {
+        while Date() < deadline {
+            if !isProcessActive {
+                appendLog("Server process ended before opening port \(port)", phase: .health, stream: .stderr)
+                return false
+            }
+
+            if utilities.isLocalPortListening(port) {
+                appendLog("Port \(port) is listening. Verifying HTTP readiness...", phase: .health)
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+
+        appendLog("Server never opened port \(port) before timeout", phase: .health, stream: .stderr)
         return false
     }
 

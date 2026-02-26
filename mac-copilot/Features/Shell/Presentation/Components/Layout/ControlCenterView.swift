@@ -115,6 +115,11 @@ struct ControlCenterView: View {
     private var logsSection: some View {
         VStack(spacing: 8) {
             HStack {
+                Button(action: viewModel.copyLogsToClipboard) {
+                    Label("Copy Logs", systemImage: "doc.on.doc")
+                }
+                .disabled(!viewModel.canCopyLogs)
+
                 Spacer()
 
                 Button(action: viewModel.requestFixWithAI) {

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 @MainActor
 final class ControlCenterViewModel: ObservableObject {
@@ -92,6 +93,10 @@ final class ControlCenterViewModel: ObservableObject {
         onFixLogsRequest != nil && !runtimeManager.isBusy
     }
 
+    var canCopyLogs: Bool {
+        !runtimeManager.logs.isEmpty
+    }
+
     var logs: [String] {
         runtimeManager.logs
     }
@@ -132,6 +137,17 @@ final class ControlCenterViewModel: ObservableObject {
 
     func requestFixWithAI() {
         onFixLogsRequest?(fixPrompt)
+    }
+
+    func copyLogsToClipboard() {
+        let content = runtimeManager.logs.joined(separator: "\n")
+        guard !content.isEmpty else {
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(content, forType: .string)
     }
 
     private func refreshResolution() {

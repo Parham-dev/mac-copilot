@@ -76,6 +76,36 @@ extension ControlCenterRuntimeManager {
                 return
             }
 
+            if let occupiedPort = detectAddressInUsePort() {
+                let freed = utilities.freeLocalPortIfNeeded(occupiedPort)
+                appendLog(freed.details, phase: .health)
+
+                guard freed.freed else {
+                    state = .failed("Port \(occupiedPort) is already in use. Could not free it automatically.")
+                    return
+                }
+
+                let retryHealthURL = URL(string: "http://127.0.0.1:\(occupiedPort)") ?? healthURL
+                appendLog("Retrying with app-declared port \(occupiedPort) after auto-free.", phase: .health)
+
+                let retryAfterFree = try await launchAndAwaitHealth(
+                    start: start,
+                    cwd: plan.workingDirectory,
+                    environment: environment,
+                    healthURL: retryHealthURL,
+                    bootTimeoutSeconds: bootTimeoutSeconds,
+                    openURL: retryHealthURL,
+                    autoOpen: autoOpen
+                )
+
+                if retryAfterFree == .healthy {
+                    return
+                }
+
+                state = .failed("Failed to start after auto-freeing port \(occupiedPort).")
+                return
+            }
+
             try await retryManagedServerStart(
                 failedPort: failedPort,
                 adapter: adapter,
@@ -192,5 +222,37 @@ extension ControlCenterRuntimeManager {
         state = .failed("Server did not become healthy in time")
         appendLog("Retry health check failed for \(retryHealthURL.absoluteString)", phase: .health)
         stop()
+    }
+
+    private func detectAddressInUsePort() -> Int? {
+        let candidates = logs.suffix(120).reversed()
+
+        for line in candidates {
+            if let port = extractPort(in: line, pattern: "EADDRINUSE.*?:(\\d{2,5})") {
+                return port
+            }
+
+            if let port = extractPort(in: line, pattern: "port:\\s*(\\d{2,5})") {
+                return port
+            }
+        }
+
+        return nil
+    }
+
+    private func extractPort(in line: String, pattern: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+
+        let fullRange = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, options: [], range: fullRange),
+              match.numberOfRanges > 1,
+              let portRange = Range(match.range(at: 1), in: line)
+        else {
+            return nil
+        }
+
+        return Int(line[portRange])
     }
 }
