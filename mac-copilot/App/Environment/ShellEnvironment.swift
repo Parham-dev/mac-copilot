@@ -11,10 +11,12 @@ final class ShellEnvironment: ObservableObject {
     let promptRepository: PromptStreamingRepository
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
+    let chatEventsStore: ChatEventsStore
     let profileViewModel: ProfileViewModel
     let projectCreationService: ProjectCreationService
 
     private let chatViewModelProvider: ChatViewModelProvider
+    private let contextPaneViewModelProvider: ContextPaneViewModelProvider
 
     init(
         shellViewModel: ShellViewModel,
@@ -25,9 +27,11 @@ final class ShellEnvironment: ObservableObject {
         promptRepository: PromptStreamingRepository,
         modelSelectionStore: ModelSelectionStore,
         mcpToolsStore: MCPToolsStore,
+        chatEventsStore: ChatEventsStore,
         profileViewModel: ProfileViewModel,
         projectCreationService: ProjectCreationService,
-        chatViewModelProvider: ChatViewModelProvider
+        chatViewModelProvider: ChatViewModelProvider,
+        contextPaneViewModelProvider: ContextPaneViewModelProvider
     ) {
         self.shellViewModel = shellViewModel
         self.modelRepository = modelRepository
@@ -37,12 +41,18 @@ final class ShellEnvironment: ObservableObject {
         self.promptRepository = promptRepository
         self.modelSelectionStore = modelSelectionStore
         self.mcpToolsStore = mcpToolsStore
+        self.chatEventsStore = chatEventsStore
         self.profileViewModel = profileViewModel
         self.projectCreationService = projectCreationService
         self.chatViewModelProvider = chatViewModelProvider
+        self.contextPaneViewModelProvider = contextPaneViewModelProvider
     }
 
     func chatViewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
         chatViewModelProvider.viewModel(for: chat, project: project)
+    }
+
+    func makeContextPaneViewModel() -> ContextPaneViewModel {
+        contextPaneViewModelProvider.makeViewModel()
     }
 }

@@ -53,8 +53,8 @@ enum SentryMonitoring {
                 scope.setExtra(value: value, key: key)
             }
         }
-        let eventID = SentrySDK.capture(error: error)
-        _ = SentrySDK.flush(timeout: 2.0)
+        _ = SentrySDK.capture(error: error)
+        SentrySDK.flush(timeout: 2.0)
     }
 
     static func captureMessage(

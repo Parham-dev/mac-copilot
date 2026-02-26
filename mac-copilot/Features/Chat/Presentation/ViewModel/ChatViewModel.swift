@@ -1,11 +1,6 @@
 import Foundation
 import Combine
 
-extension Notification.Name {
-    static let chatResponseDidFinish = Notification.Name("chatResponseDidFinish")
-    static let chatTitleDidUpdate = Notification.Name("chatTitleDidUpdate")
-}
-
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var draftPrompt = ""
@@ -28,6 +23,7 @@ final class ChatViewModel: ObservableObject {
     let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
+    let chatEventsStore: ChatEventsStore
     let sessionCoordinator: ChatSessionCoordinator
     var modelCatalogByID: [String: CopilotModelCatalogItem] = [:]
 
@@ -39,7 +35,8 @@ final class ChatViewModel: ObservableObject {
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
         modelSelectionStore: ModelSelectionStore,
         mcpToolsStore: MCPToolsStore,
-        chatRepository: ChatRepository
+        chatRepository: ChatRepository,
+        chatEventsStore: ChatEventsStore
     ) {
         self.chatID = chatID
         self.chatTitle = chatTitle
@@ -48,6 +45,7 @@ final class ChatViewModel: ObservableObject {
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
         self.modelSelectionStore = modelSelectionStore
         self.mcpToolsStore = mcpToolsStore
+        self.chatEventsStore = chatEventsStore
         self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
         let bootstrappedMessages: [ChatMessage]
         do {

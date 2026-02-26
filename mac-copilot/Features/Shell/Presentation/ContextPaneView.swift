@@ -8,6 +8,7 @@ struct ContextPaneView: View {
     let controlCenterResolver: ProjectControlCenterResolver
     @ObservedObject var controlCenterRuntimeManager: ControlCenterRuntimeManager
     @StateObject private var viewModel: ContextPaneViewModel
+    private let chatEventsStore: ChatEventsStore
     let onFixLogsRequest: ((String) -> Void)?
 
     init(
@@ -15,25 +16,17 @@ struct ContextPaneView: View {
         project: ProjectRef,
         controlCenterResolver: ProjectControlCenterResolver,
         controlCenterRuntimeManager: ControlCenterRuntimeManager,
-        gitRepositoryManager: GitRepositoryManaging,
-        modelSelectionStore: ModelSelectionStore,
-        modelRepository: ModelListingRepository,
-        promptRepository: PromptStreamingRepository,
+        viewModel: ContextPaneViewModel,
+        chatEventsStore: ChatEventsStore,
         onFixLogsRequest: ((String) -> Void)?
     ) {
         self.shellViewModel = shellViewModel
         self.project = project
         self.controlCenterResolver = controlCenterResolver
         self.controlCenterRuntimeManager = controlCenterRuntimeManager
+        self.chatEventsStore = chatEventsStore
         self.onFixLogsRequest = onFixLogsRequest
-        _viewModel = StateObject(
-            wrappedValue: ContextPaneViewModel(
-                gitRepositoryManager: gitRepositoryManager,
-                modelSelectionStore: modelSelectionStore,
-                modelRepository: modelRepository,
-                promptRepository: promptRepository
-            )
-        )
+        _viewModel = StateObject(wrappedValue: viewModel)
     }
 
     var body: some View {
@@ -80,9 +73,8 @@ struct ContextPaneView: View {
                 await viewModel.refreshGitStatus(projectPath: project.localPath)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .chatResponseDidFinish)) { notification in
-            guard let projectPath = notification.userInfo?["projectPath"] as? String,
-                  projectPath == project.localPath else {
+        .onReceive(chatEventsStore.chatResponseDidFinish) { event in
+            guard event.projectPath == project.localPath else {
                 return
             }
 
@@ -97,6 +89,7 @@ struct ContextPaneView: View {
             project: project,
             controlCenterResolver: controlCenterResolver,
             controlCenterRuntimeManager: controlCenterRuntimeManager,
+            chatEventsStore: chatEventsStore,
             onFixLogsRequest: onFixLogsRequest
         )
     }

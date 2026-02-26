@@ -55,14 +55,8 @@ struct ContentView: View {
         .onChange(of: shellViewModel.selectedItem) { _, newValue in
             shellViewModel.didSelectSidebarItem(newValue)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .chatTitleDidUpdate)) { notification in
-            guard let chatID = notification.userInfo?["chatID"] as? UUID,
-                  let title = notification.userInfo?["title"] as? String
-            else {
-                return
-            }
-
-            shellViewModel.updateChatTitle(chatID: chatID, title: title)
+        .onReceive(shellEnvironment.chatEventsStore.chatTitleDidUpdate) { event in
+            shellViewModel.updateChatTitle(chatID: event.chatID, title: event.title)
         }
         .sheet(isPresented: $showsCompanionSheet) {
             CompanionManagementSheet(

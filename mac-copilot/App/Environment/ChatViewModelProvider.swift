@@ -7,6 +7,7 @@ final class ChatViewModelProvider {
     private let chatRepository: ChatRepository
     private let modelSelectionStore: ModelSelectionStore
     private let mcpToolsStore: MCPToolsStore
+    private let chatEventsStore: ChatEventsStore
 
     private var cache: [String: ChatViewModel] = [:]
 
@@ -15,13 +16,15 @@ final class ChatViewModelProvider {
         modelRepository: ModelListingRepository,
         chatRepository: ChatRepository,
         modelSelectionStore: ModelSelectionStore,
-        mcpToolsStore: MCPToolsStore
+        mcpToolsStore: MCPToolsStore,
+        chatEventsStore: ChatEventsStore
     ) {
         self.promptRepository = promptRepository
         self.modelRepository = modelRepository
         self.chatRepository = chatRepository
         self.modelSelectionStore = modelSelectionStore
         self.mcpToolsStore = mcpToolsStore
+        self.chatEventsStore = chatEventsStore
     }
 
     func viewModel(for chat: ChatThreadRef, project: ProjectRef) -> ChatViewModel {
@@ -39,7 +42,8 @@ final class ChatViewModelProvider {
             fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: modelRepository),
             modelSelectionStore: modelSelectionStore,
             mcpToolsStore: mcpToolsStore,
-            chatRepository: chatRepository
+            chatRepository: chatRepository,
+            chatEventsStore: chatEventsStore
         )
 
         cache[cacheKey] = created

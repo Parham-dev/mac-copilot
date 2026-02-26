@@ -31,14 +31,7 @@ extension ChatViewModel {
                 hadUserMessageBeforeSend: hadUserMessageBeforeSend
             ) {
                 chatTitle = updatedTitle
-                NotificationCenter.default.post(
-                    name: .chatTitleDidUpdate,
-                    object: nil,
-                    userInfo: [
-                        "chatID": chatID,
-                        "title": updatedTitle,
-                    ]
-                )
+                chatEventsStore.publishChatTitleDidUpdate(chatID: chatID, title: updatedTitle)
             }
         } catch {
             messagePersistenceErrorMessage = "Message was saved, but chat title update failed."
@@ -187,11 +180,6 @@ extension ChatViewModel {
 
         streamingAssistantMessageID = nil
         isSending = false
-
-        NotificationCenter.default.post(
-            name: .chatResponseDidFinish,
-            object: nil,
-            userInfo: ["projectPath": projectPath]
-        )
+        chatEventsStore.publishChatResponseDidFinish(projectPath: projectPath)
     }
 }

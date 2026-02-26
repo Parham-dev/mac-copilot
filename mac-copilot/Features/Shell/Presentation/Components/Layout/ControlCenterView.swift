@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ControlCenterView: View {
     @StateObject private var viewModel: ControlCenterViewModel
+    private let chatEventsStore: ChatEventsStore
 
     private let logsBottomAnchorID = "control-center-logs-bottom-anchor"
 
@@ -18,8 +19,10 @@ struct ControlCenterView: View {
         project: ProjectRef,
         controlCenterResolver: ProjectControlCenterResolver,
         controlCenterRuntimeManager: ControlCenterRuntimeManager,
+        chatEventsStore: ChatEventsStore,
         onFixLogsRequest: ((String) -> Void)?
     ) {
+        self.chatEventsStore = chatEventsStore
         _viewModel = StateObject(
             wrappedValue: ControlCenterViewModel(
                 project: project,
@@ -40,9 +43,9 @@ struct ControlCenterView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .chatResponseDidFinish)) { notification in
-            guard let projectPath = notification.userInfo?["projectPath"] as? String,
-                  !projectPath.isEmpty else {
+        .onReceive(chatEventsStore.chatResponseDidFinish) { event in
+            let projectPath = event.projectPath
+            guard !projectPath.isEmpty else {
                 return
             }
 

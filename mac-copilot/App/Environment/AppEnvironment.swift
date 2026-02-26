@@ -34,10 +34,12 @@ final class AppEnvironment: ObservableObject {
         let gitRepositoryManager = container.gitRepositoryManager()
         let modelSelectionStore = container.modelSelectionStore()
         let mcpToolsStore = container.mcpToolsStore()
+        let chatEventsStore = container.chatEventsStore()
         let companionStatusStore = container.companionStatusStore()
         let profileViewModel = container.profileViewModel()
         let projectCreationService = container.projectCreationService()
         let chatViewModelProvider = container.chatViewModelProvider()
+        let contextPaneViewModelProvider = container.contextPaneViewModelProvider()
 
         self.authEnvironment = AuthEnvironment(authViewModel: authViewModel)
         self.shellEnvironment = ShellEnvironment(
@@ -49,9 +51,11 @@ final class AppEnvironment: ObservableObject {
             promptRepository: promptRepository,
             modelSelectionStore: modelSelectionStore,
             mcpToolsStore: mcpToolsStore,
+            chatEventsStore: chatEventsStore,
             profileViewModel: profileViewModel,
             projectCreationService: projectCreationService,
-            chatViewModelProvider: chatViewModelProvider
+            chatViewModelProvider: chatViewModelProvider,
+            contextPaneViewModelProvider: contextPaneViewModelProvider
         )
         self.companionEnvironment = CompanionEnvironment(companionStatusStore: companionStatusStore)
         self.bootstrapService = container.appBootstrapService()
