@@ -6,6 +6,10 @@ struct ChatToolbarControlsView: View {
     let selectedModelInfoLabel: String
     @State private var showsModelPopover = false
 
+    private var selectedModelLabel: String {
+        selectedModel.isEmpty ? "Select model" : selectedModel
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Button {
@@ -16,7 +20,7 @@ struct ChatToolbarControlsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Text(selectedModel)
+                    Text(selectedModelLabel)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)

@@ -39,6 +39,9 @@ struct ShellDetailPaneView: View {
                     controlCenterResolver: shellEnvironment.controlCenterResolver,
                     controlCenterRuntimeManager: shellEnvironment.controlCenterRuntimeManager,
                     gitRepositoryManager: shellEnvironment.gitRepositoryManager,
+                    modelSelectionStore: shellEnvironment.modelSelectionStore,
+                    modelRepository: shellEnvironment.modelRepository,
+                    promptRepository: shellEnvironment.promptRepository,
                     onFixLogsRequest: { prompt in
                         Task {
                             await chatViewModel.send(prompt: prompt)

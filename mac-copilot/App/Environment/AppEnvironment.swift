@@ -25,6 +25,7 @@ final class AppEnvironment: ObservableObject {
             chatRepository: chatRepository
         )
         let modelRepository = container.modelRepository()
+        let promptRepository = container.promptRepository()
         let controlCenterResolver = container.controlCenterResolver()
         let controlCenterRuntimeManager = container.controlCenterRuntimeManager()
         let gitRepositoryManager = container.gitRepositoryManager()
@@ -42,6 +43,7 @@ final class AppEnvironment: ObservableObject {
             controlCenterResolver: controlCenterResolver,
             controlCenterRuntimeManager: controlCenterRuntimeManager,
             gitRepositoryManager: gitRepositoryManager,
+            promptRepository: promptRepository,
             modelSelectionStore: modelSelectionStore,
             mcpToolsStore: mcpToolsStore,
             profileViewModel: profileViewModel,

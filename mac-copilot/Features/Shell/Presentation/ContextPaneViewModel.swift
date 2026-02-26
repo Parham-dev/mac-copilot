@@ -18,14 +18,26 @@ final class ContextPaneViewModel: ObservableObject {
     private let fetchGitRecentCommitsUseCase: FetchGitRecentCommitsUseCase
     private let initializeGitRepositoryUseCase: InitializeGitRepositoryUseCase
     private let commitGitChangesUseCase: CommitGitChangesUseCase
+    private let modelSelectionStore: ModelSelectionStore
+    private let fetchModelsUseCase: FetchModelsUseCase
+    private let sendPromptUseCase: SendPromptUseCase
+    private var aiGenerationRetryAfter: Date?
 
-    init(gitRepositoryManager: GitRepositoryManaging) {
+    init(
+        gitRepositoryManager: GitRepositoryManaging,
+        modelSelectionStore: ModelSelectionStore,
+        modelRepository: ModelListingRepository,
+        promptRepository: PromptStreamingRepository
+    ) {
         self.checkGitRepositoryUseCase = CheckGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
         self.fetchGitRepositoryStatusUseCase = FetchGitRepositoryStatusUseCase(repositoryManager: gitRepositoryManager)
         self.fetchGitFileChangesUseCase = FetchGitFileChangesUseCase(repositoryManager: gitRepositoryManager)
         self.fetchGitRecentCommitsUseCase = FetchGitRecentCommitsUseCase(repositoryManager: gitRepositoryManager)
         self.initializeGitRepositoryUseCase = InitializeGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
         self.commitGitChangesUseCase = CommitGitChangesUseCase(repositoryManager: gitRepositoryManager)
+        self.modelSelectionStore = modelSelectionStore
+        self.fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
+        self.sendPromptUseCase = SendPromptUseCase(repository: promptRepository)
     }
 
     var canCommit: Bool {
@@ -104,18 +116,37 @@ final class ContextPaneViewModel: ObservableObject {
             return
         }
 
-        let trimmedMessage = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        let effectiveMessage = trimmedMessage.isEmpty ? generateCommitMessage() : trimmedMessage
-        commitMessage = effectiveMessage
-
         isPerformingGitAction = true
         defer { isPerformingGitAction = false }
+
+        let trimmedMessage = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveMessage: String
+
+        if trimmedMessage.isEmpty {
+            if shouldAttemptAIGeneration {
+                do {
+                    effectiveMessage = try await generateCommitMessageWithAI(projectPath: projectPath)
+                    aiGenerationRetryAfter = nil
+                } catch {
+                    aiGenerationRetryAfter = Date().addingTimeInterval(60)
+                    let fallback = generateCommitMessage()
+                    effectiveMessage = fallback
+                }
+            } else {
+                effectiveMessage = generateCommitMessage()
+            }
+        } else {
+            effectiveMessage = trimmedMessage
+        }
 
         do {
             try await commitGitChangesUseCase.execute(path: projectPath, message: effectiveMessage)
             commitMessage = ""
             await refreshGitStatus(projectPath: projectPath)
         } catch {
+            if trimmedMessage.isEmpty {
+                commitMessage = effectiveMessage
+            }
             let errorMessage = error.localizedDescription
             gitErrorMessage = errorMessage.isEmpty ? "Could not commit Git changes." : errorMessage
         }
@@ -128,6 +159,84 @@ final class ContextPaneViewModel: ObservableObject {
         }
 
         return "Update \(changedFileCount) files"
+    }
+
+    private func generateCommitMessageWithAI(projectPath: String) async throws -> String {
+        let model = await resolvePreferredModel()
+        let prompt = buildCommitMessagePrompt()
+
+        var generatedText = ""
+
+        for try await event in sendPromptUseCase.execute(
+            prompt: prompt,
+            chatID: UUID(),
+            model: model,
+            projectPath: projectPath,
+            allowedTools: nil
+        ) {
+            if case .textDelta(let chunk) = event {
+                generatedText += chunk
+            }
+        }
+
+        let normalized = generatedText
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let firstLine = normalized
+            .components(separatedBy: .newlines)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if firstLine.isEmpty {
+            throw GitRepositoryError(message: "AI did not return a commit message.")
+        }
+
+        return firstLine
+    }
+
+    private func resolvePreferredModel() async -> String? {
+        let models = await fetchModelsUseCase.execute()
+        guard !models.isEmpty else { return nil }
+
+        let preferredVisible = Set(modelSelectionStore.selectedModelIDs())
+        if preferredVisible.isEmpty {
+            return models.first
+        }
+
+        let filtered = models.filter { preferredVisible.contains($0) }
+        return (filtered.isEmpty ? models : filtered).first
+    }
+
+    private func buildCommitMessagePrompt() -> String {
+        let summarizedChanges = allGitFileChanges.prefix(20).map { change in
+            "- [\(change.state.rawValue)] \(change.path) (+\(change.addedLines)/-\(change.deletedLines))"
+        }.joined(separator: "\n")
+
+        return """
+        Generate a concise Git commit message for these changes.
+
+        CRITICAL OUTPUT RULES:
+        - Respond with ONLY the commit message subject line.
+        - Do NOT include any explanation, prefix, suffix, markdown, code fences, or quotes.
+        - Do NOT say things like "Here is" or "Let me".
+        - Maximum 72 characters.
+        - One line only.
+
+        Valid example output:
+        Update git panel commit message generation
+
+        Changes:
+        \(summarizedChanges)
+        """
+    }
+
+    private var shouldAttemptAIGeneration: Bool {
+        guard let aiGenerationRetryAfter else {
+            return true
+        }
+
+        return Date() >= aiGenerationRetryAfter
     }
 
     func clearGitError() {

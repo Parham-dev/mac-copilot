@@ -8,6 +8,7 @@ final class ShellEnvironment: ObservableObject {
     let controlCenterResolver: ProjectControlCenterResolver
     let controlCenterRuntimeManager: ControlCenterRuntimeManager
     let gitRepositoryManager: GitRepositoryManaging
+    let promptRepository: PromptStreamingRepository
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
     let profileViewModel: ProfileViewModel
@@ -21,6 +22,7 @@ final class ShellEnvironment: ObservableObject {
         controlCenterResolver: ProjectControlCenterResolver,
         controlCenterRuntimeManager: ControlCenterRuntimeManager,
         gitRepositoryManager: GitRepositoryManaging,
+        promptRepository: PromptStreamingRepository,
         modelSelectionStore: ModelSelectionStore,
         mcpToolsStore: MCPToolsStore,
         profileViewModel: ProfileViewModel,
@@ -32,6 +34,7 @@ final class ShellEnvironment: ObservableObject {
         self.controlCenterResolver = controlCenterResolver
         self.controlCenterRuntimeManager = controlCenterRuntimeManager
         self.gitRepositoryManager = gitRepositoryManager
+        self.promptRepository = promptRepository
         self.modelSelectionStore = modelSelectionStore
         self.mcpToolsStore = mcpToolsStore
         self.profileViewModel = profileViewModel

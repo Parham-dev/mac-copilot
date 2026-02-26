@@ -13,8 +13,8 @@ final class ChatViewModel: ObservableObject {
     @Published var statusChipsByMessageID: [UUID: [String]] = [:]
     @Published var toolExecutionsByMessageID: [UUID: [ChatMessage.ToolExecution]] = [:]
     @Published var streamingAssistantMessageID: UUID?
-    @Published var availableModels: [String] = ["gpt-5"]
-    @Published var selectedModel = "gpt-5"
+    @Published var availableModels: [String] = []
+    @Published var selectedModel = ""
 
     let chatID: UUID
     let chatTitle: String

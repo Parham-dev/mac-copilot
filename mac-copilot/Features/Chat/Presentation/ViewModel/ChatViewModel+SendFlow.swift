@@ -44,7 +44,7 @@ extension ChatViewModel {
             for try await event in sendPromptUseCase.execute(
                 prompt: text,
                 chatID: chatID,
-                model: selectedModel,
+                model: selectedModel.isEmpty ? nil : selectedModel,
                 projectPath: projectPath,
                 allowedTools: effectiveAllowedTools
             ) {
