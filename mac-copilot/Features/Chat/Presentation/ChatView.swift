@@ -1,4 +1,7 @@
 import SwiftUI
+#if DEBUG
+import AppKit
+#endif
 
 struct ChatView: View {
     @ObservedObject var viewModel: ChatViewModel
@@ -13,6 +16,15 @@ struct ChatView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
                 Spacer()
+#if DEBUG
+                Button {
+                    copyDebugContext()
+                } label: {
+                    Label("Copy Debug", systemImage: "doc.on.doc")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+#endif
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -48,6 +60,29 @@ struct ChatView: View {
         }
     }
 }
+
+#if DEBUG
+private extension ChatView {
+    func copyDebugContext() {
+        let enabledTools = viewModel.mcpToolsStore.enabledToolIDs()
+        let resolvedTools = enabledTools.isEmpty ? ["<all-tools-enabled>"] : enabledTools
+
+        let payload = [
+            "chatID=\(viewModel.chatID.uuidString)",
+            "chatTitle=\(viewModel.chatTitle)",
+            "projectPath=\(viewModel.projectPath)",
+            "selectedModel=\(viewModel.selectedModel)",
+            "enabledTools=\(resolvedTools.joined(separator: ","))",
+            "streamingAssistantMessageID=\(viewModel.streamingAssistantMessageID?.uuidString ?? "nil")",
+            "messageCount=\(viewModel.messages.count)",
+            "timestamp=\(ISO8601DateFormatter().string(from: Date()))"
+        ].joined(separator: "\n")
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(payload, forType: .string)
+    }
+}
+#endif
 
 #Preview {
     NavigationStack {

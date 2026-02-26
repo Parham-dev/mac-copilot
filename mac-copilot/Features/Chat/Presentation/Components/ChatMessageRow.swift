@@ -123,6 +123,7 @@ struct ChatMessageRow: View {
 
     private func bubble(color: Color, alignment: Alignment) -> some View {
         Text(message.text)
+            .textSelection(.enabled)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .background(color)

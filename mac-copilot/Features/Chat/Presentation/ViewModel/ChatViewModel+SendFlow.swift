@@ -26,7 +26,20 @@ extension ChatViewModel {
         do {
             var hasContent = false
             let enabledMCPTools = mcpToolsStore.enabledToolIDs()
-            let effectiveAllowedTools = enabledMCPTools.isEmpty ? MCPToolsCatalog.all.map(\.id) : enabledMCPTools
+            let allToolIDs = MCPToolsCatalog.all.map(\.id)
+            let effectiveAllowedTools: [String]? = {
+                if enabledMCPTools.isEmpty {
+                    return nil
+                }
+
+                let enabledSet = Set(enabledMCPTools)
+                let allSet = Set(allToolIDs)
+                if enabledSet == allSet {
+                    return nil
+                }
+
+                return enabledMCPTools
+            }()
 
             for try await event in sendPromptUseCase.execute(
                 prompt: text,
