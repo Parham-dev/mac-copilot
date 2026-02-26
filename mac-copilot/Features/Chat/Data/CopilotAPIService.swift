@@ -20,10 +20,23 @@ final class CopilotAPIService {
 
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
-        ensureSidecarRunning: @escaping () -> Void = {}
+        ensureSidecarRunning: @escaping () -> Void = {},
+        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
+        lineStreamTransport: HTTPLineStreamTransporting = URLSessionHTTPLineStreamTransport(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
     ) {
-        self.modelCatalogClient = CopilotModelCatalogClient(baseURL: baseURL, ensureSidecarRunning: ensureSidecarRunning)
-        self.promptStreamClient = CopilotPromptStreamClient(baseURL: baseURL, ensureSidecarRunning: ensureSidecarRunning)
+        self.modelCatalogClient = CopilotModelCatalogClient(
+            baseURL: baseURL,
+            ensureSidecarRunning: ensureSidecarRunning,
+            transport: transport,
+            delayScheduler: delayScheduler
+        )
+        self.promptStreamClient = CopilotPromptStreamClient(
+            baseURL: baseURL,
+            ensureSidecarRunning: ensureSidecarRunning,
+            lineStreamTransport: lineStreamTransport,
+            delayScheduler: delayScheduler
+        )
     }
 
     func fetchModels() async -> [String] {

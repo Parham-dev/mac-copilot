@@ -226,6 +226,7 @@ open mac-copilot.xcodeproj
 ## Documentation
 
 - Operational and release docs: [docs/README.md](docs/README.md)
+- Testing strategy and phased roadmap: [docs/testing-plan-roadmap.md](docs/testing-plan-roadmap.md)
 - Chat/session history architecture: [docs/chat-session-history.md](docs/chat-session-history.md)
 - iOS companion architecture and rollout phases: [docs/ios-companion-architecture.md](docs/ios-companion-architecture.md)
 - End-to-end release wrapper: `./scripts/release_dmg.sh --skip-notarize`

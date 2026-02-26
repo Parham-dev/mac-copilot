@@ -17,9 +17,20 @@ private struct SidecarHealthPayload: Decodable {
 
 final class SidecarHealthProbe {
     private let port: Int
+    private let healthDataFetcher: SidecarHealthDataFetching
+    private let delaySleeper: BlockingDelaySleeping
+    private let clock: ClockProviding
 
-    init(port: Int) {
+    init(
+        port: Int,
+        healthDataFetcher: SidecarHealthDataFetching = URLSessionSidecarHealthDataFetcher(),
+        delaySleeper: BlockingDelaySleeping = ThreadBlockingDelaySleeper(),
+        clock: ClockProviding = SystemClockProvider()
+    ) {
         self.port = port
+        self.healthDataFetcher = healthDataFetcher
+        self.delaySleeper = delaySleeper
+        self.clock = clock
     }
 
     func isHealthySidecarAlreadyRunning(requiredSuccesses: Int) -> Bool {
@@ -32,19 +43,19 @@ final class SidecarHealthProbe {
             }
 
             successes += 1
-            Thread.sleep(forTimeInterval: 0.12)
+            delaySleeper.sleep(seconds: 0.12)
         }
 
         return successes == attempts
     }
 
     func waitForHealthySidecar(timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
+        let deadline = clock.now.addingTimeInterval(timeout)
+        while clock.now < deadline {
             if isHealthySidecarAlreadyRunning(requiredSuccesses: 2) {
                 return true
             }
-            Thread.sleep(forTimeInterval: 0.25)
+            delaySleeper.sleep(seconds: 0.25)
         }
         return false
     }
@@ -79,32 +90,6 @@ final class SidecarHealthProbe {
     }
 
     private func healthData(timeout: TimeInterval) -> Data? {
-        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else {
-            return nil
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = timeout
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var result: Data?
-
-        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-            defer { semaphore.signal() }
-
-            guard let http = response as? HTTPURLResponse,
-                  (200 ... 299).contains(http.statusCode),
-                  let data
-            else {
-                return
-            }
-
-            result = data
-        }
-
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + timeout + 0.4)
-        return result
+        healthDataFetcher.fetchHealthData(port: port, timeout: timeout)
     }
 }

@@ -7,6 +7,7 @@ This folder contains operational and release documentation for CopilotForge.
 - [DMG Release Guide](release-dmg.md)
 - [Sidecar Runtime and Packaging](sidecar-runtime.md)
 - [Chat Session History Architecture](chat-session-history.md)
+- [Testing Plan Roadmap](testing-plan-roadmap.md)
 - [Git Feature README & Roadmap](git-feature-roadmap.md)
 - [iOS Companion Architecture](ios-companion-architecture.md)
 - [iOS Companion AI Agent Build Brief](ios-companion-ai-agent-brief.md)

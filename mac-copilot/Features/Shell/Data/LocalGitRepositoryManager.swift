@@ -1,10 +1,5 @@
 import Foundation
 
-private struct GitCommandResult {
-    let terminationStatus: Int32
-    let output: String
-}
-
 struct GitRepositoryError: LocalizedError {
     let message: String
 
@@ -14,6 +9,12 @@ struct GitRepositoryError: LocalizedError {
 }
 
 final class LocalGitRepositoryManager: GitRepositoryManaging {
+    private let commandRunner: GitCommandRunning
+
+    init(commandRunner: GitCommandRunning = LocalGitCommandRunner()) {
+        self.commandRunner = commandRunner
+    }
+
     func isGitRepository(at path: String) async -> Bool {
         await runInBackground {
             let gitURL = URL(fileURLWithPath: path).appendingPathComponent(".git")
@@ -21,7 +22,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
                 return true
             }
 
-            let result = self.runGit(arguments: ["-C", path, "rev-parse", "--is-inside-work-tree"])
+            let result = self.commandRunner.runGit(arguments: ["-C", path, "rev-parse", "--is-inside-work-tree"])
             guard result.terminationStatus == 0 else {
                 return false
             }
@@ -32,7 +33,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
 
     func initializeRepository(at path: String) async throws {
         let result = await runInBackground {
-            self.runGit(arguments: ["-C", path, "init"])
+            self.commandRunner.runGit(arguments: ["-C", path, "init"])
         }
 
         if result.terminationStatus == 0 {
@@ -45,7 +46,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
 
     func repositoryStatus(at path: String) async throws -> GitRepositoryStatus {
         let result = await runInBackground {
-            self.runGit(arguments: ["-C", path, "status", "--porcelain", "--branch"])
+            self.commandRunner.runGit(arguments: ["-C", path, "status", "--porcelain", "--branch"])
         }
 
         guard result.terminationStatus == 0 else {
@@ -73,7 +74,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
 
     func fileChanges(at path: String) async throws -> [GitFileChange] {
         let statusResult = await runInBackground {
-            self.runGit(arguments: ["-C", path, "status", "--porcelain"])
+            self.commandRunner.runGit(arguments: ["-C", path, "status", "--porcelain"])
         }
 
         guard statusResult.terminationStatus == 0 else {
@@ -82,10 +83,10 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         }
 
         let unstagedNumStatResult = await runInBackground {
-            self.runGit(arguments: ["-C", path, "diff", "--numstat"])
+            self.commandRunner.runGit(arguments: ["-C", path, "diff", "--numstat"])
         }
         let stagedNumStatResult = await runInBackground {
-            self.runGit(arguments: ["-C", path, "diff", "--cached", "--numstat"])
+            self.commandRunner.runGit(arguments: ["-C", path, "diff", "--cached", "--numstat"])
         }
 
         let unstagedLineCounts = LocalGitRepositoryParsing.parseNumStatMap(from: unstagedNumStatResult.output)
@@ -107,7 +108,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
 
     func recentCommits(at path: String, limit: Int) async throws -> [GitRecentCommit] {
         let result = await runInBackground {
-            self.runGit(arguments: [
+            self.commandRunner.runGit(arguments: [
                 "-C", path,
                 "log",
                 "-n", String(max(limit, 1)),
@@ -148,7 +149,7 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         }
 
         let stageResult = await runInBackground {
-            self.runGit(arguments: ["-C", path, "add", "-A"])
+            self.commandRunner.runGit(arguments: ["-C", path, "add", "-A"])
         }
 
         guard stageResult.terminationStatus == 0 else {
@@ -157,33 +158,13 @@ final class LocalGitRepositoryManager: GitRepositoryManaging {
         }
 
         let result = await runInBackground {
-            self.runGit(arguments: ["-C", path, "commit", "-m", trimmedMessage])
+            self.commandRunner.runGit(arguments: ["-C", path, "commit", "-m", trimmedMessage])
         }
 
         guard result.terminationStatus == 0 else {
             let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
             let fallback = output.isEmpty ? "Could not commit Git changes." : output
             throw GitRepositoryError(message: fallback)
-        }
-    }
-
-    private func runGit(arguments: [String]) -> GitCommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: outputData, encoding: .utf8) ?? ""
-            return GitCommandResult(terminationStatus: process.terminationStatus, output: output)
-        } catch {
-            return GitCommandResult(terminationStatus: -1, output: error.localizedDescription)
         }
     }
 

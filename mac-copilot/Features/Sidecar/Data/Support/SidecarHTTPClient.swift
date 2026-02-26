@@ -26,13 +26,19 @@ enum SidecarHTTPClientError: LocalizedError {
 final class SidecarHTTPClient {
     private let baseURL: URL
     private let sidecarLifecycle: SidecarLifecycleManaging
+    private let transport: HTTPDataTransporting
+    private let delayScheduler: AsyncDelayScheduling
 
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
-        sidecarLifecycle: SidecarLifecycleManaging
+        sidecarLifecycle: SidecarLifecycleManaging,
+        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
     ) {
         self.baseURL = baseURL
         self.sidecarLifecycle = sidecarLifecycle
+        self.transport = transport
+        self.delayScheduler = delayScheduler
     }
 
     func get(path: String) async throws -> SidecarHTTPResponse {
@@ -105,7 +111,7 @@ final class SidecarHTTPClient {
         var bounded = request
         bounded.timeoutInterval = 12
 
-        let (data, response) = try await URLSession.shared.data(for: bounded)
+        let (data, response) = try await transport.data(for: bounded)
         guard let http = response as? HTTPURLResponse else {
             throw SidecarHTTPClientError.invalidResponse
         }
@@ -120,8 +126,7 @@ final class SidecarHTTPClient {
             }
 
             if attempt < maxAttempts {
-                let nanos = UInt64(max(delaySeconds, 0.1) * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
+                try? await delayScheduler.sleep(seconds: max(delaySeconds, 0.1))
             }
         }
 
@@ -133,7 +138,7 @@ final class SidecarHTTPClient {
         request.httpMethod = "GET"
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await transport.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 return false
             }

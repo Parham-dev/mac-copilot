@@ -3,10 +3,19 @@ import Foundation
 final class CopilotModelCatalogClient {
     private let baseURL: URL
     private let ensureSidecarRunning: () -> Void
+    private let transport: HTTPDataTransporting
+    private let delayScheduler: AsyncDelayScheduling
 
-    init(baseURL: URL, ensureSidecarRunning: @escaping () -> Void = {}) {
+    init(
+        baseURL: URL,
+        ensureSidecarRunning: @escaping () -> Void = {},
+        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
+    ) {
         self.baseURL = baseURL
         self.ensureSidecarRunning = ensureSidecarRunning
+        self.transport = transport
+        self.delayScheduler = delayScheduler
     }
 
     func fetchModelCatalog() async -> [CopilotModelCatalogItem] {
@@ -61,15 +70,15 @@ final class CopilotModelCatalogClient {
 
     private func fetchDataWithConnectionRetry(request: URLRequest) async throws -> (Data, URLResponse) {
         do {
-            return try await URLSession.shared.data(for: request)
+            return try await transport.data(for: request)
         } catch {
             guard shouldRetryConnection(error) else {
                 throw error
             }
 
             ensureSidecarRunning()
-            try? await Task.sleep(nanoseconds: 450_000_000)
-            return try await URLSession.shared.data(for: request)
+            try? await delayScheduler.sleep(seconds: 0.45)
+            return try await transport.data(for: request)
         }
     }
 

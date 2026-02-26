@@ -9,10 +9,19 @@ struct PromptStreamError: LocalizedError {
 final class CopilotPromptStreamClient {
     private let baseURL: URL
     private let ensureSidecarRunning: () -> Void
+    private let lineStreamTransport: HTTPLineStreamTransporting
+    private let delayScheduler: AsyncDelayScheduling
 
-    init(baseURL: URL, ensureSidecarRunning: @escaping () -> Void = {}) {
+    init(
+        baseURL: URL,
+        ensureSidecarRunning: @escaping () -> Void = {},
+        lineStreamTransport: HTTPLineStreamTransporting = URLSessionHTTPLineStreamTransport(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler()
+    ) {
         self.baseURL = baseURL
         self.ensureSidecarRunning = ensureSidecarRunning
+        self.lineStreamTransport = lineStreamTransport
+        self.delayScheduler = delayScheduler
     }
 
     func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
@@ -41,7 +50,8 @@ final class CopilotPromptStreamClient {
 
                     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-                    let (bytes, response) = try await connectWithRetry(request: request)
+                    let stream = try await connectWithRetry(request: request)
+                    let response = stream.response
                     guard let http = response as? HTTPURLResponse else {
                         throw PromptStreamError(message: "Invalid sidecar response")
                     }
@@ -56,7 +66,7 @@ final class CopilotPromptStreamClient {
                     var receivedChars = 0
                     var protocolMarkerChunkCount = 0
 
-                    for try await line in bytes.lines {
+                    for try await line in stream.lines {
                         guard line.hasPrefix("data: ") else { continue }
 
                         let payload = String(line.dropFirst(6))
@@ -143,17 +153,17 @@ final class CopilotPromptStreamClient {
 }
 
 private extension CopilotPromptStreamClient {
-    func connectWithRetry(request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+    func connectWithRetry(request: URLRequest) async throws -> HTTPLineStreamResponse {
         do {
-            return try await URLSession.shared.bytes(for: request)
+            return try await lineStreamTransport.openLineStream(for: request)
         } catch {
             guard shouldRetryConnection(error) else {
                 throw error
             }
 
             NSLog("[CopilotForge][Prompt] sidecar not ready, retrying connection once")
-            try? await Task.sleep(nanoseconds: 450_000_000)
-            return try await URLSession.shared.bytes(for: request)
+            try? await delayScheduler.sleep(seconds: 0.45)
+            return try await lineStreamTransport.openLineStream(for: request)
         }
     }
 

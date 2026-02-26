@@ -1,8 +1,29 @@
 import Foundation
 
 final class ControlCenterRuntimeUtilities {
-    private let fileManager = FileManager.default
+    private let fileManager: ControlCenterFileManaging
+    private let commandRunner: ControlCenterCommandRunning
+    private let transport: HTTPDataTransporting
+    private let delayScheduler: AsyncDelayScheduling
+    private let blockingSleeper: BlockingDelaySleeping
+    private let dateProvider: DateProviding
     private static var reservedPorts: [Int: Date] = [:]
+
+    init(
+        fileManager: ControlCenterFileManaging = FileManagerControlCenterFileManager(),
+        commandRunner: ControlCenterCommandRunning = ProcessControlCenterCommandRunner(),
+        transport: HTTPDataTransporting = URLSessionHTTPDataTransport(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler(),
+        blockingSleeper: BlockingDelaySleeping = ThreadBlockingDelaySleeper(),
+        dateProvider: DateProviding = SystemDateProvider()
+    ) {
+        self.fileManager = fileManager
+        self.commandRunner = commandRunner
+        self.transport = transport
+        self.delayScheduler = delayScheduler
+        self.blockingSleeper = blockingSleeper
+        self.dateProvider = dateProvider
+    }
 
     func expandedProjectURL(for project: ProjectRef) -> URL {
         let expanded = (project.localPath as NSString).expandingTildeInPath
@@ -20,21 +41,7 @@ final class ControlCenterRuntimeUtilities {
             return indexURL
         }
 
-        guard let enumerator = fileManager.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        for case let fileURL as URL in enumerator {
-            if fileURL.pathExtension.lowercased() == "html" {
-                return fileURL
-            }
-        }
-
-        return nil
+        return fileManager.htmlFilesRecursively(in: directory).first
     }
 
     func resolveExecutable(candidates: [String]) -> String? {
@@ -46,7 +53,7 @@ final class ControlCenterRuntimeUtilities {
                 }
             }
 
-            let output = runCommand(executable: "/usr/bin/which", arguments: [candidate])
+            let output = commandRunner.runCommand(executable: "/usr/bin/which", arguments: [candidate])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !output.isEmpty {
                 return output
@@ -83,7 +90,7 @@ final class ControlCenterRuntimeUtilities {
     }
 
     func reservePortTemporarily(_ port: Int, ttlSeconds: TimeInterval) {
-        Self.reservedPorts[port] = Date().addingTimeInterval(ttlSeconds)
+        Self.reservedPorts[port] = dateProvider.now.addingTimeInterval(ttlSeconds)
     }
 
     func isLocalPortListening(_ port: Int) -> Bool {
@@ -97,7 +104,7 @@ final class ControlCenterRuntimeUtilities {
         }
 
         for pid in pids {
-            _ = runCommand(executable: "/bin/kill", arguments: ["-TERM", String(pid)])
+            _ = commandRunner.runCommand(executable: "/bin/kill", arguments: ["-TERM", String(pid)])
         }
 
         if waitForPortToClose(port, timeoutSeconds: 1.8) {
@@ -106,7 +113,7 @@ final class ControlCenterRuntimeUtilities {
 
         let remaining = processIDsListening(on: port)
         for pid in remaining {
-            _ = runCommand(executable: "/bin/kill", arguments: ["-KILL", String(pid)])
+            _ = commandRunner.runCommand(executable: "/bin/kill", arguments: ["-KILL", String(pid)])
         }
 
         if waitForPortToClose(port, timeoutSeconds: 1.2) {
@@ -117,15 +124,15 @@ final class ControlCenterRuntimeUtilities {
     }
 
     func waitForHealthyURL(_ url: URL, timeoutSeconds: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        let deadline = dateProvider.now.addingTimeInterval(timeoutSeconds)
 
-        while Date() < deadline {
+        while dateProvider.now < deadline {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.timeoutInterval = 1.2
 
             do {
-                let (_, response) = try await URLSession.shared.data(for: request)
+                let (_, response) = try await transport.data(for: request)
                 if let http = response as? HTTPURLResponse,
                    (200 ... 499).contains(http.statusCode) {
                     return true
@@ -134,14 +141,14 @@ final class ControlCenterRuntimeUtilities {
                 // keep polling
             }
 
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await delayScheduler.sleep(seconds: 0.4)
         }
 
         return false
     }
 
     func readJSON(at url: URL) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: url),
+        guard let data = fileManager.readData(at: url),
               let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any]
         else {
@@ -152,7 +159,7 @@ final class ControlCenterRuntimeUtilities {
     }
 
     private func isPortInUse(_ port: Int) -> Bool {
-        let output = runCommand(
+        let output = commandRunner.runCommand(
             executable: "/usr/sbin/lsof",
             arguments: ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"]
         )
@@ -160,7 +167,7 @@ final class ControlCenterRuntimeUtilities {
     }
 
     private func processIDsListening(on port: Int) -> [Int] {
-        let output = runCommand(
+        let output = commandRunner.runCommand(
             executable: "/usr/sbin/lsof",
             arguments: ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"]
         )
@@ -180,41 +187,21 @@ final class ControlCenterRuntimeUtilities {
     }
 
     private func waitForPortToClose(_ port: Int, timeoutSeconds: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        let deadline = dateProvider.now.addingTimeInterval(timeoutSeconds)
 
-        while Date() < deadline {
+        while dateProvider.now < deadline {
             if !isPortInUse(port) {
                 return true
             }
 
-            Thread.sleep(forTimeInterval: 0.2)
+            blockingSleeper.sleep(seconds: 0.2)
         }
 
         return !isPortInUse(port)
     }
 
-    private func runCommand(executable: String, arguments: [String]) -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return ""
-        }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
-    }
-
     private func purgeExpiredReservedPorts() {
-        let now = Date()
+        let now = dateProvider.now
         Self.reservedPorts = Self.reservedPorts.filter { $0.value > now }
     }
 }

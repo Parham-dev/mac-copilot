@@ -12,11 +12,17 @@ final class SidecarRuntimeUtilities {
         port: Int,
         commandRunner: SidecarCommandRunner = SidecarCommandRunner(),
         healthProbe: SidecarHealthProbe? = nil,
+        healthDataFetcher: SidecarHealthDataFetching = URLSessionSidecarHealthDataFetcher(),
+        delaySleeper: BlockingDelaySleeping = ThreadBlockingDelaySleeper(),
         reusePolicy: SidecarReusePolicy? = nil
     ) {
         self.port = port
         self.commandRunner = commandRunner
-        self.healthProbe = healthProbe ?? SidecarHealthProbe(port: port)
+        self.healthProbe = healthProbe ?? SidecarHealthProbe(
+            port: port,
+            healthDataFetcher: healthDataFetcher,
+            delaySleeper: delaySleeper
+        )
         self.reusePolicy = reusePolicy ?? SidecarReusePolicy()
     }
 

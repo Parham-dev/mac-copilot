@@ -8,22 +8,44 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private let sidecarPort = 7878
-    private let queue = DispatchQueue(label: "copilotforge.sidecar.manager", qos: .userInitiated)
+    private let queue: DispatchQueue
+    private let scheduleAfter: (_ delay: TimeInterval, _ operation: @escaping () -> Void) -> Void
     private let startupTimeout: TimeInterval = 8
     private let minimumNodeMajorVersion = 22
-    private lazy var preflight = SidecarPreflight(minimumNodeMajorVersion: minimumNodeMajorVersion)
-    private let restartPolicy = SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
-    private let logger = SidecarLogger()
+    private let preflight: SidecarPreflightChecking
+    private let restartPolicy: SidecarRestartPolicyManaging
+    private let logger: SidecarLogWriting
+    private let clock: ClockProviding
     private let stateMachine = SidecarStateMachine()
 
-    private lazy var runtimeUtilities = SidecarRuntimeUtilities(port: sidecarPort)
-    private lazy var processController = SidecarProcessController(callbackQueue: queue)
+    private let runtimeUtilities: SidecarRuntimeUtilityManaging
+    private let processController: SidecarProcessControlling
 
     private var isStarting = false
     private var runID: String?
     private var startRequestCount = 0
 
-    init() {}
+    init(
+        queue: DispatchQueue = DispatchQueue(label: "copilotforge.sidecar.manager", qos: .userInitiated),
+        preflight: SidecarPreflightChecking? = nil,
+        runtimeUtilities: SidecarRuntimeUtilityManaging? = nil,
+        processController: SidecarProcessControlling? = nil,
+        restartPolicy: SidecarRestartPolicyManaging? = nil,
+        logger: SidecarLogWriting? = nil,
+        clock: ClockProviding = SystemClockProvider(),
+        scheduleAfter: ((_ delay: TimeInterval, _ operation: @escaping () -> Void) -> Void)? = nil
+    ) {
+        self.queue = queue
+        self.preflight = preflight ?? SidecarPreflight(minimumNodeMajorVersion: minimumNodeMajorVersion)
+        self.runtimeUtilities = runtimeUtilities ?? SidecarRuntimeUtilities(port: sidecarPort)
+        self.processController = processController ?? SidecarProcessController(callbackQueue: queue)
+        self.restartPolicy = restartPolicy ?? SidecarRestartPolicy(maxRestartsInWindow: 4, restartWindowSeconds: 60)
+        self.logger = logger ?? SidecarLogger()
+        self.clock = clock
+        self.scheduleAfter = scheduleAfter ?? { delay, operation in
+            queue.asyncAfter(deadline: .now() + delay, execute: operation)
+        }
+    }
 
     func startIfNeeded() {
         queue.async { [weak self] in
@@ -104,7 +126,7 @@ final class SidecarManager: SidecarLifecycleManaging {
                 runtimeUtilities.terminateStaleSidecarProcesses(matching: startup.scriptURL.path)
             }
 
-            if !restartPolicy.canAttemptRestart() {
+            if !restartPolicy.canAttemptRestart(now: clock.now) {
                 let message = "Restart guard tripped: too many restarts in 60s"
                 stateMachine.transition(to: .failed(message), log: log)
                 log(message)
@@ -170,7 +192,7 @@ final class SidecarManager: SidecarLifecycleManaging {
     }
 
     private func scheduleRetryIfAllowed() {
-        guard restartPolicy.canAttemptRestart() else {
+        guard restartPolicy.canAttemptRestart(now: clock.now) else {
             let message = "Retry skipped: restart guard tripped"
             stateMachine.transition(to: .failed(message), log: log)
             log(message)
@@ -180,7 +202,7 @@ final class SidecarManager: SidecarLifecycleManaging {
         let delay = restartPolicy.nextRetryDelay()
         log("Scheduling sidecar retry #\(restartPolicy.retryAttempt) in \(String(format: "%.2f", delay))s")
 
-        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+        scheduleAfter(delay) { [weak self] in
             self?.startIfNeededLocked(reason: .retry)
         }
     }
