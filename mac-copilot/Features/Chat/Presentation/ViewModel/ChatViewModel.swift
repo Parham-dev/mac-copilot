@@ -23,7 +23,6 @@ final class ChatViewModel: ObservableObject {
     let projectPath: String
 
     let sendPromptUseCase: SendPromptUseCase
-    let fetchModelsUseCase: FetchModelsUseCase
     let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     let modelSelectionStore: ModelSelectionStore
     let mcpToolsStore: MCPToolsStore
@@ -35,7 +34,6 @@ final class ChatViewModel: ObservableObject {
         chatTitle: String,
         projectPath: String,
         sendPromptUseCase: SendPromptUseCase,
-        fetchModelsUseCase: FetchModelsUseCase,
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
         modelSelectionStore: ModelSelectionStore,
         mcpToolsStore: MCPToolsStore,
@@ -45,7 +43,6 @@ final class ChatViewModel: ObservableObject {
         self.chatTitle = chatTitle
         self.projectPath = projectPath
         self.sendPromptUseCase = sendPromptUseCase
-        self.fetchModelsUseCase = fetchModelsUseCase
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
         self.modelSelectionStore = modelSelectionStore
         self.mcpToolsStore = mcpToolsStore

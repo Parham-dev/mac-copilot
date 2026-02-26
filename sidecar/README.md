@@ -41,7 +41,8 @@ npm run start:dist
 ## Runtime Notes (Small but Important)
 
 - The app sidecar now runs from `dist/index.js`.
-- Root files (`index.js`, `auth.js`, `copilot.js`) are compatibility shims only.
+- Canonical source entry is `src/index.ts`.
+- Copilot runtime logic lives under `src/copilot/` (for example `copilot.ts`, `copilotPromptStreaming.ts`, `copilotSessionManager.ts`).
 - If you hit local runtime issues, run `npm run check` first.
 - If an old sidecar is still bound to port `7878`, stop it and restart from `sidecar/`.
 

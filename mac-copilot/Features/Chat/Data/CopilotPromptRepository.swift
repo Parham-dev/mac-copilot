@@ -11,10 +11,6 @@ final class CopilotPromptRepository: PromptStreamingRepository, ModelListingRepo
         apiService.streamPrompt(prompt, chatID: chatID, model: model, projectPath: projectPath, allowedTools: allowedTools)
     }
 
-    func fetchModels() async -> [String] {
-        await apiService.fetchModels()
-    }
-
     func fetchModelCatalog() async -> [CopilotModelCatalogItem] {
         await apiService.fetchModelCatalog()
     }

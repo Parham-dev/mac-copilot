@@ -51,39 +51,39 @@ final class GitHubAuthService: ObservableObject {
             return
         }
 
-        let maxAttempts = 2
-        for attempt in 1 ... maxAttempts {
-            do {
-                _ = try await sidecarClient.authorize(token: token)
-                isAuthenticated = true
-                statusMessage = "Signed in"
-                return
-            } catch {
-                if sidecarClient.isRecoverableConnectionError(error), attempt < maxAttempts {
+        do {
+            _ = try await AsyncRetry.run(
+                maxAttempts: 2,
+                delayForAttempt: { attempt in
+                    TimeInterval(attempt) * 0.3
+                },
+                shouldRetry: { [sidecarClient] error, _ in
+                    sidecarClient.isRecoverableConnectionError(error)
+                },
+                operation: {
                     statusMessage = "Reconnecting to local sidecar…"
-                    let retryDelay = UInt64(300_000_000 * UInt64(attempt))
-                    try? await Task.sleep(nanoseconds: retryDelay)
-                    continue
+                    return try await sidecarClient.authorize(token: token)
                 }
+            )
 
-                if sidecarClient.isRecoverableConnectionError(error) {
-                    isAuthenticated = false
-                    statusMessage = "Local sidecar is offline. Relaunch app to retry."
-                    errorMessage = error.localizedDescription
-                    return
-                }
-
-                keychain.deleteToken()
-                exportTokenToProcessEnvironment(nil)
+            isAuthenticated = true
+            statusMessage = "Signed in"
+            return
+        } catch {
+            if sidecarClient.isRecoverableConnectionError(error) {
                 isAuthenticated = false
-                statusMessage = "Session expired. Please sign in again."
+                statusMessage = "Local sidecar is offline. Relaunch app to retry."
                 errorMessage = error.localizedDescription
                 return
             }
-        }
 
-        isAuthenticated = false
-        statusMessage = "Sign in required"
+            keychain.deleteToken()
+            exportTokenToProcessEnvironment(nil)
+            isAuthenticated = false
+            statusMessage = "Session expired. Please sign in again."
+            errorMessage = error.localizedDescription
+            return
+        }
     }
 
     func startDeviceFlow() async {

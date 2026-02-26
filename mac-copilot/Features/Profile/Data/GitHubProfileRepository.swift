@@ -95,36 +95,38 @@ final class GitHubProfileRepository: ProfileRepository {
     ) async throws -> (report: (statusCode: Int, data: Data), parsed: CopilotReport?) {
         var latestReport: (statusCode: Int, data: Data)?
         var latestParsed: CopilotReport?
-        var lastError: Error?
 
-        for attempt in 1 ... 3 {
-            do {
-                _ = try await client.authorize(token: accessToken)
+        do {
+            return try await AsyncRetry.run(
+                maxAttempts: 3,
+                delayForAttempt: { attempt in
+                    TimeInterval(attempt) * 0.25
+                },
+                shouldRetry: { _, _ in true },
+                operation: {
+                    _ = try await client.authorize(token: accessToken)
 
-                let authStatusResponse = try await requestLocal(path: "auth/status")
-                let sidecarAuthenticated = parseAuthStatus(from: authStatusResponse.data) ?? false
+                    let authStatusResponse = try await requestLocal(path: "auth/status")
+                    let sidecarAuthenticated = parseAuthStatus(from: authStatusResponse.data) ?? false
 
-                let report = try await requestLocal(path: "copilot/report")
-                latestReport = report
-                latestParsed = parseCopilotReport(from: report.data)
+                    let report = try await requestLocal(path: "copilot/report")
+                    latestReport = report
+                    latestParsed = parseCopilotReport(from: report.data)
 
-                if sidecarAuthenticated, latestParsed?.sessionReady == true {
+                    guard sidecarAuthenticated, latestParsed?.sessionReady == true else {
+                        throw ProfileError.reauthorizationIncomplete
+                    }
+
                     return (report, latestParsed)
                 }
-            } catch {
-                lastError = error
+            )
+        } catch {
+            if let latestReport {
+                return (latestReport, latestParsed)
             }
 
-            if attempt < 3 {
-                try? await Task.sleep(nanoseconds: UInt64(attempt) * 250_000_000)
-            }
+            throw error
         }
-
-        if let latestReport {
-            return (latestReport, latestParsed)
-        }
-
-        throw lastError ?? ProfileError.invalidResponse
     }
 
     private func request(path: String, token: String) async throws -> (statusCode: Int, data: Data) {
@@ -208,11 +210,14 @@ final class GitHubProfileRepository: ProfileRepository {
 
 private enum ProfileError: LocalizedError {
     case invalidResponse
+    case reauthorizationIncomplete
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "Invalid response from GitHub API."
+        case .reauthorizationIncomplete:
+            return "Sidecar reauthorization did not complete yet."
         }
     }
 }

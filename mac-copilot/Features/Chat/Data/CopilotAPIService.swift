@@ -43,11 +43,6 @@ final class CopilotAPIService {
         )
     }
 
-    func fetchModels() async -> [String] {
-        let catalog = await fetchModelCatalog()
-        return catalog.map(\.id)
-    }
-
     func fetchModelCatalog() async -> [CopilotModelCatalogItem] {
         await modelCatalogClient.fetchModelCatalog()
     }

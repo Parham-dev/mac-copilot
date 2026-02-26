@@ -19,7 +19,7 @@ final class ContextPaneViewModel: ObservableObject {
     private let initializeGitRepositoryUseCase: InitializeGitRepositoryUseCase
     private let commitGitChangesUseCase: CommitGitChangesUseCase
     private let modelSelectionStore: ModelSelectionStore
-    private let fetchModelsUseCase: FetchModelsUseCase
+    private let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     private let sendPromptUseCase: SendPromptUseCase
     private var aiGenerationRetryAfter: Date?
 
@@ -36,7 +36,7 @@ final class ContextPaneViewModel: ObservableObject {
         self.initializeGitRepositoryUseCase = InitializeGitRepositoryUseCase(repositoryManager: gitRepositoryManager)
         self.commitGitChangesUseCase = CommitGitChangesUseCase(repositoryManager: gitRepositoryManager)
         self.modelSelectionStore = modelSelectionStore
-        self.fetchModelsUseCase = FetchModelsUseCase(repository: modelRepository)
+        self.fetchModelCatalogUseCase = FetchModelCatalogUseCase(repository: modelRepository)
         self.sendPromptUseCase = SendPromptUseCase(repository: promptRepository)
     }
 
@@ -196,7 +196,7 @@ final class ContextPaneViewModel: ObservableObject {
     }
 
     private func resolvePreferredModel() async -> String? {
-        let models = await fetchModelsUseCase.execute()
+        let models = await fetchModelCatalogUseCase.execute().map(\.id)
         guard !models.isEmpty else { return nil }
 
         let preferredVisible = Set(modelSelectionStore.selectedModelIDs())

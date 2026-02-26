@@ -36,7 +36,6 @@ final class ChatViewModelProvider {
             chatTitle: chat.title,
             projectPath: project.localPath,
             sendPromptUseCase: SendPromptUseCase(repository: promptRepository),
-            fetchModelsUseCase: FetchModelsUseCase(repository: modelRepository),
             fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: modelRepository),
             modelSelectionStore: modelSelectionStore,
             mcpToolsStore: mcpToolsStore,

@@ -61,26 +61,16 @@ extension ChatViewModel {
     }
 
     private func fetchModelDataWithRetry(maxAttempts: Int = 3) async -> (catalog: [CopilotModelCatalogItem], models: [String]) {
-        var lastCatalog: [CopilotModelCatalogItem] = []
-        var lastModels: [String] = []
-
-        for attempt in 1 ... maxAttempts {
+        await AsyncRetry.runUntil(
+            maxAttempts: maxAttempts,
+            delayForAttempt: { _ in 0.5 },
+            isSuccess: { !$0.models.isEmpty },
+            operation: {
             let catalog = await fetchModelCatalogUseCase.execute()
-            let models = await fetchModelsUseCase.execute()
-
-            lastCatalog = catalog
-            lastModels = models
-
-            if !models.isEmpty {
-                return (catalog, models)
+            let models = catalog.map(\.id)
+            return (catalog, models)
             }
-
-            if attempt < maxAttempts {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-            }
-        }
-
-        return (lastCatalog, lastModels)
+        )
     }
 
     private func compactTokenString(_ value: Int) -> String {
