@@ -7,6 +7,91 @@ CopilotForge is a native macOS app that provides a project-first chat workspace 
 - Feature-first architecture (`Domain` / `Data` / `Presentation`)
 - Local-first project and chat persistence
 
+
+## Why CopilotForge?
+
+The AI app builder market exploded in 2025. Lovable hit $200M ARR. Bolt crossed 5M users.
+The tools work. The problem is who pays for them — and how much.
+
+Every major AI app builder (Lovable, Bolt, v0, Replit) charges you **twice**:
+once for their platform subscription, and again — implicitly — for the AI compute underneath it.
+Those credit systems, token limits, and overage fees exist because they’re buying GPT-4o or
+Claude Sonnet at retail API rates and passing the cost on to you.
+
+A realistic app-building session with Claude Sonnet via API costs **$5–20 in raw tokens**.
+Heavy usage — three projects a month — runs **$30–100/month** in API spend alone,
+before any platform fee.
+
+**GitHub Copilot already solved this.** For $10/month (Pro) or as part of a company-paid
+Business or Enterprise seat, you get access to GPT-5, Claude Opus 4, Gemini 3 Pro, and o3 —
+all through a single flat-rate subscription. 90% of Fortune 100 companies already have
+Copilot Business seats. Millions of developers, PMs, and designers have Copilot paid for
+by their employer and never think to use it outside an IDE.
+
+CopilotForge puts that subscription to work for non-developers.
+
+-----
+
+### What Makes This Different
+
+**It uses your Copilot subscription — not ours.**
+There is no AI middleman. Your prompts go from the local sidecar directly to GitHub’s
+Copilot API using your own authenticated token. We never see your traffic, we never
+mark up your API costs, and your quota is yours.
+
+**It’s a native Mac app — not another Electron wrapper.**
+Every other local AI builder (Dyad, Cursor) runs on Electron or in a browser. CopilotForge
+is built in SwiftUI, runs natively on Apple Silicon, and feels like it belongs on your Mac —
+fast animations, system dark mode, proper window management, Keychain-stored tokens.
+
+**It’s open source and free to use.**
+The app itself costs nothing. The AI costs nothing beyond what you’re already paying for
+Copilot. We only charge for managed deployment infrastructure and the iOS companion app —
+the parts that genuinely require server resources to operate.
+
+**It ships with a real workspace, not just a chat.**
+Git panel, runtime manager, structured logs, AI-assisted commit messages, port conflict
+resolution, multi-stack support (Node, Python, HTML) — the things non-developers
+shouldn’t have to think about are handled automatically.
+
+-----
+
+### The Cost Comparison
+
+|Tool             |Platform fee       |AI cost                   |Total / month|
+|-----------------|-------------------|--------------------------|-------------|
+|Lovable Pro      |$25                |included (capped credits) |**$25+**     |
+|Bolt             |$20                |token overages common     |**$20–80+**  |
+|Dyad + Claude API|free               |~$15–60 retail tokens     |**$15–60**   |
+|GitHub Spark     |$39 (Pro+ required)|included                  |**$39**      |
+|**CopilotForge** |**free**           |**$0** (your Copilot plan)|**$0***      |
+
+*You pay only for deployments and the iOS companion if you want them.
+If your company pays for Copilot Business or Enterprise, your AI cost is literally $0.
+
+-----
+
+### Who This Is For
+
+- **PMs and designers** at companies with Copilot Business seats who want to build
+  internal tools without filing a ticket with engineering
+- **Founders** who have a Copilot subscription and want to validate ideas fast without
+  paying Lovable out of pocket
+- **Developers** who want a native Mac workspace that treats their project like a real
+  codebase — not a cloud sandbox they don’t control
+- **Anyone** who believes their code, their prompts, and their projects should stay on
+  their machine
+
+-----
+
+### Why Not Just Use GitHub Spark?
+
+GitHub Spark is GitHub’s own answer to this space — and it’s a real product. But it
+requires Copilot **Pro+** ($39/month), runs entirely in the browser, is closed source,
+and hosts your project on GitHub’s infrastructure. CopilotForge works with any paid
+Copilot plan starting at $10/month, runs locally, is fully open source, and your code
+never leaves your machine unless you choose to deploy it.
+
 ## Current Status
 
 - Auth flow: implemented (GitHub device flow)
