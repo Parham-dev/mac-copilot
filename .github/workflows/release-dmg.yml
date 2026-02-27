@@ -87,6 +87,24 @@ jobs:
             build
 
           test -d "$APP_PATH"
+
+          # Re-sign all embedded Mach-O artifacts (native node modules/helpers/binaries)
+          # that ship inside sidecar resources to satisfy notarization requirements.
+          while IFS= read -r -d '' candidate; do
+            if file -b "$candidate" | grep -q "Mach-O"; then
+              echo "Signing embedded binary: $candidate"
+              codesign --force --sign 'Developer ID Application' --options runtime --timestamp "$candidate"
+            fi
+          done < <(find "$APP_PATH/Contents/Resources/sidecar" -type f -print0)
+
+          # Re-sign the outer app after nested code signatures change.
+          codesign --force \
+            --sign 'Developer ID Application' \
+            --options runtime \
+            --timestamp \
+            --preserve-metadata=identifier,entitlements,requirements,flags \
+            "$APP_PATH"
+
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
