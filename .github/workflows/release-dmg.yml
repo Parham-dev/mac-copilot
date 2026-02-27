@@ -108,14 +108,6 @@ jobs:
           KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
           echo "$APPLE_NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
 
-          xcrun notarytool submit "$APP_PATH" \
-            --key "$KEY_PATH" \
-            --key-id "$APPLE_NOTARY_KEY_ID" \
-            --issuer "$APPLE_NOTARY_ISSUER_ID" \
-            --wait
-
-          xcrun stapler staple "$APP_PATH"
-
           xcrun notarytool submit "$DMG_PATH" \
             --key "$KEY_PATH" \
             --key-id "$APPLE_NOTARY_KEY_ID" \
