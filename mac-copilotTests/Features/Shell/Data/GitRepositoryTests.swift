@@ -3,13 +3,13 @@ import Testing
 @testable import mac_copilot
 
 struct GitRepositoryTests {
-    @Test func parsing_branchNameHandlesEdgeCases() {
+    @Test(.tags(.unit)) func parsing_branchNameHandlesEdgeCases() {
         #expect(LocalGitRepositoryParsing.parseBranchName(from: "## No commits yet on main") == "main")
         #expect(LocalGitRepositoryParsing.parseBranchName(from: "## HEAD (no branch)") == "Detached HEAD")
         #expect(LocalGitRepositoryParsing.parseBranchName(from: "## feature/refactor...origin/feature/refactor [ahead 1]") == "feature/refactor")
     }
 
-    @Test func parsing_numstatAggregatesAndNormalizesRenamePaths() {
+    @Test(.tags(.unit)) func parsing_numstatAggregatesAndNormalizesRenamePaths() {
         let output = [
             "5\t2\tsrc/ViewModel.swift",
             "3\t1\tsrc/ViewModel.swift",
@@ -24,14 +24,14 @@ struct GitRepositoryTests {
         #expect(map["new/name.txt"]?.deleted == 0)
     }
 
-    @Test func parsing_fileStateMappingPrefersAddedThenDeletedThenModified() {
+    @Test(.tags(.unit)) func parsing_fileStateMappingPrefersAddedThenDeletedThenModified() {
         #expect(LocalGitRepositoryParsing.mapFileState(stagedStatus: "A", unstagedStatus: " ") == .added)
         #expect(LocalGitRepositoryParsing.mapFileState(stagedStatus: " ", unstagedStatus: "?") == .added)
         #expect(LocalGitRepositoryParsing.mapFileState(stagedStatus: "D", unstagedStatus: " ") == .deleted)
         #expect(LocalGitRepositoryParsing.mapFileState(stagedStatus: "R", unstagedStatus: " ") == .modified)
     }
 
-    @Test func manager_fileChangesMapsStatesAndUsesLineCountFallbackForAddedTextFile() async throws {
+    @Test(.tags(.unit, .async_)) func manager_fileChangesMapsStatesAndUsesLineCountFallbackForAddedTextFile() async throws {
         let temp = try TemporaryRepo.make()
         defer { temp.cleanup() }
 
@@ -84,7 +84,7 @@ struct GitRepositoryTests {
         #expect(renamed.deletedLines == 0)
     }
 
-    @Test func manager_commitRejectsEmptyMessage() async {
+    @Test(.tags(.unit, .async_)) func manager_commitRejectsEmptyMessage() async {
         let manager = LocalGitRepositoryManager(
             commandRunner: FakeGitCommandRunner([:]),
             fileSystem: FakeGitFileSystem(exists: false)
@@ -95,7 +95,7 @@ struct GitRepositoryTests {
         }
     }
 
-    @Test func manager_commitThrowsWhenStagingFails() async {
+    @Test(.tags(.unit, .async_)) func manager_commitThrowsWhenStagingFails() async {
         let path = "/tmp/repo"
         let runner = FakeGitCommandRunner([
             ["-C", path, "add", "-A"]: GitCommandResult(terminationStatus: 1, output: "index.lock exists")
@@ -110,7 +110,7 @@ struct GitRepositoryTests {
         #expect(runner.calls.first == ["-C", path, "add", "-A"])
     }
 
-    @Test func manager_commitThrowsWhenCommitCommandFails() async {
+    @Test(.tags(.unit, .async_)) func manager_commitThrowsWhenCommitCommandFails() async {
         let path = "/tmp/repo"
         let runner = FakeGitCommandRunner([
             ["-C", path, "add", "-A"]: GitCommandResult(terminationStatus: 0, output: ""),

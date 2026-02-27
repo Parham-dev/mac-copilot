@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct ChatEventsStoreTests {
-    @Test func publishChatTitleDidUpdate_emitsEvent() async throws {
+    @Test(.tags(.unit)) func publishChatTitleDidUpdate_emitsEvent() async throws {
         let store = ChatEventsStore()
         let chatID = UUID()
         var received: ChatTitleDidUpdateEvent?
@@ -19,7 +19,7 @@ struct ChatEventsStoreTests {
         #expect(received?.title == "New Title")
     }
 
-    @Test func publishChatResponseDidFinish_emitsEvent() async throws {
+    @Test(.tags(.unit)) func publishChatResponseDidFinish_emitsEvent() async throws {
         let store = ChatEventsStore()
         var received: ChatResponseDidFinishEvent?
 
@@ -31,7 +31,7 @@ struct ChatEventsStoreTests {
         #expect(received?.projectPath == "/tmp/project")
     }
 
-    @Test func lateSubscriber_doesNotReceivePreviousEvents() {
+    @Test(.tags(.unit, .regression)) func lateSubscriber_doesNotReceivePreviousEvents() {
         let store = ChatEventsStore()
         let chatID = UUID()
 
@@ -44,7 +44,7 @@ struct ChatEventsStoreTests {
         #expect(received == nil)
     }
 
-    @Test func publishChatTitleDidUpdate_multipleEventsReceivedInOrder() {
+    @Test(.tags(.unit)) func publishChatTitleDidUpdate_multipleEventsReceivedInOrder() {
         let store = ChatEventsStore()
         var receivedTitles: [String] = []
 

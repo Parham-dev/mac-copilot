@@ -6,7 +6,7 @@ import Testing
 
 @MainActor
 struct AppStoresTests {
-    @Test func appBootstrapService_runsDependenciesInOrderOnlyOnce() async {
+    @Test(.tags(.unit, .async_)) func appBootstrapService_runsDependenciesInOrderOnlyOnce() async {
         let recorder = CallRecorder()
         let sidecar = RecordingSidecarLifecycle(recorder: recorder)
         let authRepository = FakeAuthRepository(recorder: recorder)
@@ -37,7 +37,7 @@ struct AppStoresTests {
         #expect(companionService.fetchStatusCount == 1)
     }
 
-    @Test func modelSelectionStore_normalizesPersistsAndBumpsChangeToken() {
+    @Test(.tags(.unit)) func modelSelectionStore_normalizesPersistsAndBumpsChangeToken() {
         let preferences = InMemoryModelSelectionPreferencesStore([" old ", "gpt-5"])
         let store = ModelSelectionStore(preferencesStore: preferences)
 
@@ -50,7 +50,7 @@ struct AppStoresTests {
         #expect(store.changeToken == 1)
     }
 
-    @Test func mcpToolsStore_normalizesPersistsAndBumpsChangeToken() {
+    @Test(.tags(.unit)) func mcpToolsStore_normalizesPersistsAndBumpsChangeToken() {
         let preferences = InMemoryMCPToolsPreferencesStore(["old_tool"])
         let store = MCPToolsStore(preferencesStore: preferences)
 
@@ -61,7 +61,7 @@ struct AppStoresTests {
         #expect(store.changeToken == 1)
     }
 
-    @Test func companionStatusStore_refreshStatus_updatesConnectedStateAndComputedProperties() async {
+    @Test(.tags(.unit, .async_)) func companionStatusStore_refreshStatus_updatesConnectedStateAndComputedProperties() async {
         let now = Date(timeIntervalSince1970: 1_234)
         let service = RecordingCompanionConnectionService(
             statusSnapshot: CompanionConnectionSnapshot(connectedDeviceName: "Parham iPhone", connectedAt: now)
@@ -78,7 +78,7 @@ struct AppStoresTests {
         #expect(store.lastErrorMessage == nil)
     }
 
-    @Test func companionStatusStore_startPairing_setsPairingState() async {
+    @Test(.tags(.unit, .async_)) func companionStatusStore_startPairing_setsPairingState() async {
         let expiresAt = Date(timeIntervalSince1970: 9_999)
         let service = RecordingCompanionConnectionService(
             pairingSession: CompanionPairingSession(code: "ABC123", qrPayload: "payload", expiresAt: expiresAt)
@@ -94,7 +94,7 @@ struct AppStoresTests {
         #expect(!store.isBusy)
     }
 
-    @Test func companionStatusStore_disconnect_clearsPairingAndAppliesDisconnectedStatus() async {
+    @Test(.tags(.unit, .async_)) func companionStatusStore_disconnect_clearsPairingAndAppliesDisconnectedStatus() async {
         let service = RecordingCompanionConnectionService(
             disconnectSnapshot: CompanionConnectionSnapshot(connectedDeviceName: nil, connectedAt: nil)
         )
@@ -110,7 +110,7 @@ struct AppStoresTests {
         #expect(!store.isBusy)
     }
 
-    @Test func companionStatusStore_recordsErrorAndClearsBusyWhenOperationFails() async {
+    @Test(.tags(.unit, .async_)) func companionStatusStore_recordsErrorAndClearsBusyWhenOperationFails() async {
         let service = RecordingCompanionConnectionService(fetchStatusError: CompanionStoreTestError.failed)
         let store = CompanionStatusStore(service: service)
 
@@ -121,7 +121,7 @@ struct AppStoresTests {
         #expect(store.lastErrorMessage == CompanionStoreTestError.failed.localizedDescription)
     }
 
-    @Test func appEnvironment_wiresSharedContainerDependencies() {
+    @Test(.tags(.smoke)) func appEnvironment_wiresSharedContainerDependencies() {
         let container = Container.shared
         let environment = AppEnvironment(container: container)
 
@@ -133,7 +133,7 @@ struct AppStoresTests {
         #expect(environment.shellEnvironment.projectCreationService === container.projectCreationService())
     }
 
-    @Test func appContainer_storeFactoriesReturnSingletonInstances() {
+    @Test(.tags(.smoke)) func appContainer_storeFactoriesReturnSingletonInstances() {
         let container = Container.shared
 
         #expect(container.modelSelectionStore() === container.modelSelectionStore())

@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct CompanionSyncPayloadTests {
-    @Test func postsSnapshotPayloadWithProjectsChatsMessages() async {
+    @Test(.tags(.integration, .async_)) func postsSnapshotPayloadWithProjectsChatsMessages() async {
         URLProtocolSnapshotStub.reset()
         URLProtocol.registerClass(URLProtocolSnapshotStub.self)
         defer {

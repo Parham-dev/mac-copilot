@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct ChatViewModelTests {
-    @Test func loadModels_appliesPreferredVisibilityAndSelectionFallback() async {
+    @Test(.tags(.unit, .async_)) func loadModels_appliesPreferredVisibilityAndSelectionFallback() async {
         let modelRepo = FakeModelListingRepository(
             models: ["gpt-5", "claude-opus-4", "gemini-3-pro"],
             catalog: [
@@ -24,7 +24,7 @@ struct ChatViewModelTests {
         #expect(viewModel.modelCatalogByID["gpt-5"] != nil)
     }
 
-    @Test func loadModels_clearsSelectionWhenFetchReturnsEmpty() async {
+    @Test(.tags(.unit, .async_)) func loadModels_clearsSelectionWhenFetchReturnsEmpty() async {
         let modelRepo = FakeModelListingRepository(models: [], catalog: [])
         let viewModel = makeViewModel(modelRepo: modelRepo)
         viewModel.selectedModel = "gpt-5"
@@ -35,7 +35,7 @@ struct ChatViewModelTests {
         #expect(viewModel.selectedModel.isEmpty)
     }
 
-    @Test func send_successfulStreamPersistsAssistantMetadataAndToolEvents() async {
+    @Test(.tags(.unit, .async_)) func send_successfulStreamPersistsAssistantMetadataAndToolEvents() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .status("Planning"),
@@ -94,7 +94,7 @@ struct ChatViewModelTests {
         )
     }
 
-    @Test func send_failureMarksFailedAndWritesErrorMessage() async throws {
+    @Test(.tags(.unit, .async_)) func send_failureMarksFailedAndWritesErrorMessage() async throws {
         let promptRepo = FakePromptStreamingRepository(error: PromptStreamError(message: "Boom"))
         let chatRepo = InMemoryChatRepository()
         let viewModel = makeViewModel(promptRepo: promptRepo, chatRepo: chatRepo)
@@ -112,7 +112,7 @@ struct ChatViewModelTests {
         #expect(persisted.text.contains("response failed") == true)
     }
 
-    @Test func send_usesAllowedToolsSubsetWhenNotAllEnabled() async {
+    @Test(.tags(.unit, .async_)) func send_usesAllowedToolsSubsetWhenNotAllEnabled() async {
         let promptRepo = FakePromptStreamingRepository(streamEvents: [.textDelta("ok")])
         let toolStore = MCPToolsStore(preferencesStore: InMemoryMCPToolsPreferencesStore(["read_file", "list_dir"]))
         let viewModel = makeViewModel(promptRepo: promptRepo, mcpToolsStore: toolStore)
@@ -122,7 +122,7 @@ struct ChatViewModelTests {
         #expect(promptRepo.lastRequest?.allowedTools == ["list_dir", "read_file"])
     }
 
-    @Test func send_firstPromptUpdatesChatTitleUsingTruncatedText() async throws {
+    @Test(.tags(.unit, .async_)) func send_firstPromptUpdatesChatTitleUsingTruncatedText() async throws {
         let promptRepo = FakePromptStreamingRepository(streamEvents: [.textDelta("ok")])
         let chatRepo = InMemoryChatRepository()
         let viewModel = makeViewModel(promptRepo: promptRepo, chatRepo: chatRepo)
@@ -138,7 +138,7 @@ struct ChatViewModelTests {
         #expect(viewModel.chatTitle == updatedTitle)
     }
 
-    @Test func send_streamAssemblerHandlesCumulativeChunksWithoutDuplication() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerHandlesCumulativeChunksWithoutDuplication() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("Let me check the actual current working directory:"),
@@ -154,7 +154,7 @@ struct ChatViewModelTests {
         #expect(assistantText == "Let me check the actual current working directory: Now let me read the files: This is a basic Node.js web server project")
     }
 
-    @Test func send_streamAssemblerHandlesCumulativeWhitespaceVariantsWithoutDuplication() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerHandlesCumulativeWhitespaceVariantsWithoutDuplication() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("Let me check the current directory:"),
@@ -169,7 +169,7 @@ struct ChatViewModelTests {
         #expect(viewModel.messages.last?.text == "Let me check the current directory:\nNow let me view the files with proper paths:")
     }
 
-    @Test func send_streamAssemblerHandlesOverlappingDeltaChunks() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerHandlesOverlappingDeltaChunks() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("Hello wor"),
@@ -183,7 +183,7 @@ struct ChatViewModelTests {
         #expect(viewModel.messages.last?.text == "Hello world")
     }
 
-    @Test func send_streamAssemblerDoesNotSplitWordsAcrossChunks() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerDoesNotSplitWordsAcrossChunks() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("some"),
@@ -198,7 +198,7 @@ struct ChatViewModelTests {
         #expect(viewModel.messages.last?.text == "somef words and characteristics")
     }
 
-    @Test func send_streamAssemblerPreservesMarkdownBoldMarkersAcrossChunks() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerPreservesMarkdownBoldMarkersAcrossChunks() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("• *"),
@@ -212,7 +212,7 @@ struct ChatViewModelTests {
         #expect(viewModel.messages.last?.text == "• **Frontend:** An index.html with a Hello World page")
     }
 
-    @Test func send_streamAssemblerAvoidsSingleCharacterOverlapLetterDrop() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerAvoidsSingleCharacterOverlapLetterDrop() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("This project has:\n- **N"),
@@ -226,7 +226,7 @@ struct ChatViewModelTests {
         #expect(viewModel.messages.last?.text == "This project has:\n- **Name**: `basic-node-app`")
     }
 
-    @Test func send_streamAssemblerFormatsOrderedListBoundaries() async {
+    @Test(.tags(.unit, .async_, .regression)) func send_streamAssemblerFormatsOrderedListBoundaries() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("1."),
@@ -243,7 +243,7 @@ struct ChatViewModelTests {
         #expect(viewModel.messages.last?.text == "1. A homepage\n2. CSS styling3 An HTML file")
     }
 
-    @Test func send_inlineToolCallAppearsBetweenTextSegmentsInOrder() async {
+    @Test(.tags(.unit, .async_)) func send_inlineToolCallAppearsBetweenTextSegmentsInOrder() async {
         let promptRepo = FakePromptStreamingRepository(
             streamEvents: [
                 .textDelta("First segment. "),

@@ -3,7 +3,7 @@ import Testing
 @testable import mac_copilot
 
 struct SidecarLifecycleTests {
-    @Test func restartPolicy_backoffAndJitterAreDeterministicWhenInjected() {
+    @Test(.tags(.unit)) func restartPolicy_backoffAndJitterAreDeterministicWhenInjected() {
         let policy = SidecarRestartPolicy(
             maxRestartsInWindow: 4,
             restartWindowSeconds: 60,
@@ -20,7 +20,7 @@ struct SidecarLifecycleTests {
         #expect(policy.nextRetryDelay() == 2.2)
     }
 
-    @Test func restartPolicy_windowGuardBlocksAndThenRecovers() {
+    @Test(.tags(.unit)) func restartPolicy_windowGuardBlocksAndThenRecovers() {
         let policy = SidecarRestartPolicy(maxRestartsInWindow: 2, restartWindowSeconds: 60, jitterProvider: { 0 })
         let base = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -30,7 +30,7 @@ struct SidecarLifecycleTests {
         #expect(policy.canAttemptRestart(now: base.addingTimeInterval(61)))
     }
 
-    @Test func stateMachine_crashDuringHealthyTransitionsToDegradedAndRequestsRetry() {
+    @Test(.tags(.unit)) func stateMachine_crashDuringHealthyTransitionsToDegradedAndRequestsRetry() {
         let machine = SidecarStateMachine()
         var logs: [String] = []
         machine.transition(to: .healthy) { logs.append($0) }
@@ -44,7 +44,7 @@ struct SidecarLifecycleTests {
         #expect(machine.state == .degraded)
     }
 
-    @Test func stateMachine_intentionalTerminationDuringRestartStopsWithoutRetry() {
+    @Test(.tags(.unit)) func stateMachine_intentionalTerminationDuringRestartStopsWithoutRetry() {
         let machine = SidecarStateMachine()
         machine.transition(to: .restarting) { _ in }
 
@@ -57,7 +57,7 @@ struct SidecarLifecycleTests {
         #expect(machine.state == .stopped)
     }
 
-    @Test func sidecarManager_reusesHealthyExternalSidecarWithoutLaunchingProcess() async {
+    @Test(.tags(.unit, .async_)) func sidecarManager_reusesHealthyExternalSidecarWithoutLaunchingProcess() async {
         let preflight = FakePreflight.success()
         let runtime = FakeRuntimeUtilities()
         runtime.healthyResults[2] = true
@@ -86,7 +86,7 @@ struct SidecarLifecycleTests {
         #expect(restart.canAttemptCallCount == 0)
     }
 
-    @Test func sidecarManager_clearsStaleHandleAndStartsProcess() async {
+    @Test(.tags(.unit, .async_)) func sidecarManager_clearsStaleHandleAndStartsProcess() async {
         let preflight = FakePreflight.success()
         let runtime = FakeRuntimeUtilities()
         runtime.waitForHealthyResult = true
@@ -113,7 +113,7 @@ struct SidecarLifecycleTests {
         #expect(process.clearStaleCalls == 1)
     }
 
-    @Test func sidecarManager_failedReadinessSchedulesRetryWhenAllowed() async {
+    @Test(.tags(.unit, .async_)) func sidecarManager_failedReadinessSchedulesRetryWhenAllowed() async {
         let preflight = FakePreflight.success()
         let runtime = FakeRuntimeUtilities()
         runtime.waitForHealthyResult = false
@@ -142,7 +142,7 @@ struct SidecarLifecycleTests {
         #expect(logger.contains("Scheduling sidecar retry"))
     }
 
-    @Test func sidecarManager_failedReadinessMarksFailedWhenRetryGuardTrips() async {
+    @Test(.tags(.unit, .async_)) func sidecarManager_failedReadinessMarksFailedWhenRetryGuardTrips() async {
         let preflight = FakePreflight.success()
         let runtime = FakeRuntimeUtilities()
         runtime.waitForHealthyResult = false
@@ -169,7 +169,7 @@ struct SidecarLifecycleTests {
         #expect(scheduler.delays.isEmpty)
     }
 
-    @Test func sidecarManager_crashTerminationSchedulesRetry_butIntentionalDoesNot() async {
+    @Test(.tags(.unit, .async_, .regression)) func sidecarManager_crashTerminationSchedulesRetry_butIntentionalDoesNot() async {
         let preflight = FakePreflight.success()
         let runtime = FakeRuntimeUtilities()
         runtime.waitForHealthyResult = true

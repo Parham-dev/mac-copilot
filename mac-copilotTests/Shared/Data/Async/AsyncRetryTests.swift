@@ -3,7 +3,7 @@ import Testing
 @testable import mac_copilot
 
 struct AsyncRetryTests {
-    @Test func succeedsOnFirstAttempt() async throws {
+    @Test(.tags(.unit, .async_)) func succeedsOnFirstAttempt() async throws {
         var callCount = 0
         let result = try await AsyncRetry.run(
             maxAttempts: 3,
@@ -16,7 +16,7 @@ struct AsyncRetryTests {
         #expect(callCount == 1)
     }
 
-    @Test func retriesAndSucceedsOnSecondAttempt() async throws {
+    @Test(.tags(.unit, .async_)) func retriesAndSucceedsOnSecondAttempt() async throws {
         var callCount = 0
         let result = try await AsyncRetry.run(
             maxAttempts: 3,
@@ -30,7 +30,7 @@ struct AsyncRetryTests {
         #expect(callCount == 2)
     }
 
-    @Test func throwsAfterExhaustingMaxAttempts() async {
+    @Test(.tags(.unit, .async_)) func throwsAfterExhaustingMaxAttempts() async {
         var callCount = 0
         await #expect(throws: (any Error).self) {
             try await AsyncRetry.run(
@@ -44,7 +44,7 @@ struct AsyncRetryTests {
         #expect(callCount == 3)
     }
 
-    @Test func stopsRetryingWhenShouldRetryReturnsFalse() async {
+    @Test(.tags(.unit, .async_)) func stopsRetryingWhenShouldRetryReturnsFalse() async {
         var callCount = 0
         await #expect(throws: (any Error).self) {
             try await AsyncRetry.run(
@@ -58,7 +58,7 @@ struct AsyncRetryTests {
         #expect(callCount == 2)
     }
 
-    @Test func callsOnRetryCallback() async throws {
+    @Test(.tags(.unit, .async_)) func callsOnRetryCallback() async throws {
         var retryAttempts: [Int] = []
         _ = try? await AsyncRetry.run(
             maxAttempts: 3,
@@ -70,7 +70,19 @@ struct AsyncRetryTests {
         #expect(retryAttempts == [1, 2])
     }
 
-    @Test func runUntil_returnsResultOnFirstSuccess() async {
+    @Test(.tags(.unit, .async_)) func delayForAttempt_isInvokedWithCorrectAttemptNumbers() async {
+        var recordedAttempts: [Int] = []
+        _ = try? await AsyncRetry.run(
+            maxAttempts: 3,
+            delayForAttempt: { attempt in recordedAttempts.append(attempt); return 0 },
+            shouldRetry: { _, _ in true }
+        ) {
+            throw URLError(.cannotConnectToHost)
+        } as Int
+        #expect(recordedAttempts == [1, 2])
+    }
+
+    @Test(.tags(.unit, .async_)) func runUntil_returnsResultOnFirstSuccess() async {
         var callCount = 0
         let result = await AsyncRetry.runUntil(
             maxAttempts: 5,
@@ -83,7 +95,7 @@ struct AsyncRetryTests {
         #expect(callCount == 1)
     }
 
-    @Test func runUntil_retriesUntilSuccessConditionMet() async {
+    @Test(.tags(.unit, .async_)) func runUntil_retriesUntilSuccessConditionMet() async {
         var callCount = 0
         let result = await AsyncRetry.runUntil(
             maxAttempts: 5,
@@ -96,7 +108,7 @@ struct AsyncRetryTests {
         #expect(callCount == 3)
     }
 
-    @Test func runUntil_returnsLastResultWhenNeverSucceeds() async {
+    @Test(.tags(.unit, .async_)) func runUntil_returnsLastResultWhenNeverSucceeds() async {
         var callCount = 0
         let result = await AsyncRetry.runUntil(
             maxAttempts: 3,

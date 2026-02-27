@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct ModelCatalogClientTests {
-    @Test func decodesWrappedObjectPayload() async throws {
+    @Test(.tags(.unit, .async_)) func decodesWrappedObjectPayload() async throws {
         let data = try CopilotModelCatalogPayloadFixture.wrappedObjectsData()
         let transport = StubHTTPDataTransport(results: [successResult(data: data, response: makeResponse(statusCode: 200))])
         var sidecarEnsures = 0
@@ -27,7 +27,7 @@ struct ModelCatalogClientTests {
         #expect(claude.maxPromptTokens == 64000)
     }
 
-    @Test func decodesStringPayloadShapes() async throws {
+    @Test(.tags(.unit, .async_)) func decodesStringPayloadShapes() async throws {
         let wrappedStringData = try CopilotModelCatalogPayloadFixture.wrappedStringListData()
         let directStringData = try CopilotModelCatalogPayloadFixture.directStringListData()
 
@@ -55,7 +55,7 @@ struct ModelCatalogClientTests {
         #expect(directIDs == ["claude-opus-4", "gpt-5"])
     }
 
-    @Test func retriesRecoverableConnectionErrorOnce() async throws {
+    @Test(.tags(.unit, .async_, .regression)) func retriesRecoverableConnectionErrorOnce() async throws {
         let payload = try CopilotModelCatalogPayloadFixture.wrappedStringListData()
         let transport = StubHTTPDataTransport(
             results: [
@@ -82,7 +82,7 @@ struct ModelCatalogClientTests {
         #expect(delay.sleeps == [0.45])
     }
 
-    @Test func returnsEmptyOnHttpFailure() async {
+    @Test(.tags(.unit, .async_)) func returnsEmptyOnHttpFailure() async {
         let response = makeResponse(statusCode: 500)
         let client = CopilotModelCatalogClient(
             baseURL: URL(string: "http://127.0.0.1:7878")!,
@@ -101,7 +101,7 @@ struct ModelCatalogClientTests {
 
     // MARK: - HTTP Payload Contract tests
 
-    @Test func fetchUsesModelsGetRouteContract() async throws {
+    @Test(.tags(.unit, .async_)) func fetchUsesModelsGetRouteContract() async throws {
         let transport = CapturingHTTPDataTransport(
             result: .success((
                 Data("[\"gpt-5\"]".utf8),

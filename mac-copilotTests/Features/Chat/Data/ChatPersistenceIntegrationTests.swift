@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct ChatPersistenceIntegrationTests {
-    @Test func swiftData_projectChatMessageRoundtripPreservesOrderingAndMetadata() throws {
+    @Test(.tags(.integration)) func swiftData_projectChatMessageRoundtripPreservesOrderingAndMetadata() throws {
         let context = try makeInMemoryContext()
         let projectRepository = SwiftDataProjectRepository(context: context)
         let chatRepository = SwiftDataChatRepository(context: context)
@@ -62,7 +62,7 @@ struct ChatPersistenceIntegrationTests {
         #expect(fetchedProjects.first?.id == project.id)
     }
 
-    @Test func swiftData_deleteChatRemovesThreadAndMessages() throws {
+    @Test(.tags(.integration)) func swiftData_deleteChatRemovesThreadAndMessages() throws {
         let context = try makeInMemoryContext()
         let projectRepository = SwiftDataProjectRepository(context: context)
         let chatRepository = SwiftDataChatRepository(context: context)
@@ -80,7 +80,7 @@ struct ChatPersistenceIntegrationTests {
         #expect(try chatRepository.loadMessages(chatID: chat.id).isEmpty)
     }
 
-    @Test func swiftData_loadMessages_decodesLegacyMetadataWithoutToolExecutionID() throws {
+    @Test(.tags(.integration, .regression)) func swiftData_loadMessages_decodesLegacyMetadataWithoutToolExecutionID() throws {
         let context = try makeInMemoryContext()
         let projectRepository = SwiftDataProjectRepository(context: context)
         let chatRepository = SwiftDataChatRepository(context: context)

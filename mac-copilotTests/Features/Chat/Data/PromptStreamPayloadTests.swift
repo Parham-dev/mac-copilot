@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct PromptStreamPayloadTests {
-    @Test func postPayloadIncludesExpectedFields() async throws {
+    @Test(.tags(.unit, .async_)) func postPayloadIncludesExpectedFields() async throws {
         let transport = CapturingLineStreamTransport()
         let chatID = UUID()
         let client = CopilotPromptStreamClient(
@@ -37,7 +37,7 @@ struct PromptStreamPayloadTests {
         #expect((json["allowedTools"] as? [String]) == ["read_file", "list_dir"])
     }
 
-    @Test func omitsBlankModelAndNilToolsFromPayload() async throws {
+    @Test(.tags(.unit, .async_)) func omitsBlankModelAndNilToolsFromPayload() async throws {
         let transport = CapturingLineStreamTransport()
         let client = CopilotPromptStreamClient(
             baseURL: URL(string: "http://127.0.0.1:7878")!,

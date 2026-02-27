@@ -5,21 +5,21 @@ import Testing
 struct StreamTextAssemblerTests {
     // MARK: - Empty / identity cases
 
-    @Test func emptyIncoming_returnsCurrent() {
+    @Test(.tags(.unit)) func emptyIncoming_returnsCurrent() {
         #expect(StreamTextAssembler.merge(current: "Hello", incoming: "") == "Hello")
     }
 
-    @Test func emptyCurrent_returnsIncoming() {
+    @Test(.tags(.unit)) func emptyCurrent_returnsIncoming() {
         #expect(StreamTextAssembler.merge(current: "", incoming: "Hello") == "Hello")
     }
 
-    @Test func identicalStrings_returnsCurrent() {
+    @Test(.tags(.unit)) func identicalStrings_returnsCurrent() {
         #expect(StreamTextAssembler.merge(current: "Hello world", incoming: "Hello world") == "Hello world")
     }
 
     // MARK: - Cumulative / prefix growth
 
-    @Test func incomingIsCumulativePrefixExtension_appendsNewPart() {
+    @Test(.tags(.unit)) func incomingIsCumulativePrefixExtension_appendsNewPart() {
         let result = StreamTextAssembler.merge(
             current: "Hello",
             incoming: "Hello world"
@@ -27,7 +27,7 @@ struct StreamTextAssemblerTests {
         #expect(result == "Hello world")
     }
 
-    @Test func incomingIsSubstringOfCurrent_returnsCurrent() {
+    @Test(.tags(.unit)) func incomingIsSubstringOfCurrent_returnsCurrent() {
         let result = StreamTextAssembler.merge(
             current: "Hello world",
             incoming: "Hello"
@@ -37,7 +37,7 @@ struct StreamTextAssemblerTests {
 
     // MARK: - Suffix-prefix overlap deduplication
 
-    @Test func overlappingChunks_deduplicatesSuffix() {
+    @Test(.tags(.unit, .regression)) func overlappingChunks_deduplicatesSuffix() {
         let result = StreamTextAssembler.merge(
             current: "Hello wor",
             incoming: "world"
@@ -45,7 +45,7 @@ struct StreamTextAssemblerTests {
         #expect(result == "Hello world")
     }
 
-    @Test func singleCharacterOverlap_notWordLike_doesNotDeduplicate() {
+    @Test(.tags(.unit, .regression)) func singleCharacterOverlap_notWordLike_doesNotDeduplicate() {
         // ":" is not word-like, single char overlap not deduped
         let result = StreamTextAssembler.merge(
             current: "Check this:",
@@ -57,7 +57,7 @@ struct StreamTextAssemblerTests {
 
     // MARK: - Boundary spacing
 
-    @Test func colonFollowedByWord_insertsSpace() {
+    @Test(.tags(.unit)) func colonFollowedByWord_insertsSpace() {
         let result = StreamTextAssembler.merge(
             current: "directory:",
             incoming: "Now"
@@ -65,7 +65,7 @@ struct StreamTextAssemblerTests {
         #expect(result == "directory: Now")
     }
 
-    @Test func orderedListNumber_insertsBoundaryNewline() {
+    @Test(.tags(.unit)) func orderedListNumber_insertsBoundaryNewline() {
         let result = StreamTextAssembler.merge(
             current: "Item one",
             incoming: "2. Item two"
@@ -73,7 +73,7 @@ struct StreamTextAssemblerTests {
         #expect(result == "Item one\n2. Item two")
     }
 
-    @Test func orderedListDotFollowedByWord_insertsSpace() {
+    @Test(.tags(.unit)) func orderedListDotFollowedByWord_insertsSpace() {
         // "1." then "A homepage" → "1. A homepage"
         let result = StreamTextAssembler.merge(
             current: "1.",
@@ -84,7 +84,7 @@ struct StreamTextAssemblerTests {
 
     // MARK: - Markdown preservation
 
-    @Test func boldMarkersAcrossChunks_preserved() {
+    @Test(.tags(.unit, .regression)) func boldMarkersAcrossChunks_preserved() {
         let result = StreamTextAssembler.merge(
             current: "• *",
             incoming: "*Frontend:** An index.html"
@@ -92,7 +92,7 @@ struct StreamTextAssemblerTests {
         #expect(result == "• **Frontend:** An index.html")
     }
 
-    @Test func avoidsSingleCharLetterDropOnShortOverlap() {
+    @Test(.tags(.unit, .regression)) func avoidsSingleCharLetterDropOnShortOverlap() {
         let result = StreamTextAssembler.merge(
             current: "This project has:\n- **N",
             incoming: "Name**: `basic-node-app`"
@@ -102,7 +102,7 @@ struct StreamTextAssemblerTests {
 
     // MARK: - No false overlap on short non-word chars
 
-    @Test func doesNotSplitWordAcrossChunks() {
+    @Test(.tags(.unit, .regression)) func doesNotSplitWordAcrossChunks() {
         let result = StreamTextAssembler.merge(
             current: "some",
             incoming: "f words and characteristics"
@@ -112,7 +112,7 @@ struct StreamTextAssemblerTests {
 
     // MARK: - Whitespace normalization
 
-    @Test func newlinePreservedInOutput() {
+    @Test(.tags(.unit)) func newlinePreservedInOutput() {
         let result = StreamTextAssembler.merge(
             current: "Let me check the current directory:",
             incoming: "Let me check the current directory:\nNow let me view the files:"
@@ -120,7 +120,7 @@ struct StreamTextAssemblerTests {
         #expect(result == "Let me check the current directory:\nNow let me view the files:")
     }
 
-    @Test func multipleSpacesBetweenTokens_collapsedForComparison() {
+    @Test(.tags(.unit)) func multipleSpacesBetweenTokens_collapsedForComparison() {
         // Whitespace-variant of same content should be treated as equal
         let result = StreamTextAssembler.merge(
             current: "Hello world",
