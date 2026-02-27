@@ -203,17 +203,6 @@ struct SidecarLifecyclePhase1Tests {
     }
 }
 
-private func eventually(timeout: TimeInterval = 1.0, intervalNanoseconds: UInt64 = 20_000_000, _ condition: () -> Bool) async -> Bool {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-        if condition() {
-            return true
-        }
-        try? await Task.sleep(nanoseconds: intervalNanoseconds)
-    }
-    return condition()
-}
-
 private struct FixedClock: ClockProviding {
     let now: Date
 }

@@ -16,7 +16,7 @@ struct PayloadContractsPhase4Tests {
             baseURL: URL(string: "http://127.0.0.1:7878")!,
             ensureSidecarRunning: {},
             transport: transport,
-            delayScheduler: NoOpDelaySchedulerPhase4()
+            delayScheduler: NoOpDelayScheduler()
         )
 
         let models = try await client.fetchModelCatalog()
@@ -35,7 +35,7 @@ struct PayloadContractsPhase4Tests {
             baseURL: URL(string: "http://127.0.0.1:7878")!,
             ensureSidecarRunning: {},
             lineStreamTransport: transport,
-            delayScheduler: NoOpDelaySchedulerPhase4()
+            delayScheduler: NoOpDelayScheduler()
         )
 
         let stream = client.streamPrompt(
@@ -67,7 +67,7 @@ struct PayloadContractsPhase4Tests {
             baseURL: URL(string: "http://127.0.0.1:7878")!,
             ensureSidecarRunning: {},
             lineStreamTransport: transport,
-            delayScheduler: NoOpDelaySchedulerPhase4()
+            delayScheduler: NoOpDelayScheduler()
         )
 
         let stream = client.streamPrompt(
@@ -148,188 +148,5 @@ struct PayloadContractsPhase4Tests {
         #expect((projects?.first?["id"] as? String) == project.id.uuidString)
         #expect((chats?.first?["projectId"] as? String) == project.id.uuidString)
         #expect((messages?.first?["chatId"] as? String) == chat.id.uuidString)
-    }
-}
-
-private func requestBodyData(_ request: URLRequest) -> Data? {
-    if let body = request.httpBody {
-        return body
-    }
-
-    guard let stream = request.httpBodyStream else {
-        return nil
-    }
-
-    stream.open()
-    defer { stream.close() }
-
-    let bufferSize = 4096
-    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-    defer { buffer.deallocate() }
-
-    var data = Data()
-    while stream.hasBytesAvailable {
-        let bytesRead = stream.read(buffer, maxLength: bufferSize)
-        if bytesRead <= 0 {
-            break
-        }
-        data.append(buffer, count: bytesRead)
-    }
-
-    return data.isEmpty ? nil : data
-}
-
-private final class CapturingHTTPDataTransport: HTTPDataTransporting {
-    private let result: Result<(Data, URLResponse), Error>
-    private(set) var lastRequest: URLRequest?
-
-    init(result: Result<(Data, URLResponse), Error>) {
-        self.result = result
-    }
-
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        lastRequest = request
-        switch result {
-        case .success(let value):
-            return value
-        case .failure(let error):
-            throw error
-        }
-    }
-}
-
-private final class CapturingLineStreamTransport: HTTPLineStreamTransporting {
-    private(set) var lastRequest: URLRequest?
-
-    func openLineStream(for request: URLRequest) async throws -> HTTPLineStreamResponse {
-        lastRequest = request
-
-        let stream = AsyncThrowingStream<String, Error> { continuation in
-            continuation.yield("data: [DONE]")
-            continuation.finish()
-        }
-
-        return HTTPLineStreamResponse(
-            lines: stream,
-            response: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-    }
-}
-
-private struct NoOpDelaySchedulerPhase4: AsyncDelayScheduling {
-    func sleep(seconds: TimeInterval) async throws {
-        _ = seconds
-    }
-}
-
-@MainActor
-private final class RecordingLifecycleManager: SidecarLifecycleManaging {
-    private(set) var starts = 0
-
-    func startIfNeeded() {
-        starts += 1
-    }
-
-    func restart() {}
-    func stop() {}
-}
-
-@MainActor
-private final class FixedProjectRepository: ProjectRepository {
-    private let projects: [ProjectRef]
-
-    init(projects: [ProjectRef]) {
-        self.projects = projects
-    }
-
-    func fetchProjects() -> [ProjectRef] {
-        projects
-    }
-
-    @discardableResult
-    func createProject(name: String, localPath: String) -> ProjectRef {
-        ProjectRef(name: name, localPath: localPath)
-    }
-
-    func deleteProject(projectID: UUID) {
-        _ = projectID
-    }
-}
-
-@MainActor
-private final class FixedChatRepository: ChatRepository {
-    private let chatsByProjectID: [UUID: [ChatThreadRef]]
-    private let messagesByChatID: [UUID: [ChatMessage]]
-
-    init(chatsByProjectID: [UUID: [ChatThreadRef]], messagesByChatID: [UUID: [ChatMessage]]) {
-        self.chatsByProjectID = chatsByProjectID
-        self.messagesByChatID = messagesByChatID
-    }
-
-    func fetchChats(projectID: UUID) -> [ChatThreadRef] {
-        chatsByProjectID[projectID] ?? []
-    }
-
-    @discardableResult
-    func createChat(projectID: UUID, title: String) -> ChatThreadRef {
-        ChatThreadRef(projectID: projectID, title: title)
-    }
-
-    func deleteChat(chatID: UUID) {
-        _ = chatID
-    }
-
-    func updateChatTitle(chatID: UUID, title: String) {
-        _ = chatID
-        _ = title
-    }
-
-    func loadMessages(chatID: UUID) -> [ChatMessage] {
-        messagesByChatID[chatID] ?? []
-    }
-
-    func saveMessage(chatID: UUID, message: ChatMessage) {
-        _ = chatID
-        _ = message
-    }
-
-    func updateMessage(chatID: UUID, messageID: UUID, text: String, metadata: ChatMessage.Metadata?) {
-        _ = chatID
-        _ = messageID
-        _ = text
-        _ = metadata
-    }
-}
-
-private final class URLProtocolSnapshotStub: URLProtocol {
-    static var requestHandler: ((URLRequest) -> (HTTPURLResponse, Data))?
-    static var requests: [URLRequest] = []
-
-    override class func canInit(with request: URLRequest) -> Bool {
-        request.url?.host == "phase4.local"
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
-    }
-
-    override func startLoading() {
-        guard let handler = Self.requestHandler else {
-            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-            return
-        }
-
-        Self.requests.append(request)
-        let (response, data) = handler(request)
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
-    }
-
-    override func stopLoading() {}
-
-    static func reset() {
-        requestHandler = nil
-        requests = []
     }
 }

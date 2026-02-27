@@ -258,38 +258,6 @@ private final class RecordingCompanionConnectionService: CompanionConnectionServ
     }
 }
 
-private final class InMemoryModelSelectionPreferencesStore: ModelSelectionPreferencesStoring {
-    private(set) var storedIDs: [String]
-
-    init(_ ids: [String]) {
-        self.storedIDs = ids
-    }
-
-    func readSelectedModelIDs() -> [String] {
-        storedIDs
-    }
-
-    func writeSelectedModelIDs(_ ids: [String]) {
-        storedIDs = ids
-    }
-}
-
-private final class InMemoryMCPToolsPreferencesStore: MCPToolsPreferencesStoring {
-    private(set) var storedIDs: [String]
-
-    init(_ ids: [String]) {
-        self.storedIDs = ids
-    }
-
-    func readEnabledMCPToolIDs() -> [String] {
-        storedIDs
-    }
-
-    func writeEnabledMCPToolIDs(_ ids: [String]) {
-        storedIDs = ids
-    }
-}
-
 private enum CompanionStoreTestError: LocalizedError {
     case failed
 

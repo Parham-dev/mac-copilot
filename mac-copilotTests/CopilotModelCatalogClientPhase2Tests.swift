@@ -100,50 +100,7 @@ struct CopilotModelCatalogClientPhase2Tests {
     }
 }
 
-private func successResult(data: Data, response: URLResponse) -> Result<(Data, URLResponse), Error> {
-    .success((data, response))
-}
-
 private func makeResponse(statusCode: Int) -> HTTPURLResponse {
-    HTTPURLResponse(url: URL(string: "http://127.0.0.1:7878/models")!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
-}
-
-private final class StubHTTPDataTransport: HTTPDataTransporting {
-    private var results: [Result<(Data, URLResponse), Error>]
-    private(set) var callCount = 0
-
-    init(results: [Result<(Data, URLResponse), Error>]) {
-        self.results = results
-    }
-
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        _ = request
-        callCount += 1
-        guard !results.isEmpty else {
-            throw URLError(.badServerResponse)
-        }
-
-        let result = results.removeFirst()
-        switch result {
-        case .success(let value):
-            return value
-        case .failure(let error):
-            throw error
-        }
-    }
-}
-
-private struct NoOpDelayScheduler: AsyncDelayScheduling {
-    func sleep(seconds: TimeInterval) async throws {
-        _ = seconds
-    }
-}
-
-private final class RecordingDelayScheduler: AsyncDelayScheduling {
-    private(set) var sleeps: [TimeInterval] = []
-
-    func sleep(seconds: TimeInterval) async throws {
-        sleeps.append(seconds)
-    }
+    makeHTTPResponse(statusCode: statusCode)
 }
 
