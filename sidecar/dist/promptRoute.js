@@ -9,6 +9,9 @@ export function registerPromptRoute(app) {
         const promptText = String(req.body?.prompt ?? "");
         const chatID = typeof req.body?.chatID === "string" ? req.body.chatID : undefined;
         const projectPath = typeof req.body?.projectPath === "string" ? req.body.projectPath : undefined;
+        const allowedTools = Array.isArray(req.body?.allowedTools)
+            ? req.body.allowedTools.filter((entry) => typeof entry === "string")
+            : null;
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
@@ -20,6 +23,9 @@ export function registerPromptRoute(app) {
         let assistantText = "";
         let usageEventCount = 0;
         let lastUsageSnapshot = null;
+        let toolStartCount = 0;
+        let toolCompleteCount = 0;
+        const toolNamesUsed = new Set();
         companionChatStore.recordUserPrompt({
             chatId: chatID,
             projectPath,
@@ -29,6 +35,8 @@ export function registerPromptRoute(app) {
             requestId,
             promptChars: promptText.length,
             authenticated: isAuthenticated(),
+            allowedToolsCount: allowedTools?.length ?? null,
+            allowedToolsSample: allowedTools?.slice(0, 8) ?? null,
         }));
         const telemetry = await startPromptTelemetry({
             requestId,
@@ -36,7 +44,7 @@ export function registerPromptRoute(app) {
             chatId: chatID,
         });
         try {
-            await sendPrompt(promptText, chatID, req.body?.model, projectPath, req.body?.allowedTools, requestId, (event) => {
+            await sendPrompt(promptText, chatID, req.body?.model, projectPath, allowedTools, requestId, (event) => {
                 const payload = typeof event === "object" && event !== null
                     ? event
                     : { type: "text", text: String(event ?? "") };
@@ -55,9 +63,13 @@ export function registerPromptRoute(app) {
                     telemetry.onUsage(payload);
                 }
                 if (payload.type === "tool_start" && typeof payload.toolName === "string") {
+                    toolStartCount += 1;
+                    toolNamesUsed.add(payload.toolName);
                     telemetry.onToolStart(payload.toolName, typeof payload.toolCallID === "string" ? payload.toolCallID : undefined);
                 }
                 if (payload.type === "tool_complete" && typeof payload.toolName === "string") {
+                    toolCompleteCount += 1;
+                    toolNamesUsed.add(payload.toolName);
                     telemetry.onToolComplete(payload.toolName, payload.success !== false, typeof payload.details === "string" ? payload.details : undefined, typeof payload.toolCallID === "string" ? payload.toolCallID : undefined);
                 }
                 if (payload.type === "text" && typeof payload.text === "string") {
@@ -75,6 +87,9 @@ export function registerPromptRoute(app) {
                 chunkCount,
                 totalChars,
                 usageEventCount,
+                toolStartCount,
+                toolCompleteCount,
+                toolNamesUsed: Array.from(toolNamesUsed),
                 usage: lastUsageSnapshot,
             }));
             telemetry.end();

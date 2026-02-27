@@ -134,6 +134,11 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       const serializedArgs = safeJSONStringify(toolArgs);
 
       if (!toolName) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          reason: "missing_tool_name",
+        }));
         return {
           permissionDecision: "deny",
           permissionDecisionReason: "Tool call denied: missing tool name.",
@@ -141,6 +146,12 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       }
 
       if (blockedTools.has(toolName)) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          toolName,
+          reason: "blocked_by_policy",
+        }));
         return {
           permissionDecision: "deny",
           permissionDecisionReason: `Tool '${toolName}' is blocked by sidecar policy.`,
@@ -148,6 +159,13 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       }
 
       if (allowedToolSet && !allowedToolSet.has(toolName)) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          toolName,
+          reason: "not_in_allowed_list",
+          allowedToolsCount: allowedToolSet.size,
+        }));
         return {
           permissionDecision: "deny",
           permissionDecisionReason: `Tool '${toolName}' is not in the allowed tool list for this chat context.`,
@@ -155,6 +173,14 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       }
 
       if (serializedArgs.length > maxToolArgsBytes) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          toolName,
+          reason: "args_too_large",
+          argsBytes: serializedArgs.length,
+          maxToolArgsBytes,
+        }));
         return {
           permissionDecision: "deny",
           permissionDecisionReason: `Tool '${toolName}' arguments exceed the configured size limit (${maxToolArgsBytes} bytes).`,
@@ -162,6 +188,14 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       }
 
       if (typeof toolArgs?.command === "string" && toolArgs.command.length > maxStringValueBytes) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          toolName,
+          reason: "command_too_large",
+          commandLength: toolArgs.command.length,
+          maxStringValueBytes,
+        }));
         return {
           permissionDecision: "deny",
           permissionDecisionReason: `Tool '${toolName}' command exceeds the configured size limit (${maxStringValueBytes} chars).`,

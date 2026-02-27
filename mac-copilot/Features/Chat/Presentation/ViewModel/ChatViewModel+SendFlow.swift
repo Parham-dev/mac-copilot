@@ -59,6 +59,20 @@ extension ChatViewModel {
             var renderedSegments: [AssistantTranscriptSegment] = []
             var flushedAssistantText = ""
             let effectiveAllowedTools = resolveAllowedToolsForCurrentContext()
+            let isProjectChat = !projectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let enabledNativeToolCount = nativeToolsStore.enabledNativeToolIDs().count
+            let catalogCount = NativeToolsCatalog.all.count
+            let requestedToolCount = effectiveAllowedTools?.count ?? catalogCount
+            NSLog(
+                "[CopilotForge][Tools] send_context chatID=%@ mode=%@ enabledNativeToolCount=%d catalogCount=%d requestedAllowedToolCount=%d requestedAllowedToolsNil=%@ requestedAllowedToolsSample=%@",
+                chatID.uuidString,
+                isProjectChat ? "project" : "agent",
+                enabledNativeToolCount,
+                catalogCount,
+                requestedToolCount,
+                effectiveAllowedTools == nil ? "true" : "false",
+                String((effectiveAllowedTools ?? Array(NativeToolsCatalog.all.map(\.id).prefix(5))).prefix(5).joined(separator: ","))
+            )
 
             func textTailSinceLastFlush() -> String {
                 guard !assembledAssistantText.isEmpty else { return "" }
@@ -174,20 +188,7 @@ extension ChatViewModel {
         let isProjectChat = !normalizedProjectPath.isEmpty
 
         if isProjectChat {
-            let enabledNativeTools = nativeToolsStore.enabledNativeToolIDs()
-            let allToolIDs = NativeToolsCatalog.all.map(\.id)
-
-            if enabledNativeTools.isEmpty {
-                return nil
-            }
-
-            let enabledSet = Set(enabledNativeTools)
-            let allSet = Set(allToolIDs)
-            if enabledSet == allSet {
-                return nil
-            }
-
-            return enabledNativeTools
+            return nativeToolsStore.enabledNativeToolIDs()
         }
 
         return NativeToolsCatalog.defaultAgentToolIDs

@@ -64,12 +64,26 @@ export class CopilotSessionManager {
     const chatKey = normalizeChatKey(args.chatID, requestedWorkingDirectory ?? undefined);
     const existing = this.sessionByChatKey.get(chatKey);
 
+    console.log("[CopilotForge][Session] ensure_context", JSON.stringify({
+      chatKey,
+      model: requestedModel,
+      workingDirectory: requestedWorkingDirectory,
+      requestedAllowedToolsCount: requestedAvailableTools?.length ?? null,
+      requestedAllowedToolsSample: requestedAvailableTools?.slice(0, 8) ?? null,
+      hasExistingSession: Boolean(existing),
+    }));
+
     if (existing
         && existing.model === requestedModel
         && existing.workingDirectory === requestedWorkingDirectory
         && sameAllowedTools(existing.availableTools, requestedAvailableTools)
         && sameStringList(existing.skillDirectories, requestedSkillDirectories)
         && sameStringList(existing.disabledSkills, requestedDisabledSkills)) {
+      console.log("[CopilotForge][Session] reuse", JSON.stringify({
+        chatKey,
+        sessionId: existing.sessionId,
+        allowedToolsCount: existing.availableTools?.length ?? null,
+      }));
       this.lastSessionState = existing;
       return existing.session;
     }
@@ -92,6 +106,12 @@ export class CopilotSessionManager {
 
     this.sessionByChatKey.set(chatKey, state);
     this.lastSessionState = state;
+    console.log("[CopilotForge][Session] active", JSON.stringify({
+      chatKey,
+      sessionId: state.sessionId,
+      allowedToolsCount: state.availableTools?.length ?? null,
+      allowedToolsSample: state.availableTools?.slice(0, 8) ?? null,
+    }));
     return state.session;
   }
 }
@@ -108,7 +128,7 @@ function normalizeAllowedTools(allowedTools?: string[] | null) {
       .filter((entry) => entry.length > 0)
   )).sort((lhs, rhs) => lhs.localeCompare(rhs));
 
-  return normalized.length > 0 ? normalized : null;
+  return normalized;
 }
 
 function normalizeStringListEnv(name: string) {
