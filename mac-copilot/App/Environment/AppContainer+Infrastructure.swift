@@ -29,18 +29,6 @@ extension Container {
         .singleton
     }
 
-    var contextPaneViewModelProvider: Factory<ContextPaneViewModelProvider> {
-        self { @MainActor in
-            ContextPaneViewModelProvider(
-                gitRepositoryManager: self.gitRepositoryManager(),
-                modelSelectionStore: self.modelSelectionStore(),
-                modelRepository: self.modelRepository(),
-                promptRepository: self.promptRepository()
-            )
-        }
-        .singleton
-    }
-
     var projectCreationService: Factory<ProjectCreationService> {
         self { @MainActor in ProjectCreationService() }
             .singleton

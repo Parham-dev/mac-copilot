@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 /// Self-contained environment for the Projects feature.
 ///
@@ -83,5 +84,44 @@ final class ProjectsEnvironment: ObservableObject {
 
     func evictContextPaneViewModel(for projectID: UUID) {
         contextPaneViewModelProvider.evict(projectID: projectID)
+    }
+
+    // MARK: - Shell bridge
+
+    func handleShellListSelectionChange(featureID: String, newSelection: AnyHashable?) {
+        guard featureID == ProjectsFeatureModule.featureID else { return }
+        let decoded = newSelection as? ProjectsViewModel.SidebarItem
+        guard projectsViewModel.selectedItem != decoded else { return }
+        projectsViewModel.selectedItem = decoded
+        projectsViewModel.didSelectItem(decoded)
+    }
+
+    func syncSelectionToShell(_ newItem: ProjectsViewModel.SidebarItem?, shellViewModel: ShellViewModel) {
+        let featureID = ProjectsFeatureModule.featureID
+        let current = shellViewModel.selectionByFeature[featureID]
+        let newHashable = newItem.map { AnyHashable($0) }
+        guard current != newHashable else { return }
+        shellViewModel.selectionBinding(for: featureID).wrappedValue = newHashable
+    }
+
+    func handleChatTitleDidUpdate(chatID: UUID, title: String) {
+        projectsViewModel.updateChatTitle(chatID: chatID, title: title)
+    }
+
+    var activeWarningMessage: String? {
+        if let err = projectsViewModel.workspaceLoadError, !err.isEmpty { return err }
+        if let err = projectsViewModel.chatCreationError, !err.isEmpty { return err }
+        if let err = projectsViewModel.chatDeletionError, !err.isEmpty { return err }
+        if let err = projectsViewModel.projectDeletionError, !err.isEmpty { return err }
+        return nil
+    }
+
+    @discardableResult
+    func dismissActiveWarning() -> Bool {
+        if projectsViewModel.workspaceLoadError != nil { projectsViewModel.clearWorkspaceLoadError(); return true }
+        if projectsViewModel.chatCreationError != nil { projectsViewModel.clearChatCreationError(); return true }
+        if projectsViewModel.chatDeletionError != nil { projectsViewModel.clearChatDeletionError(); return true }
+        if projectsViewModel.projectDeletionError != nil { projectsViewModel.clearProjectDeletionError(); return true }
+        return false
     }
 }

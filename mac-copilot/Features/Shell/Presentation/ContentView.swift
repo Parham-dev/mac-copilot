@@ -23,7 +23,6 @@ struct ContentView: View {
 
     var body: some View {
         let companionStatusStore = companionEnvironment.companionStatusStore
-        let projectsVM = projectsEnvironment.projectsViewModel
 
         NavigationSplitView {
             ShellSidebarView(
@@ -52,12 +51,10 @@ struct ContentView: View {
                 // Syncs the feature VM from the shell selection without relying
                 // on $selectionByFeature which double-fires on Dictionary mutation.
                 onListSelectionChange: { featureID, newSelection in
-                    if featureID == ProjectsFeatureModule.featureID {
-                        let decoded = newSelection as? ProjectsViewModel.SidebarItem
-                        guard projectsVM.selectedItem != decoded else { return }
-                        projectsVM.selectedItem = decoded
-                        projectsVM.didSelectItem(decoded)
-                    }
+                    projectsEnvironment.handleShellListSelectionChange(
+                        featureID: featureID,
+                        newSelection: newSelection
+                    )
                 }
             )
             .environmentObject(featureRegistry)
@@ -71,7 +68,7 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
-                ShellOpenProjectMenuButton(projectsViewModel: projectsVM)
+                ShellOpenProjectMenuButton(projectsViewModel: projectsEnvironment.projectsViewModel)
             }
         }
         // VM → Shell: keep shellViewModel in sync whenever ProjectsViewModel
@@ -80,15 +77,11 @@ struct ContentView: View {
         // all paths that mutate ProjectsViewModel.selectedItem without going through
         // the List selection binding. Without this, shellViewModel.selectionByFeature
         // ["projects"] stays nil and ShellDetailView always renders "Select a chat".
-        .onReceive(projectsVM.$selectedItem) { newItem in
-            let featureID = ProjectsFeatureModule.featureID
-            let current = shellViewModel.selectionByFeature[featureID]
-            let newHashable = newItem.map { AnyHashable($0) }
-            guard current != newHashable else { return }
-            shellViewModel.selectionBinding(for: featureID).wrappedValue = newHashable
+        .onReceive(projectsEnvironment.projectsViewModel.$selectedItem) { newItem in
+            projectsEnvironment.syncSelectionToShell(newItem, shellViewModel: shellViewModel)
         }
         .onReceive(projectsEnvironment.chatEventsStore.chatTitleDidUpdate) { event in
-            projectsVM.updateChatTitle(chatID: event.chatID, title: event.title)
+            projectsEnvironment.handleChatTitleDidUpdate(chatID: event.chatID, title: event.title)
         }
         .sheet(isPresented: $showsProfileSheet) {
             ProfileView(
@@ -121,8 +114,8 @@ struct ContentView: View {
             .frame(minWidth: 980, minHeight: 640)
         }
         .safeAreaInset(edge: .top) {
-            if let warningMessage = activeWarningMessage(projectsVM: projectsVM) {
-                warningBanner(message: warningMessage, projectsVM: projectsVM)
+            if let warningMessage = activeWarningMessage {
+                warningBanner(message: warningMessage)
             }
         }
     }
@@ -138,17 +131,14 @@ struct ContentView: View {
 
     // MARK: - Warning banner
 
-    private func activeWarningMessage(projectsVM: ProjectsViewModel) -> String? {
-        if let err = projectsVM.workspaceLoadError, !err.isEmpty { return err }
-        if let err = projectsVM.chatCreationError, !err.isEmpty { return err }
-        if let err = projectsVM.chatDeletionError, !err.isEmpty { return err }
-        if let err = projectsVM.projectDeletionError, !err.isEmpty { return err }
+    private var activeWarningMessage: String? {
+        if let projectWarning = projectsEnvironment.activeWarningMessage { return projectWarning }
         if let updateStatusMessage, !updateStatusMessage.isEmpty { return updateStatusMessage }
         return nil
     }
 
     @ViewBuilder
-    private func warningBanner(message: String, projectsVM: ProjectsViewModel) -> some View {
+    private func warningBanner(message: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
@@ -161,7 +151,7 @@ struct ContentView: View {
             Spacer(minLength: 8)
 
             Button("Dismiss") {
-                dismissActiveWarning(projectsVM: projectsVM)
+                dismissActiveWarning()
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -171,11 +161,8 @@ struct ContentView: View {
         .background(.ultraThinMaterial)
     }
 
-    private func dismissActiveWarning(projectsVM: ProjectsViewModel) {
-        if projectsVM.workspaceLoadError != nil { projectsVM.clearWorkspaceLoadError(); return }
-        if projectsVM.chatCreationError != nil { projectsVM.clearChatCreationError(); return }
-        if projectsVM.chatDeletionError != nil { projectsVM.clearChatDeletionError(); return }
-        if projectsVM.projectDeletionError != nil { projectsVM.clearProjectDeletionError(); return }
+    private func dismissActiveWarning() {
+        if projectsEnvironment.dismissActiveWarning() { return }
         if updateStatusMessage != nil {
             updateStatusTask?.cancel()
             updateStatusMessage = nil
