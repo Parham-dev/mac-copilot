@@ -45,6 +45,7 @@ extension Container {
                 gitRepositoryManager: self.gitRepositoryManager(),
                 modelSelectionStore: self.modelSelectionStore(),
                 nativeToolsStore: self.nativeToolsStore(),
+                mcpToolsStore: self.mcpToolsStore(),
                 chatEventsStore: self.chatEventsStore(),
                 modelRepository: self.modelRepository(),
                 promptRepository: self.promptRepository()

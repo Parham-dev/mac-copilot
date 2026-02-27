@@ -19,6 +19,7 @@ export async function streamPromptWithSession(
 
   let sawAnyOutput = false;
   let sawDeltaOutput = false;
+  let sawToolCompletion = false;
 
   let resolveDone: () => void;
   let rejectDone: (reason?: unknown) => void;
@@ -141,6 +142,9 @@ export async function streamPromptWithSession(
   const unsubscribeToolComplete = session.on("tool.execution_complete", (event: any) => {
     const { toolName, success, details, toolCallID } = extractToolExecutionResult(event, toolNameByCallID);
 
+    sawToolCompletion = true;
+    sawAnyOutput = true;
+
     onEvent({
       type: "tool_complete",
       toolName,
@@ -189,7 +193,7 @@ export async function streamPromptWithSession(
       onEvent({ type: "text", text: remaining });
     }
 
-    if (!sawAnyOutput) {
+    if (!sawAnyOutput && !sawToolCompletion) {
       onEvent({ type: "text", text: "Copilot returned no text output for this request." });
     }
   } finally {

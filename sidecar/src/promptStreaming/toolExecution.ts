@@ -1,4 +1,5 @@
 export function extractToolExecutionResult(event: any, toolNameByCallID: Map<string, string>) {
+  const success = event?.data?.success !== false;
   const toolCallID = event?.data?.toolCallId;
   const toolName =
     event?.data?.toolName
@@ -25,7 +26,12 @@ export function extractToolExecutionResult(event: any, toolNameByCallID: Map<str
     : null;
 
   const resultContent = event?.data?.result?.content;
-  const errorMessage = event?.data?.error?.message;
+  const errorMessage =
+    event?.data?.error?.message
+    ?? (typeof event?.data?.error === "string" ? event.data.error : null)
+    ?? (typeof event?.error === "string" ? event.error : null)
+    ?? event?.error?.message
+    ?? (typeof event?.data?.reason === "string" ? event.data.reason : null);
   const detailsRaw =
     (typeof firstContentText === "string" && firstContentText.length > 0 ? firstContentText : null)
     ?? (typeof resultContent === "string" && resultContent.length > 0 ? resultContent : null)
@@ -38,14 +44,18 @@ export function extractToolExecutionResult(event: any, toolNameByCallID: Map<str
     .replace(/<?exited?\s+with\s+exit\s*code\s*\d+>?/gi, "")
     .trim();
 
-  if (!details && event?.data?.success !== false) {
+  if (!details && success) {
     details = "Command completed successfully.";
+  }
+
+  if (!details && !success) {
+    details = "Tool execution failed without an error payload.";
   }
 
   return {
     toolCallID: typeof toolCallID === "string" ? toolCallID : null,
     toolName,
-    success: event?.data?.success !== false,
+    success,
     details: details.length > 0 ? details.slice(0, 280) : undefined,
     detailsChars: details.length,
   };

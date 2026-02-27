@@ -9,6 +9,7 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
     }
     let sawAnyOutput = false;
     let sawDeltaOutput = false;
+    let sawToolCompletion = false;
     let resolveDone;
     let rejectDone;
     const done = new Promise((resolve, reject) => {
@@ -108,6 +109,8 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
     });
     const unsubscribeToolComplete = session.on("tool.execution_complete", (event) => {
         const { toolName, success, details, toolCallID } = extractToolExecutionResult(event, toolNameByCallID);
+        sawToolCompletion = true;
+        sawAnyOutput = true;
         onEvent({
             type: "tool_complete",
             toolName,
@@ -148,7 +151,7 @@ export async function streamPromptWithSession(session, prompt, onEvent, debugLab
             sawAnyOutput = true;
             onEvent({ type: "text", text: remaining });
         }
-        if (!sawAnyOutput) {
+        if (!sawAnyOutput && !sawToolCompletion) {
             onEvent({ type: "text", text: "Copilot returned no text output for this request." });
         }
     }

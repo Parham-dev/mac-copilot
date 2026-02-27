@@ -188,7 +188,14 @@ extension ChatViewModel {
         let isProjectChat = !normalizedProjectPath.isEmpty
 
         if isProjectChat {
-            return nativeToolsStore.enabledNativeToolIDs()
+            let enabledToolIDs = Set(nativeToolsStore.enabledNativeToolIDs())
+            let allToolIDs = Set(NativeToolsCatalog.all.map(\.id))
+
+            if enabledToolIDs.isEmpty || enabledToolIDs == allToolIDs {
+                return nil
+            }
+
+            return Array(enabledToolIDs).sorted()
         }
 
         return NativeToolsCatalog.defaultAgentToolIDs

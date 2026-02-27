@@ -20,8 +20,8 @@ struct ChatViewModelProviderTests {
             modelSelectionStore: ModelSelectionStore(
                 preferencesStore: InMemoryModelSelectionPreferencesStore([])
             ),
-            mcpToolsStore: MCPToolsStore(
-                preferencesStore: InMemoryMCPToolsPreferencesStore([])
+            nativeToolsStore: NativeToolsStore(
+                preferencesStore: InMemoryNativeToolsPreferencesStore([])
             ),
             chatEventsStore: ChatEventsStore()
         )

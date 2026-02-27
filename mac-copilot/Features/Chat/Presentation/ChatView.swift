@@ -34,6 +34,7 @@ struct ChatView: View {
 
             ChatTranscriptView(
                 messages: viewModel.messages,
+                statusChipsByMessageID: viewModel.statusChipsByMessageID,
                 inlineSegmentsByMessageID: viewModel.inlineSegmentsByMessageID,
                 streamingAssistantMessageID: viewModel.streamingAssistantMessageID
             )

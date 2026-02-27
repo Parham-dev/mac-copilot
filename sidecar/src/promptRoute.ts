@@ -3,7 +3,7 @@ import { sendPrompt, isAuthenticated } from "./copilot/copilot.js";
 import { companionChatStore } from "./companion/chatStore.js";
 import { startPromptTelemetry } from "./telemetry/otel.js";
 
-const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
+const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter|function|function_)\b[^>]*>/i;
 const promptTraceEnabled = process.env.COPILOTFORGE_PROMPT_TRACE === "1";
 
 export function registerPromptRoute(app: Express) {

@@ -1,6 +1,7 @@
-export const protocolTagNames = ["function_calls", "system_notification", "invoke", "parameter"];
+export const protocolTagNames = ["function_calls", "system_notification", "invoke", "parameter", "function", "function_"];
+const inlineProtocolTagNames = new Set(["function", "function_"]);
 const openingTagPattern = new RegExp(`<\\s*(${protocolTagNames.join("|")})\\b[^>]*>`, "i");
-export const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
+export const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter|function|function_)\b[^>]*>/i;
 export class ProtocolMarkupFilter {
     activeTag = null;
     tail = "";
@@ -30,6 +31,9 @@ export class ProtocolMarkupFilter {
             }
             output += text.slice(0, openMatch.start);
             text = text.slice(openMatch.end);
+            if (inlineProtocolTagNames.has(openMatch.tagName)) {
+                continue;
+            }
             this.activeTag = openMatch.tagName;
         }
         return sanitizeInlineProtocolTags(output);

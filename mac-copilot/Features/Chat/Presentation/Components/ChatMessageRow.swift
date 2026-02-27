@@ -6,6 +6,7 @@ import Textual
 
 struct ChatMessageRow: View {
     let message: ChatMessage
+    let statusChips: [String]
     let isStreaming: Bool
     let inlineSegments: [AssistantTranscriptSegment]
 
@@ -16,6 +17,23 @@ struct ChatMessageRow: View {
             if message.role == .assistant {
                 VStack(alignment: .leading, spacing: 6) {
                     assistantBubble(color: .gray.opacity(0.18), alignment: .leading)
+
+                    if !statusChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(Array(statusChips.enumerated()), id: \.offset) { _, chip in
+                                    Text(chip)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(.gray.opacity(0.14))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.leading, 6)
+                    }
 
                     if !message.text.isEmpty {
                         Button {
@@ -213,8 +231,19 @@ struct ChatMessageRow: View {
     }
 
     private var fullCopyText: String {
+        var sections: [String] = []
+
+        if !message.text.isEmpty {
+            sections.append(message.text)
+        }
+
+        if !statusChips.isEmpty {
+            let statusBlock = statusChips.joined(separator: "\n- ")
+            sections.append("Status:\n- \(statusBlock)")
+        }
+
         if inlineSegments.isEmpty {
-            return message.text
+            return sections.joined(separator: "\n\n")
         }
 
         let parts = inlineSegments.compactMap { segment -> String? in
@@ -231,6 +260,10 @@ struct ChatMessageRow: View {
             }
         }
 
-        return parts.joined(separator: "\n\n")
+        if !parts.isEmpty {
+            sections.append(parts.joined(separator: "\n\n"))
+        }
+
+        return sections.joined(separator: "\n\n")
     }
 }

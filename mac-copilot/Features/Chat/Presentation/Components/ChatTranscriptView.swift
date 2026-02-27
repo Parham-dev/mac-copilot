@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChatTranscriptView: View {
     let messages: [ChatMessage]
+    let statusChipsByMessageID: [UUID: [String]]
     let inlineSegmentsByMessageID: [UUID: [AssistantTranscriptSegment]]
     let streamingAssistantMessageID: UUID?
 
@@ -24,6 +25,7 @@ struct ChatTranscriptView: View {
                     ForEach(messages) { message in
                         ChatMessageRow(
                             message: message,
+                            statusChips: statusChipsByMessageID[message.id] ?? [],
                             isStreaming: streamingAssistantMessageID == message.id,
                             inlineSegments: inlineSegmentsByMessageID[message.id] ?? []
                         )
