@@ -46,6 +46,14 @@ npm run start:dist
 - If you hit local runtime issues, run `npm run check` first.
 - If an old sidecar is still bound to port `7878`, stop it and restart from `sidecar/`.
 
+## Runtime Environment Flags
+
+- `COPILOTFORGE_SKILL_DIRECTORIES` — comma-separated skill parent directories for SDK `skillDirectories` (example: `./skills,/opt/copilot/skills`).
+- `COPILOTFORGE_DISABLED_SKILLS` — comma-separated skill names mapped to SDK `disabledSkills` (example: `experimental-feature,deprecated-tool`).
+- `COPILOTFORGE_BACKGROUND_COMPACTION_THRESHOLD` — overrides infinite session `backgroundCompactionThreshold`.
+- `COPILOTFORGE_BUFFER_EXHAUSTION_THRESHOLD` — overrides infinite session `bufferExhaustionThreshold`.
+- `COPILOTFORGE_OTEL_ENABLED=1` — enables optional OpenTelemetry span emission for prompt/tool lifecycle.
+
 ## Release vs Debug Node Policy
 
 - `Debug`: resolver prefers bundled Node but can fall back to compatible system Node for local development.

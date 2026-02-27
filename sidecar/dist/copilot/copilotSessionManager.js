@@ -1,5 +1,8 @@
 import { approveAll } from "@github/copilot-sdk";
 import { mkdirSync } from "node:fs";
+import { buildSessionHooks } from "./copilotSessionHooks.js";
+const DEFAULT_BACKGROUND_COMPACTION_THRESHOLD = 120_000;
+const DEFAULT_BUFFER_EXHAUSTION_THRESHOLD = 200_000;
 export class CopilotSessionManager {
     sessionByChatKey = new Map();
     lastSessionState = null;
@@ -18,6 +21,8 @@ export class CopilotSessionManager {
             model: this.lastSessionState?.model ?? null,
             workingDirectory: this.lastSessionState?.workingDirectory ?? null,
             availableTools: this.lastSessionState?.availableTools ?? null,
+            skillDirectories: this.lastSessionState?.skillDirectories ?? null,
+            disabledSkills: this.lastSessionState?.disabledSkills ?? null,
         };
     }
     async ensureSessionForContext(client, args) {
@@ -29,12 +34,16 @@ export class CopilotSessionManager {
             ? args.projectPath.trim()
             : null;
         const requestedAvailableTools = normalizeAllowedTools(args.allowedTools);
+        const requestedSkillDirectories = normalizeStringListEnv("COPILOTFORGE_SKILL_DIRECTORIES");
+        const requestedDisabledSkills = normalizeStringListEnv("COPILOTFORGE_DISABLED_SKILLS");
         const chatKey = normalizeChatKey(args.chatID, requestedWorkingDirectory ?? undefined);
         const existing = this.sessionByChatKey.get(chatKey);
         if (existing
             && existing.model === requestedModel
             && existing.workingDirectory === requestedWorkingDirectory
-            && sameAllowedTools(existing.availableTools, requestedAvailableTools)) {
+            && sameAllowedTools(existing.availableTools, requestedAvailableTools)
+            && sameStringList(existing.skillDirectories, requestedSkillDirectories)
+            && sameStringList(existing.disabledSkills, requestedDisabledSkills)) {
             this.lastSessionState = existing;
             return existing.session;
         }
@@ -50,6 +59,8 @@ export class CopilotSessionManager {
             model: requestedModel,
             workingDirectory: requestedWorkingDirectory,
             allowedTools: requestedAvailableTools,
+            skillDirectories: requestedSkillDirectories,
+            disabledSkills: requestedDisabledSkills,
         });
         this.sessionByChatKey.set(chatKey, state);
         this.lastSessionState = state;
@@ -66,7 +77,30 @@ function normalizeAllowedTools(allowedTools) {
         .filter((entry) => entry.length > 0))).sort((lhs, rhs) => lhs.localeCompare(rhs));
     return normalized.length > 0 ? normalized : null;
 }
+function normalizeStringListEnv(name) {
+    const raw = String(process.env[name] ?? "").trim();
+    if (!raw) {
+        return null;
+    }
+    const normalized = Array.from(new Set(raw
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0))).sort((lhs, rhs) => lhs.localeCompare(rhs));
+    return normalized.length > 0 ? normalized : null;
+}
 function sameAllowedTools(lhs, rhs) {
+    if (lhs === null && rhs === null) {
+        return true;
+    }
+    if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
+        return false;
+    }
+    if (lhs.length !== rhs.length) {
+        return false;
+    }
+    return lhs.every((value, index) => value === rhs[index]);
+}
+function sameStringList(lhs, rhs) {
     if (lhs === null && rhs === null) {
         return true;
     }
@@ -98,6 +132,14 @@ function buildSessionIdentifier(chatKey) {
     const suffix = sanitized.length > 0 ? sanitized : "default";
     return `copilotforge-${suffix}`;
 }
+function readPositiveIntegerEnv(name, fallback) {
+    const raw = String(process.env[name] ?? "").trim();
+    if (!raw) {
+        return fallback;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 async function createOrResumeSessionForContext(client, args) {
     if (!client) {
         throw new Error("Copilot client is not initialized.");
@@ -106,16 +148,27 @@ async function createOrResumeSessionForContext(client, args) {
         mkdirSync(args.workingDirectory, { recursive: true });
     }
     const sessionId = buildSessionIdentifier(args.chatKey);
+    const backgroundCompactionThreshold = readPositiveIntegerEnv("COPILOTFORGE_BACKGROUND_COMPACTION_THRESHOLD", DEFAULT_BACKGROUND_COMPACTION_THRESHOLD);
+    const bufferExhaustionThreshold = readPositiveIntegerEnv("COPILOTFORGE_BUFFER_EXHAUSTION_THRESHOLD", DEFAULT_BUFFER_EXHAUSTION_THRESHOLD);
     const config = {
         sessionId,
         model: args.model,
         streaming: true,
         onPermissionRequest: approveAll,
+        hooks: buildSessionHooks({
+            chatKey: args.chatKey,
+            workingDirectory: args.workingDirectory,
+            allowedTools: args.allowedTools,
+        }),
         infiniteSessions: {
             enabled: true,
+            backgroundCompactionThreshold,
+            bufferExhaustionThreshold,
         },
         ...(args.workingDirectory ? { workingDirectory: args.workingDirectory } : {}),
         ...(args.allowedTools ? { availableTools: args.allowedTools } : {}),
+        ...(args.skillDirectories ? { skillDirectories: args.skillDirectories } : {}),
+        ...(args.disabledSkills ? { disabledSkills: args.disabledSkills } : {}),
     };
     let createdSession;
     try {
@@ -131,5 +184,7 @@ async function createOrResumeSessionForContext(client, args) {
         model: args.model,
         workingDirectory: args.workingDirectory,
         availableTools: args.allowedTools,
+        skillDirectories: args.skillDirectories,
+        disabledSkills: args.disabledSkills,
     };
 }

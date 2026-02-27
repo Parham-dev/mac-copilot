@@ -1,5 +1,6 @@
 import { sendPrompt, isAuthenticated } from "./copilot/copilot.js";
 import { companionChatStore } from "./companion/chatStore.js";
+import { startPromptTelemetry } from "./telemetry/otel.js";
 const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter)\b[^>]*>/i;
 const promptTraceEnabled = process.env.COPILOTFORGE_PROMPT_TRACE === "1";
 export function registerPromptRoute(app) {
@@ -17,6 +18,8 @@ export function registerPromptRoute(app) {
         let chunkCount = 0;
         let totalChars = 0;
         let assistantText = "";
+        let usageEventCount = 0;
+        let lastUsageSnapshot = null;
         companionChatStore.recordUserPrompt({
             chatId: chatID,
             projectPath,
@@ -27,6 +30,11 @@ export function registerPromptRoute(app) {
             promptChars: promptText.length,
             authenticated: isAuthenticated(),
         }));
+        const telemetry = await startPromptTelemetry({
+            requestId,
+            model: typeof req.body?.model === "string" ? req.body.model : undefined,
+            chatId: chatID,
+        });
         try {
             await sendPrompt(promptText, chatID, req.body?.model, projectPath, req.body?.allowedTools, requestId, (event) => {
                 const payload = typeof event === "object" && event !== null
@@ -41,6 +49,17 @@ export function registerPromptRoute(app) {
                     }));
                 }
                 const text = JSON.stringify(payload);
+                if (payload.type === "usage") {
+                    usageEventCount += 1;
+                    lastUsageSnapshot = payload;
+                    telemetry.onUsage(payload);
+                }
+                if (payload.type === "tool_start" && typeof payload.toolName === "string") {
+                    telemetry.onToolStart(payload.toolName, typeof payload.toolCallID === "string" ? payload.toolCallID : undefined);
+                }
+                if (payload.type === "tool_complete" && typeof payload.toolName === "string") {
+                    telemetry.onToolComplete(payload.toolName, payload.success !== false, typeof payload.details === "string" ? payload.details : undefined, typeof payload.toolCallID === "string" ? payload.toolCallID : undefined);
+                }
                 if (payload.type === "text" && typeof payload.text === "string") {
                     assistantText += payload.text;
                 }
@@ -55,10 +74,15 @@ export function registerPromptRoute(app) {
                 requestId,
                 chunkCount,
                 totalChars,
+                usageEventCount,
+                usage: lastUsageSnapshot,
             }));
+            telemetry.end();
             res.write("data: [DONE]\n\n");
         }
         catch (error) {
+            telemetry.fail(error);
+            telemetry.end();
             console.error("[CopilotForge][Prompt] error", JSON.stringify({
                 requestId,
                 error: String(error),

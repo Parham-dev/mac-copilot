@@ -134,18 +134,34 @@ export async function streamPromptWithSession(
     onEvent({
       type: "tool_start",
       toolName,
+      toolCallID,
     });
   });
 
   const unsubscribeToolComplete = session.on("tool.execution_complete", (event: any) => {
-    const { toolName, success, details } = extractToolExecutionResult(event, toolNameByCallID);
+    const { toolName, success, details, toolCallID } = extractToolExecutionResult(event, toolNameByCallID);
 
     onEvent({
       type: "tool_complete",
       toolName,
+      toolCallID,
       success,
       details,
     });
+  });
+
+  const unsubscribeUsage = session.on("assistant.usage", (event: any) => {
+    const usage = normalizeUsagePayload(event?.data);
+    if (!usage) {
+      return;
+    }
+
+    onEvent({
+      type: "usage",
+      ...usage,
+    });
+
+    logTrace("assistant usage", usage);
   });
 
   const unsubscribeIdle = session.on("session.idle", () => {
@@ -184,8 +200,67 @@ export async function streamPromptWithSession(
     unsubscribeFinal();
     unsubscribeToolStart();
     unsubscribeToolComplete();
+    unsubscribeUsage();
     unsubscribeIdle();
   }
+}
+
+function normalizeUsagePayload(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const source = data as Record<string, unknown>;
+  const usageRoot = source.usage && typeof source.usage === "object"
+    ? (source.usage as Record<string, unknown>)
+    : source;
+
+  const inputTokens = readTokenNumber(usageRoot, ["inputTokens", "input_tokens", "promptTokens", "prompt_tokens"]);
+  const outputTokens = readTokenNumber(usageRoot, ["outputTokens", "output_tokens", "completionTokens", "completion_tokens"]);
+  const totalTokens = readTokenNumber(usageRoot, ["totalTokens", "total_tokens"])
+    ?? sumTokens(inputTokens, outputTokens);
+
+  const model = readStringValue(usageRoot, ["model"]) ?? readStringValue(source, ["model"]);
+
+  const usage: Record<string, unknown> = {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    raw: usageRoot,
+  };
+
+  if (model) {
+    usage.model = model;
+  }
+
+  return usage;
+}
+
+function readTokenNumber(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function readStringValue(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function sumTokens(inputTokens?: number, outputTokens?: number) {
+  if (typeof inputTokens !== "number" && typeof outputTokens !== "number") {
+    return undefined;
+  }
+  return (inputTokens ?? 0) + (outputTokens ?? 0);
 }
 
 function mergeDeltaText(current: string, incoming: string): string {

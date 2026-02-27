@@ -93,17 +93,30 @@ All files under `docs-gco/` were reviewed, including:
 
 ## Priority Order (Implementation)
 
-1. Replace `approveAll` with explicit permission policy.
-2. Add hooks (`pre/post/error/session lifecycle`) with basic policy + telemetry.
+`approveAll` replacement is intentionally deferred for now.
+
+1. Add hooks (`pre/post/error/session lifecycle`) with basic policy + telemetry.
+2. Set explicit `infiniteSessions` thresholds.
 3. Add `assistant.usage` event handling.
-4. Set explicit `infiniteSessions` thresholds.
-5. Add optional OTel instrumentation.
-6. Add optional `skillDirectories` runtime config if desired product behavior.
+4. Add optional OTel instrumentation.
+5. Add optional `skillDirectories` runtime config if desired product behavior.
+6. Replace `approveAll` with explicit permission policy (deferred hardening step).
+
+Rationale: centralize governance hooks first, stabilize long-session behavior, add observability depth, and then complete least-privilege hardening.
+
+## Implementation Constraints (Clean + Production-Ready)
+
+- Keep each new or heavily modified source file under ~300 lines where practical; split policy, hooks, telemetry, and config into focused modules.
+- Preserve sidecar boundaries: session creation/config in session manager, streaming in prompt streaming, HTTP translation in route layer.
+- Prefer explicit config flags and defaults for production behavior; avoid implicit SDK defaults for security-sensitive or lifecycle-critical behavior.
+- Add structured logging for allow/deny decisions and hook errors without leaking sensitive prompt/tool arguments.
+- Keep changes incremental and testable: one concern per PR-sized change (permission policy, hooks, usage events, thresholds, OTel, skills).
 
 ## Suggested Validation After Changes
 
-- Prompt execution with allowed and denied tool actions.
-- Ensure denied actions produce deterministic user-facing output.
-- Verify usage events are emitted and logged.
-- Run long chat and confirm compaction behavior remains stable.
-- Confirm no regression in existing stream text/tool UX.
+- Prompt execution with explicitly allowed and denied tool actions.
+- Ensure denied actions produce deterministic user-facing output and machine-readable logs.
+- Verify pre/post/lifecycle/error hooks fire with expected payload shape.
+- Verify usage events are emitted over SSE and captured in logs/metrics.
+- Run long chats and confirm explicit compaction thresholds behave as expected.
+- Confirm no regression in existing text/tool streaming UX.
