@@ -193,7 +193,27 @@ jobs:
         run: |
           set -euo pipefail
           DERIVED_DATA_PATH="$RUNNER_TEMP/DerivedData"
+          SPARKLE_CHECKOUT="$DERIVED_DATA_PATH/SourcePackages/checkouts/Sparkle"
           GENERATE_APPCAST_BIN="$DERIVED_DATA_PATH/SourcePackages/checkouts/Sparkle/bin/generate_appcast"
+
+          if [ ! -x "$GENERATE_APPCAST_BIN" ]; then
+            if [ ! -d "$SPARKLE_CHECKOUT" ]; then
+              echo "error: Sparkle checkout not found at $SPARKLE_CHECKOUT"
+              exit 1
+            fi
+
+            SPARKLE_TOOLS_DERIVED_DATA="$RUNNER_TEMP/SparkleToolsDerivedData"
+            xcodebuild \
+              -project "$SPARKLE_CHECKOUT/Sparkle.xcodeproj" \
+              -scheme generate_appcast \
+              -configuration Release \
+              -derivedDataPath "$SPARKLE_TOOLS_DERIVED_DATA" \
+              -destination 'platform=macOS' \
+              build
+
+            GENERATE_APPCAST_BIN="$SPARKLE_TOOLS_DERIVED_DATA/Build/Products/Release/generate_appcast"
+          fi
+
           test -x "$GENERATE_APPCAST_BIN"
 
           APPCAST_DIR="$RUNNER_TEMP/appcast"
