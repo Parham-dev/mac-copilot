@@ -8,6 +8,7 @@ This folder contains operational and release documentation for CopilotForge.
 - [DMG Release Guide](release-dmg.md)
 - [Release CI/CD and Updates Runbook](release-cicd-and-updates-runbook.md)
 - [Update Button Verification Guide](update-button-verification.md)
+- [Copilot SDK Official Best-Practices Review](copilot-sdk-official-best-practices-review.md)
 - [Sidecar Runtime and Packaging](sidecar-runtime.md)
 - [Chat Session History Architecture](chat-session-history.md)
 - [Testing Plan Roadmap](testing-plan-roadmap.md)
