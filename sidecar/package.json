@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start:dist": "node dist/index.js",
     "doctor": "node scripts/doctor.mjs",
+    "probe:tools": "node scripts/sdk-tool-count-probe.mjs",
     "check": "npm run typecheck && npm run build && npm run doctor",
     "validate:release": "npm run check"
   },
