@@ -26,6 +26,10 @@ final class StubHTTPDataTransport: HTTPDataTransporting {
         self.results = results
     }
 
+    func appendResults(_ newResults: [Result<(Data, URLResponse), Error>]) {
+        results.append(contentsOf: newResults)
+    }
+
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         _ = request
         callCount += 1
@@ -368,6 +372,58 @@ final class URLProtocolSnapshotStub: URLProtocol {
     static func reset() {
         requestHandler = nil
         requests = []
+    }
+}
+
+// MARK: - Keychain Token Store Doubles
+
+/// In-memory keychain token store for testing.
+/// Stores the token in a plain property — no real Keychain I/O.
+final class InMemoryKeychainTokenStore: KeychainTokenStoring {
+    private(set) var storedToken: String?
+    private(set) var saveCallCount = 0
+    private(set) var readCallCount = 0
+    private(set) var deleteCallCount = 0
+
+    init(existingToken: String? = nil) {
+        self.storedToken = existingToken
+    }
+
+    func saveToken(_ token: String) throws {
+        saveCallCount += 1
+        storedToken = token
+    }
+
+    func readToken() -> String? {
+        readCallCount += 1
+        return storedToken
+    }
+
+    func deleteToken() {
+        deleteCallCount += 1
+        storedToken = nil
+    }
+}
+
+/// A keychain store that always throws on save — for testing error paths.
+final class ThrowingKeychainTokenStore: KeychainTokenStoring {
+    let error: Error
+    private(set) var storedToken: String?
+
+    init(error: Error = AuthError.server("Keychain save failed")) {
+        self.error = error
+    }
+
+    func saveToken(_ token: String) throws {
+        throw error
+    }
+
+    func readToken() -> String? {
+        storedToken
+    }
+
+    func deleteToken() {
+        storedToken = nil
     }
 }
 

@@ -1,7 +1,13 @@
 import Foundation
 import Security
 
-struct KeychainTokenStore {
+protocol KeychainTokenStoring {
+    func saveToken(_ token: String) throws
+    func readToken() -> String?
+    func deleteToken()
+}
+
+struct KeychainTokenStore: KeychainTokenStoring {
     private let service = "CopilotForge"
     private let account = "github_access_token"
 

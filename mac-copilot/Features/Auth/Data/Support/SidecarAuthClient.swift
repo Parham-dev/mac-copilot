@@ -7,9 +7,10 @@ final class SidecarAuthClient {
 
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:7878")!,
-        sidecarLifecycle: SidecarLifecycleManaging
+        sidecarLifecycle: SidecarLifecycleManaging,
+        httpClient: SidecarHTTPClient? = nil
     ) {
-        self.transport = SidecarHTTPClient(baseURL: baseURL, sidecarLifecycle: sidecarLifecycle)
+        self.transport = httpClient ?? SidecarHTTPClient(baseURL: baseURL, sidecarLifecycle: sidecarLifecycle)
         self.logsIncludeResponseBody = ProcessInfo.processInfo.environment["COPILOTFORGE_LOG_HTTP_BODIES"] == "1"
     }
 

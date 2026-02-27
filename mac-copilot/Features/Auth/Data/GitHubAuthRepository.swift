@@ -11,7 +11,12 @@ final class GitHubAuthRepository: AuthRepository {
         self.service = service
         self.subject = CurrentValueSubject(Self.mapState(from: service))
 
+        // Use receive(on:) to observe *after* the @Published values have been
+        // written, so mapState always sees the current (post-mutation) state.
+        // objectWillChange fires *before* mutations are applied, which would
+        // capture stale values.
         service.objectWillChange
+            .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.publishState()
@@ -31,22 +36,18 @@ final class GitHubAuthRepository: AuthRepository {
 
     func restoreSessionIfNeeded() async {
         await service.restoreSessionIfNeeded()
-        publishState()
     }
 
     func startDeviceFlow() async {
         await service.startDeviceFlow()
-        publishState()
     }
 
     func pollForAuthorization() async {
         await service.pollForAuthorization()
-        publishState()
     }
 
     func signOut() {
         service.signOut()
-        publishState()
     }
 
     func currentAccessToken() -> String? {

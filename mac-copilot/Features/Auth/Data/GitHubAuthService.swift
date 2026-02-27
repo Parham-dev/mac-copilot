@@ -16,12 +16,20 @@ final class GitHubAuthService: ObservableObject {
     private var didAttemptRestore = false
     private var isRestoring = false
 
-    private let keychain = KeychainTokenStore()
+    private let keychain: KeychainTokenStoring
     private let sidecarClient: SidecarAuthClient
+    private let delayScheduler: AsyncDelayScheduling
 
-    init(sidecarClient: SidecarAuthClient) {
+    init(
+        sidecarClient: SidecarAuthClient,
+        keychain: KeychainTokenStoring = KeychainTokenStore(),
+        delayScheduler: AsyncDelayScheduling = TaskAsyncDelayScheduler(),
+        clientID: String? = nil
+    ) {
         self.sidecarClient = sidecarClient
-        self.clientID = Self.resolveClientID() ?? ""
+        self.keychain = keychain
+        self.delayScheduler = delayScheduler
+        self.clientID = clientID ?? Self.resolveClientID() ?? ""
     }
 
     func restoreSessionIfNeeded() async {
@@ -190,7 +198,7 @@ final class GitHubAuthService: ObservableObject {
 
     private func waitForPoll(seconds: Int) async throws {
         let clamped = max(seconds, 1)
-        try await Task.sleep(nanoseconds: UInt64(clamped) * 1_000_000_000)
+        try await delayScheduler.sleep(seconds: TimeInterval(clamped))
     }
 
     private func exportTokenToProcessEnvironment(_ token: String?) {
@@ -208,6 +216,12 @@ final class GitHubAuthService: ObservableObject {
                 clientID = resolved
             }
             return resolved
+        }
+
+        // If no environment/bundle override is found, keep any previously set
+        // value (e.g. one injected via the init's clientID parameter).
+        if !clientID.isEmpty {
+            return clientID
         }
 
         clientID = ""
