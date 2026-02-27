@@ -473,6 +473,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "co.uk.appwebdev.mac-copilot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
+				SPARKLE_APPCAST_URL = "https://parham-dev.github.io/mac-copilot/appcast.xml";
+				SPARKLE_PUBLIC_ED_KEY = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -515,6 +517,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "co.uk.appwebdev.mac-copilot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
+				SPARKLE_APPCAST_URL = "https://parham-dev.github.io/mac-copilot/appcast.xml";
+				SPARKLE_PUBLIC_ED_KEY = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;

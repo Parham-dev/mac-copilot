@@ -18,6 +18,7 @@ enum ProjectsFeatureModule {
     static func make(environment: ProjectsEnvironment) -> FeatureModule {
         FeatureModule(
             id: featureID,
+            sidebarTitle: "Projects",
             sidebarSection: { selectionBinding in
                 AnyView(
                     ProjectsSidebarSection(selection: selectionBinding)

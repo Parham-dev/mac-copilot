@@ -28,6 +28,8 @@ struct ContentView: View {
         NavigationSplitView {
             ShellSidebarView(
                 shellViewModel: shellViewModel,
+                projectsViewModel: projectsShellBridge.projectsViewModel,
+                projectCreationService: projectsEnvironment.projectCreationService,
                 isAuthenticated: authViewModel.isAuthenticated,
                 companionStatusLabel: companionStatusStore.statusLabel,
                 isUpdateAvailable: true,
@@ -68,8 +70,10 @@ struct ContentView: View {
                 .navigationTitle(navigationTitle)
         }
         .toolbar {
-            ToolbarItem(placement: .automatic) {
-                ShellOpenProjectMenuButton(projectsViewModel: projectsShellBridge.projectsViewModel)
+            if shellViewModel.activeFeatureID == ProjectsFeatureModule.featureID {
+                ToolbarItem(placement: .primaryAction) {
+                    ShellOpenProjectMenuButton(projectsViewModel: projectsShellBridge.projectsViewModel)
+                }
             }
         }
         // VM → Shell: keep shellViewModel in sync whenever ProjectsViewModel
@@ -174,8 +178,16 @@ struct ContentView: View {
         updateStatusTask?.cancel()
         updateStatusMessage = message
         updateStatusTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            updateStatusMessage = nil
+            do {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else { return }
+            if updateStatusMessage == message {
+                updateStatusMessage = nil
+            }
         }
     }
 }

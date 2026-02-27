@@ -6,10 +6,81 @@ private func openProjectInTarget(projectURL: URL, target: OpenTarget) {
     NSWorkspace.shared.open([projectURL], withApplicationAt: target.appURL, configuration: configuration) { _, _ in }
 }
 
-/// Toolbar button that offers "Open In: <editor>" for the current project.
+/// Sidebar section menu button for project actions.
 ///
-/// Now wired to `ProjectsViewModel` directly since the active project is
-/// owned by the Projects feature, not the shell.
+/// Shows only project CRUD actions and is intended for the Projects section
+/// header in the sidebar.
+struct ProjectsSectionActionMenuButton: View {
+    @ObservedObject var projectsViewModel: ProjectsViewModel
+    let projectCreationService: ProjectCreationService
+    let iconSystemName: String
+
+    @State private var actionErrorMessage: String?
+
+    var body: some View {
+        Menu {
+            Button {
+                createNewProject()
+            } label: {
+                Label("Create New Project", systemImage: "folder.badge.plus")
+            }
+
+            Button {
+                openExistingProject()
+            } label: {
+                Label("Open Existing Project", systemImage: "folder")
+            }
+        } label: {
+            Image(systemName: iconSystemName)
+                .symbolRenderingMode(.hierarchical)
+        }
+        .menuStyle(.borderlessButton)
+        .help("Project actions")
+        .alert("Project Action Failed", isPresented: actionErrorBinding) {
+            Button("OK", role: .cancel) { actionErrorMessage = nil }
+        } message: {
+            Text(actionErrorMessage ?? "Could not complete project action.")
+        }
+    }
+
+    private var actionErrorBinding: Binding<Bool> {
+        Binding(
+            get: { actionErrorMessage != nil },
+            set: { if !$0 { actionErrorMessage = nil } }
+        )
+    }
+
+    // MARK: - Project actions
+
+    private func createNewProject() {
+        do {
+            guard let created = try projectCreationService.createProjectInteractively() else { return }
+            _ = try projectsViewModel.addProject(name: created.name, localPath: created.localPath)
+        } catch {
+            actionErrorMessage = UserFacingErrorMapper.message(
+                error,
+                fallback: "Could not create project right now."
+            )
+        }
+    }
+
+    private func openExistingProject() {
+        do {
+            guard let selected = try projectCreationService.openProjectInteractively() else { return }
+            _ = try projectsViewModel.addProject(name: selected.name, localPath: selected.localPath)
+        } catch {
+            actionErrorMessage = UserFacingErrorMapper.message(
+                error,
+                fallback: "Could not open project right now."
+            )
+        }
+    }
+}
+
+/// Toolbar button that offers "Open In: <editor>" for the active project.
+///
+/// Intended for the navigation header (top bar) and shown only when Projects
+/// is the active feature.
 struct ShellOpenProjectMenuButton: View {
     @ObservedObject var projectsViewModel: ProjectsViewModel
 

@@ -17,6 +17,9 @@ struct FeatureModule: Identifiable {
     /// and for sidebar highlight tracking.
     let id: String
 
+    /// Display title for this feature in the sidebar section header.
+    let sidebarTitle: String
+
     /// Builds the sidebar section for this feature.
     ///
     /// - Parameter selection: Binding to the feature's currently selected item, typed

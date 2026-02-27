@@ -18,6 +18,8 @@ import SwiftUI
 ///   unreliable `$selectionByFeature` publisher which double-fires on Dictionary mutation.
 struct ShellSidebarView: View {
     @ObservedObject var shellViewModel: ShellViewModel
+    @ObservedObject var projectsViewModel: ProjectsViewModel
+    let projectCreationService: ProjectCreationService
     @EnvironmentObject private var featureRegistry: AppFeatureRegistry
     let isAuthenticated: Bool
     let companionStatusLabel: String
@@ -48,7 +50,7 @@ struct ShellSidebarView: View {
         GeometryReader { geometry in
             List(selection: $listSelection) {
                 ForEach(featureRegistry.features) { feature in
-                    Section {
+                    Section(header: sidebarHeader(for: feature)) {
                         feature.sidebarSection(
                             // Per-feature binding: writes into shellViewModel.
                             // Wrapper intercepts the `set` to also update listSelection.
@@ -81,6 +83,22 @@ struct ShellSidebarView: View {
     }
 
     // MARK: - Selection binding wrapper
+
+    @ViewBuilder
+    private func sidebarHeader(for feature: FeatureModule) -> some View {
+        HStack(spacing: 8) {
+            Text(feature.sidebarTitle)
+            Spacer(minLength: 8)
+
+            if feature.id == ProjectsFeatureModule.featureID {
+                ProjectsSectionActionMenuButton(
+                    projectsViewModel: projectsViewModel,
+                    projectCreationService: projectCreationService,
+                    iconSystemName: "plus.circle"
+                )
+            }
+        }
+    }
 
     /// Creates a per-feature `Binding<AnyHashable?>` that mirrors writes into
     /// both `shellViewModel` and `listSelection` so the List highlight is instant.
