@@ -5,7 +5,7 @@ import Testing
 @testable import mac_copilot
 
 @MainActor
-struct AppStoresPhaseAUnitTests {
+struct AppStoresTests {
     @Test func appBootstrapService_runsDependenciesInOrderOnlyOnce() async {
         let recorder = CallRecorder()
         let sidecar = RecordingSidecarLifecycle(recorder: recorder)
@@ -142,6 +142,8 @@ struct AppStoresPhaseAUnitTests {
         #expect(container.chatViewModelProvider() === container.chatViewModelProvider())
     }
 }
+
+// MARK: - App bootstrap-specific test doubles
 
 @MainActor
 private final class CallRecorder {

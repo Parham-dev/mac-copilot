@@ -2,7 +2,9 @@ import Foundation
 import Testing
 @testable import mac_copilot
 
-struct TestingPlanFixturesSmokeTests {
+/// Smoke tests that verify all shared test fixtures build valid domain objects.
+/// If a fixture helper breaks, these tests catch it before domain tests run.
+struct FixturesSmokeTests {
     @Test func chatMessageFixture_buildsExpectedRoles() {
         let userMessage = ChatMessageFixture.user()
         let assistantMessage = ChatMessageFixture.assistant()

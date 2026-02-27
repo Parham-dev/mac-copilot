@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import mac_copilot
 
-struct SidecarLifecyclePhase1Tests {
+struct SidecarLifecycleTests {
     @Test func restartPolicy_backoffAndJitterAreDeterministicWhenInjected() {
         let policy = SidecarRestartPolicy(
             maxRestartsInWindow: 4,
@@ -202,6 +202,8 @@ struct SidecarLifecyclePhase1Tests {
         #expect(scheduler.delays.count == 1)
     }
 }
+
+// MARK: - Sidecar-domain test doubles
 
 private struct FixedClock: ClockProviding {
     let now: Date

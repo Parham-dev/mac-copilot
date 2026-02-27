@@ -3,7 +3,7 @@ import Testing
 @testable import mac_copilot
 
 @MainActor
-struct ChatViewModelPhase2Tests {
+struct ChatViewModelTests {
     @Test func loadModels_appliesPreferredVisibilityAndSelectionFallback() async {
         let modelRepo = FakeModelListingRepository(
             models: ["gpt-5", "claude-opus-4", "gemini-3-pro"],
@@ -274,6 +274,8 @@ struct ChatViewModelPhase2Tests {
         #expect(viewModel.messages.last?.text == "First segment. Second segment.")
     }
 }
+
+// MARK: - Helpers
 
 private func segmentMarker(_ segment: AssistantTranscriptSegment) -> String {
     switch segment {

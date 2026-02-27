@@ -3,7 +3,7 @@ import Testing
 @testable import mac_copilot
 
 @MainActor
-struct CopilotModelCatalogClientPhase2Tests {
+struct ModelCatalogClientTests {
     @Test func decodesWrappedObjectPayload() async throws {
         let data = try CopilotModelCatalogPayloadFixture.wrappedObjectsData()
         let transport = StubHTTPDataTransport(results: [successResult(data: data, response: makeResponse(statusCode: 200))])
@@ -98,9 +98,34 @@ struct CopilotModelCatalogClientPhase2Tests {
             return statusCode == 500
         }
     }
+
+    // MARK: - HTTP Payload Contract tests
+
+    @Test func fetchUsesModelsGetRouteContract() async throws {
+        let transport = CapturingHTTPDataTransport(
+            result: .success((
+                Data("[\"gpt-5\"]".utf8),
+                HTTPURLResponse(url: URL(string: "http://127.0.0.1:7878/models")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            ))
+        )
+
+        let client = CopilotModelCatalogClient(
+            baseURL: URL(string: "http://127.0.0.1:7878")!,
+            ensureSidecarRunning: {},
+            transport: transport,
+            delayScheduler: NoOpDelayScheduler()
+        )
+
+        let models = try await client.fetchModelCatalog()
+        let request = try #require(transport.lastRequest)
+
+        #expect(models.map(\.id) == ["gpt-5"])
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.path == "/models")
+        #expect(request.timeoutInterval == 8)
+    }
 }
 
 private func makeResponse(statusCode: Int) -> HTTPURLResponse {
     makeHTTPResponse(statusCode: statusCode)
 }
-

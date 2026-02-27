@@ -4,7 +4,7 @@ import Testing
 @testable import mac_copilot
 
 @MainActor
-struct PersistencePhase4IntegrationTests {
+struct ChatPersistenceIntegrationTests {
     @Test func swiftData_projectChatMessageRoundtripPreservesOrderingAndMetadata() throws {
         let context = try makeInMemoryContext()
         let projectRepository = SwiftDataProjectRepository(context: context)

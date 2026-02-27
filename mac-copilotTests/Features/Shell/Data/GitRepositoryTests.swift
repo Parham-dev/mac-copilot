@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import mac_copilot
 
-struct GitDomainPhase3Tests {
+struct GitRepositoryTests {
     @Test func parsing_branchNameHandlesEdgeCases() {
         #expect(LocalGitRepositoryParsing.parseBranchName(from: "## No commits yet on main") == "main")
         #expect(LocalGitRepositoryParsing.parseBranchName(from: "## HEAD (no branch)") == "Detached HEAD")
@@ -128,6 +128,8 @@ struct GitDomainPhase3Tests {
     }
 }
 
+// MARK: - Git-domain test doubles
+
 private final class FakeGitCommandRunner: GitCommandRunning {
     private let responses: [String: GitCommandResult]
     private(set) var calls: [[String]] = []
@@ -159,7 +161,7 @@ private struct TemporaryRepo {
 
     static func make() throws -> TemporaryRepo {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("git-phase3-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("git-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return TemporaryRepo(path: directory.path)
     }
