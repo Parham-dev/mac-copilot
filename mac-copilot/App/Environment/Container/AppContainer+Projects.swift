@@ -53,6 +53,17 @@ extension Container {
         .singleton
     }
 
+    var projectsShellBridge: Factory<ProjectsShellBridge> {
+        self { @MainActor in
+            ProjectsShellBridge(
+                projectsViewModel: self.projectsViewModel(),
+                appUpdateManager: self.appUpdateManager(),
+                chatEventsStore: self.chatEventsStore()
+            )
+        }
+        .singleton
+    }
+
     var profileEnvironment: Factory<ProfileEnvironment> {
         self { @MainActor in
             ProfileEnvironment(profileViewModel: self.profileViewModel())

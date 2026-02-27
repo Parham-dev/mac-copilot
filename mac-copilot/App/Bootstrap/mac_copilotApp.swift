@@ -24,6 +24,7 @@ struct mac_copilotApp: App {
                 .environmentObject(appEnvironment.shellViewModel)
                 .environmentObject(appEnvironment.featureRegistry)
                 .environmentObject(appEnvironment.projectsEnvironment)
+                .environmentObject(appEnvironment.projectsShellBridge)
                 .environmentObject(appEnvironment.companionEnvironment)
                 .background(WindowFrameGuard())
         }

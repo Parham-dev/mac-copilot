@@ -15,6 +15,7 @@ final class AppEnvironment: ObservableObject {
     let authEnvironment: AuthEnvironment
     let shellViewModel: ShellViewModel
     let projectsEnvironment: ProjectsEnvironment
+    let projectsShellBridge: ProjectsShellBridge
     let profileEnvironment: ProfileEnvironment
     let companionEnvironment: CompanionEnvironment
     let featureRegistry: AppFeatureRegistry
@@ -28,11 +29,13 @@ final class AppEnvironment: ObservableObject {
         let shellViewModel = container.shellViewModel()
         let companionStatusStore = container.companionStatusStore()
         let projectsEnv = container.projectsEnvironment()
+        let projectsShellBridge = container.projectsShellBridge()
         let profileEnv = container.profileEnvironment()
 
         self.authEnvironment = AuthEnvironment(authViewModel: authViewModel)
         self.shellViewModel = shellViewModel
         self.projectsEnvironment = projectsEnv
+        self.projectsShellBridge = projectsShellBridge
         self.profileEnvironment = profileEnv
         self.companionEnvironment = CompanionEnvironment(companionStatusStore: companionStatusStore)
         self.featureRegistry = AppFeatureRegistry(features: [

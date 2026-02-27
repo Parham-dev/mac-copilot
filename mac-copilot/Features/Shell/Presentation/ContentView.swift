@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject private var shellViewModel: ShellViewModel
     @EnvironmentObject private var featureRegistry: AppFeatureRegistry
     @EnvironmentObject private var projectsEnvironment: ProjectsEnvironment
+    @EnvironmentObject private var projectsShellBridge: ProjectsShellBridge
     @EnvironmentObject private var companionEnvironment: CompanionEnvironment
     @EnvironmentObject private var appEnvironment: AppEnvironment
     @State private var showsCompanionSheet = false
@@ -33,7 +34,7 @@ struct ContentView: View {
                 onCheckForUpdates: {
                     showTransientUpdateStatus("Checking for updates...")
                     do {
-                        try projectsEnvironment.appUpdateManager.checkForUpdates()
+                        try projectsShellBridge.checkForUpdates()
                     } catch {
                         updateStatusTask?.cancel()
                         updateStatusMessage = UserFacingErrorMapper.message(
@@ -51,7 +52,7 @@ struct ContentView: View {
                 // Syncs the feature VM from the shell selection without relying
                 // on $selectionByFeature which double-fires on Dictionary mutation.
                 onListSelectionChange: { featureID, newSelection in
-                    projectsEnvironment.handleShellListSelectionChange(
+                    projectsShellBridge.handleShellListSelectionChange(
                         featureID: featureID,
                         newSelection: newSelection
                     )
@@ -68,7 +69,7 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
-                ShellOpenProjectMenuButton(projectsViewModel: projectsEnvironment.projectsViewModel)
+                ShellOpenProjectMenuButton(projectsViewModel: projectsShellBridge.projectsViewModel)
             }
         }
         // VM → Shell: keep shellViewModel in sync whenever ProjectsViewModel
@@ -77,11 +78,11 @@ struct ContentView: View {
         // all paths that mutate ProjectsViewModel.selectedItem without going through
         // the List selection binding. Without this, shellViewModel.selectionByFeature
         // ["projects"] stays nil and ShellDetailView always renders "Select a chat".
-        .onReceive(projectsEnvironment.projectsViewModel.$selectedItem) { newItem in
-            projectsEnvironment.syncSelectionToShell(newItem, selectionSync: shellViewModel)
+        .onReceive(projectsShellBridge.projectsViewModel.$selectedItem) { newItem in
+            projectsShellBridge.syncSelectionToShell(newItem, selectionSync: shellViewModel)
         }
-        .onReceive(projectsEnvironment.chatEventsStore.chatTitleDidUpdate) { event in
-            projectsEnvironment.handleChatTitleDidUpdate(chatID: event.chatID, title: event.title)
+        .onReceive(projectsShellBridge.chatTitleDidUpdate) { event in
+            projectsShellBridge.handleChatTitleDidUpdate(chatID: event.chatID, title: event.title)
         }
         .sheet(isPresented: $showsProfileSheet) {
             ProfileView(
@@ -132,7 +133,7 @@ struct ContentView: View {
     // MARK: - Warning banner
 
     private var activeWarningMessage: String? {
-        if let projectWarning = projectsEnvironment.activeWarningMessage { return projectWarning }
+        if let projectWarning = projectsShellBridge.activeWarningMessage { return projectWarning }
         if let updateStatusMessage, !updateStatusMessage.isEmpty { return updateStatusMessage }
         return nil
     }
@@ -162,7 +163,7 @@ struct ContentView: View {
     }
 
     private func dismissActiveWarning() {
-        if projectsEnvironment.dismissActiveWarning() { return }
+        if projectsShellBridge.dismissActiveWarning() { return }
         if updateStatusMessage != nil {
             updateStatusTask?.cancel()
             updateStatusMessage = nil
@@ -187,5 +188,6 @@ struct ContentView: View {
         .environmentObject(environment.shellViewModel)
         .environmentObject(environment.featureRegistry)
         .environmentObject(environment.projectsEnvironment)
+        .environmentObject(environment.projectsShellBridge)
         .environmentObject(environment.companionEnvironment)
 }

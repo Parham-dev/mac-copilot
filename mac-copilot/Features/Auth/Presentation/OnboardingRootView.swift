@@ -109,5 +109,6 @@ struct OnboardingRootView: View {
         .environmentObject(environment.authEnvironment.authViewModel)
         .environmentObject(environment.featureRegistry)
         .environmentObject(environment.projectsEnvironment)
+        .environmentObject(environment.projectsShellBridge)
         .environmentObject(environment.companionEnvironment)
 }
