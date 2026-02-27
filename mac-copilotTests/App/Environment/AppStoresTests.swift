@@ -126,11 +126,11 @@ struct AppStoresTests {
         let environment = AppEnvironment(container: container)
 
         #expect(environment.authEnvironment.authViewModel === container.authViewModel())
-        #expect(environment.shellEnvironment.modelSelectionStore === container.modelSelectionStore())
-        #expect(environment.shellEnvironment.mcpToolsStore === container.mcpToolsStore())
+        #expect(environment.projectsEnvironment.modelSelectionStore === container.modelSelectionStore())
+        #expect(environment.projectsEnvironment.mcpToolsStore === container.mcpToolsStore())
         #expect(environment.companionEnvironment.companionStatusStore === container.companionStatusStore())
-        #expect(environment.shellEnvironment.profileViewModel === container.profileViewModel())
-        #expect(environment.shellEnvironment.projectCreationService === container.projectCreationService())
+        #expect(environment.profileEnvironment.profileViewModel === container.profileViewModel())
+        #expect(environment.projectsEnvironment.projectCreationService === container.projectCreationService())
     }
 
     @Test(.tags(.smoke)) func appContainer_storeFactoriesReturnSingletonInstances() {
