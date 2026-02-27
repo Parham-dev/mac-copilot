@@ -24,6 +24,7 @@ jobs:
       SCHEME: mac-copilot
       CONFIGURATION: Release
       DMG_PATH: dist/mac-copilot.dmg
+      APPCAST_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/appcast.xml
 
     steps:
       - name: Checkout
@@ -65,6 +66,8 @@ jobs:
       - name: Build signed app
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_APPCAST_URL: ${{ env.APPCAST_URL }}
         run: |
           set -euo pipefail
           DERIVED_DATA_PATH="$RUNNER_TEMP/DerivedData"
@@ -148,6 +151,83 @@ jobs:
           path: |
             ${{ steps.assets.outputs.versioned_dmg }}
             dist/SHA256SUMS.txt
+
+      - name: Generate Sparkle appcast
+        if: startsWith(github.ref, 'refs/tags/v') && secrets.APPCAST_SIGNING_PRIVATE_KEY != ''
+        env:
+          APPCAST_SIGNING_PRIVATE_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          DERIVED_DATA_PATH="$RUNNER_TEMP/DerivedData"
+          GENERATE_APPCAST_BIN="$DERIVED_DATA_PATH/SourcePackages/checkouts/Sparkle/bin/generate_appcast"
+          test -x "$GENERATE_APPCAST_BIN"
+
+          APPCAST_DIR="$RUNNER_TEMP/appcast"
+          mkdir -p "$APPCAST_DIR"
+          cp "${{ steps.assets.outputs.versioned_dmg }}" "$APPCAST_DIR/"
+
+          ED_KEY_PATH="$RUNNER_TEMP/sparkle_ed25519_private_key"
+          printf '%s' "$APPCAST_SIGNING_PRIVATE_KEY" > "$ED_KEY_PATH"
+          chmod 600 "$ED_KEY_PATH"
+
+          DOWNLOAD_URL_PREFIX="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          "$GENERATE_APPCAST_BIN" "$APPCAST_DIR" \
+            --ed-key-file "$ED_KEY_PATH" \
+            --download-url-prefix "$DOWNLOAD_URL_PREFIX"
+
+          test -f "$APPCAST_DIR/appcast.xml"
+          cp "$APPCAST_DIR/appcast.xml" dist/appcast.xml
+
+      - name: Upload appcast artifact
+        if: startsWith(github.ref, 'refs/tags/v') && secrets.APPCAST_SIGNING_PRIVATE_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-copilot-appcast
+          path: dist/appcast.xml
+
+      - name: Publish appcast to gh-pages
+        if: startsWith(github.ref, 'refs/tags/v') && secrets.APPCAST_SIGNING_PRIVATE_KEY != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PAGES_DIR="$RUNNER_TEMP/gh-pages"
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$REPO_URL" "$PAGES_DIR"
+          else
+            git clone --depth 1 "$REPO_URL" "$PAGES_DIR"
+            (
+              cd "$PAGES_DIR"
+              git checkout --orphan gh-pages
+              git rm -rf . || true
+              touch .nojekyll
+              git add .nojekyll
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git commit -m "Initialize gh-pages"
+              git push origin gh-pages
+            )
+            rm -rf "$PAGES_DIR"
+            git clone --depth 1 --branch gh-pages "$REPO_URL" "$PAGES_DIR"
+          fi
+
+          cp dist/appcast.xml "$PAGES_DIR/appcast.xml"
+          touch "$PAGES_DIR/.nojekyll"
+
+          (
+            cd "$PAGES_DIR"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add appcast.xml .nojekyll
+            if git diff --cached --quiet; then
+              echo "No appcast changes to commit."
+            else
+              git commit -m "Update Sparkle appcast for ${GITHUB_REF_NAME}"
+              git push origin gh-pages
+            fi
+          )
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')

@@ -32,6 +32,9 @@ struct ContentView: View {
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
                 onOpenProject: openProjectWithFolderBrowser,
+                onCheckForUpdates: {
+                    try shellEnvironment.appUpdateManager.checkForUpdates()
+                },
                 companionStatusLabel: companionStatusStore.statusLabel,
                 onManageModels: { showsModelsSheet = true },
                 onManageCompanion: { showsCompanionSheet = true },

@@ -60,7 +60,8 @@ Add these in GitHub repository secrets:
 - `APPLE_NOTARY_KEY_ID`
 - `APPLE_NOTARY_ISSUER_ID`
 - `APPLE_NOTARY_PRIVATE_KEY_BASE64` (base64 for `.p8`)
-- (Optional) `APPCAST_SIGNING_PRIVATE_KEY` (if enabling Sparkle updates)
+- `SPARKLE_PUBLIC_ED_KEY` (Sparkle EdDSA public key used by the app)
+- (Optional but recommended) `APPCAST_SIGNING_PRIVATE_KEY` (Sparkle EdDSA private key for signing appcast entries)
 
 ---
 
@@ -97,7 +98,9 @@ Recommended release policy:
 6. **Staple notarization ticket**
 7. **Verify codesign + stapling**
 8. **Generate SHA256 checksums**
-9. **Create GitHub Release and upload assets**
+9. **Generate Sparkle appcast** (if appcast signing key is configured)
+10. **Publish appcast to `gh-pages`** (if appcast signing key is configured)
+11. **Create GitHub Release and upload assets**
 
 ## Required output assets
 
@@ -177,6 +180,8 @@ For non-App-Store macOS apps, recommended update path is **Sparkle 2**.
 
 - Host appcast + release artifacts on GitHub Releases.
 - Serve appcast XML from GitHub Pages or your website.
+- Current workflow publishes `appcast.xml` to `gh-pages` at:
+  - `https://<org-or-user>.github.io/<repo>/appcast.xml`
 
 ## User experience
 

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D02C15772F50D74A00E99852 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = D02C15762F50D74A00E99852 /* Sentry */; };
+		D0D070052F51C83300722A1C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = D0D070042F51C83300722A1C /* Sparkle */; };
 		D0F04FA12F4F565F00DAB6A7 /* FactoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA02F4F565F00DAB6A7 /* FactoryKit */; };
 		D0F04FA32F4F565F00DAB6A7 /* FactoryTesting in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA22F4F565F00DAB6A7 /* FactoryTesting */; };
 		D0F04FAA2F4F626600DAB6A7 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = D0F04FA92F4F626600DAB6A7 /* Textual */; };
@@ -60,6 +61,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D0F04FAA2F4F626600DAB6A7 /* Textual in Frameworks */,
+				D0D070052F51C83300722A1C /* Sparkle in Frameworks */,
 				D0F04FA12F4F565F00DAB6A7 /* FactoryKit in Frameworks */,
 				D02C15772F50D74A00E99852 /* Sentry in Frameworks */,
 			);
@@ -127,6 +129,7 @@
 				D0F04FA02F4F565F00DAB6A7 /* FactoryKit */,
 				D0F04FA92F4F626600DAB6A7 /* Textual */,
 				D02C15762F50D74A00E99852 /* Sentry */,
+				D0D070042F51C83300722A1C /* Sparkle */,
 			);
 			productName = "mac-copilot";
 			productReference = D0F043992F4F1F1B00DAB6A7 /* mac-copilot.app */;
@@ -215,6 +218,7 @@
 				D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */,
 				D0F04FA82F4F626600DAB6A7 /* XCRemoteSwiftPackageReference "textual" */,
 				D02C15752F50D74A00E99852 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				D0D070032F51C83300722A1C /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0F0439A2F4F1F1B00DAB6A7 /* Products */;
@@ -454,6 +458,8 @@
 				INFOPLIST_KEY_GITHUB_OAUTH_CLIENT_ID = "$(COPILOTFORGE_GITHUB_CLIENT_ID)";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_SENTRY_DSN = "$(SENTRY_DSN)";
+				INFOPLIST_KEY_SUFeedURL = "$(SPARKLE_APPCAST_URL)";
+				INFOPLIST_KEY_SUPublicEDKey = "$(SPARKLE_PUBLIC_ED_KEY)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -494,6 +500,8 @@
 				INFOPLIST_KEY_GITHUB_OAUTH_CLIENT_ID = "$(COPILOTFORGE_GITHUB_CLIENT_ID)";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_SENTRY_DSN = "$(SENTRY_DSN)";
+				INFOPLIST_KEY_SUFeedURL = "$(SPARKLE_APPCAST_URL)";
+				INFOPLIST_KEY_SUPublicEDKey = "$(SPARKLE_PUBLIC_ED_KEY)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -646,6 +654,14 @@
 				minimumVersion = 9.5.1;
 			};
 		};
+		D0D070032F51C83300722A1C /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.0;
+			};
+		};
 		D0F04F9F2F4F565F00DAB6A7 /* XCRemoteSwiftPackageReference "Factory" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/hmlongco/Factory";
@@ -669,6 +685,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D02C15752F50D74A00E99852 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
+		};
+		D0D070042F51C83300722A1C /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0D070032F51C83300722A1C /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		D0F04FA02F4F565F00DAB6A7 /* FactoryKit */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -2,6 +2,11 @@ import Foundation
 import FactoryKit
 
 extension Container {
+    var appUpdateManager: Factory<any AppUpdateManaging> {
+        self { @MainActor in SparkleAppUpdateManager() }
+            .singleton
+    }
+
     var sidecarLifecycleManager: Factory<any SidecarLifecycleManaging> {
         self { @MainActor in SidecarManager() }
             .singleton

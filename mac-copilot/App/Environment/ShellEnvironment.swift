@@ -4,6 +4,7 @@ import Combine
 @MainActor
 final class ShellEnvironment: ObservableObject {
     let shellViewModel: ShellViewModel
+    let appUpdateManager: any AppUpdateManaging
     let modelRepository: ModelListingRepository
     let controlCenterResolver: ProjectControlCenterResolver
     let controlCenterRuntimeManager: ControlCenterRuntimeManager
@@ -20,6 +21,7 @@ final class ShellEnvironment: ObservableObject {
 
     init(
         shellViewModel: ShellViewModel,
+        appUpdateManager: any AppUpdateManaging,
         modelRepository: ModelListingRepository,
         controlCenterResolver: ProjectControlCenterResolver,
         controlCenterRuntimeManager: ControlCenterRuntimeManager,
@@ -34,6 +36,7 @@ final class ShellEnvironment: ObservableObject {
         contextPaneViewModelProvider: ContextPaneViewModelProvider
     ) {
         self.shellViewModel = shellViewModel
+        self.appUpdateManager = appUpdateManager
         self.modelRepository = modelRepository
         self.controlCenterResolver = controlCenterResolver
         self.controlCenterRuntimeManager = controlCenterRuntimeManager

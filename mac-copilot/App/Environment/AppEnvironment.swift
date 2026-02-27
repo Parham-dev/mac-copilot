@@ -27,6 +27,7 @@ final class AppEnvironment: ObservableObject {
             projectRepository: container.projectRepository(),
             chatRepository: chatRepository
         )
+        let appUpdateManager = container.appUpdateManager()
         let modelRepository = container.modelRepository()
         let promptRepository = container.promptRepository()
         let controlCenterResolver = container.controlCenterResolver()
@@ -44,6 +45,7 @@ final class AppEnvironment: ObservableObject {
         self.authEnvironment = AuthEnvironment(authViewModel: authViewModel)
         self.shellEnvironment = ShellEnvironment(
             shellViewModel: shellViewModel,
+            appUpdateManager: appUpdateManager,
             modelRepository: modelRepository,
             controlCenterResolver: controlCenterResolver,
             controlCenterRuntimeManager: controlCenterRuntimeManager,

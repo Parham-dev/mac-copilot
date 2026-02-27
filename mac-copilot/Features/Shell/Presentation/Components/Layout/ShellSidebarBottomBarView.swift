@@ -3,7 +3,6 @@ import SwiftUI
 struct ShellSidebarBottomBarView: View {
     let isAuthenticated: Bool
     let sidebarWidth: CGFloat
-    let onUpdate: () -> Void
     let onOpenProfile: () -> Void
     let companionStatusLabel: String
     let onManageCompanion: () -> Void
@@ -15,20 +14,6 @@ struct ShellSidebarBottomBarView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Button {
-                onUpdate()
-            } label: {
-                Text("Update")
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.9)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
             Button {
                 showsProfileMenu.toggle()
             } label: {
