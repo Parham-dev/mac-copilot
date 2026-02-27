@@ -108,11 +108,29 @@ jobs:
           KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
           echo "$APPLE_NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
 
+          SUBMIT_JSON_PATH="$RUNNER_TEMP/notary-submit.json"
           xcrun notarytool submit "$DMG_PATH" \
             --key "$KEY_PATH" \
             --key-id "$APPLE_NOTARY_KEY_ID" \
             --issuer "$APPLE_NOTARY_ISSUER_ID" \
-            --wait
+            --wait \
+            --output-format json > "$SUBMIT_JSON_PATH"
+
+          cat "$SUBMIT_JSON_PATH"
+
+          STATUS="$(/usr/bin/plutil -extract status raw -o - "$SUBMIT_JSON_PATH" 2>/dev/null || true)"
+          SUBMISSION_ID="$(/usr/bin/plutil -extract id raw -o - "$SUBMIT_JSON_PATH" 2>/dev/null || true)"
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "error: Notarization status is '$STATUS' (submission id: $SUBMISSION_ID)"
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --key "$KEY_PATH" \
+                --key-id "$APPLE_NOTARY_KEY_ID" \
+                --issuer "$APPLE_NOTARY_ISSUER_ID" || true
+            fi
+            exit 1
+          fi
 
           xcrun stapler staple "$DMG_PATH"
 
