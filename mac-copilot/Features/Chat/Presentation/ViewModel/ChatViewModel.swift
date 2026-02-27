@@ -22,7 +22,7 @@ final class ChatViewModel: ObservableObject {
     let sendPromptUseCase: SendPromptUseCase
     let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     let modelSelectionStore: ModelSelectionStore
-    let mcpToolsStore: MCPToolsStore
+    let nativeToolsStore: NativeToolsStore
     let chatEventsStore: ChatEventsStore
     let sessionCoordinator: ChatSessionCoordinator
     var modelCatalogByID: [String: CopilotModelCatalogItem] = [:]
@@ -34,7 +34,7 @@ final class ChatViewModel: ObservableObject {
         sendPromptUseCase: SendPromptUseCase,
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
         modelSelectionStore: ModelSelectionStore,
-        mcpToolsStore: MCPToolsStore,
+        nativeToolsStore: NativeToolsStore,
         chatRepository: ChatRepository,
         chatEventsStore: ChatEventsStore
     ) {
@@ -44,7 +44,7 @@ final class ChatViewModel: ObservableObject {
         self.sendPromptUseCase = sendPromptUseCase
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
         self.modelSelectionStore = modelSelectionStore
-        self.mcpToolsStore = mcpToolsStore
+        self.nativeToolsStore = nativeToolsStore
         self.chatEventsStore = chatEventsStore
         self.sessionCoordinator = ChatSessionCoordinator(chatRepository: chatRepository)
         let bootstrappedMessages: [ChatMessage]

@@ -6,7 +6,7 @@ final class ChatViewModelProvider {
     private let modelRepository: ModelListingRepository
     private let chatRepository: ChatRepository
     private let modelSelectionStore: ModelSelectionStore
-    private let mcpToolsStore: MCPToolsStore
+    private let nativeToolsStore: NativeToolsStore
     private let chatEventsStore: ChatEventsStore
 
     private var cache: [String: ChatViewModel] = [:]
@@ -16,14 +16,14 @@ final class ChatViewModelProvider {
         modelRepository: ModelListingRepository,
         chatRepository: ChatRepository,
         modelSelectionStore: ModelSelectionStore,
-        mcpToolsStore: MCPToolsStore,
+        nativeToolsStore: NativeToolsStore,
         chatEventsStore: ChatEventsStore
     ) {
         self.promptRepository = promptRepository
         self.modelRepository = modelRepository
         self.chatRepository = chatRepository
         self.modelSelectionStore = modelSelectionStore
-        self.mcpToolsStore = mcpToolsStore
+        self.nativeToolsStore = nativeToolsStore
         self.chatEventsStore = chatEventsStore
     }
 
@@ -41,7 +41,7 @@ final class ChatViewModelProvider {
             sendPromptUseCase: SendPromptUseCase(repository: promptRepository),
             fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: modelRepository),
             modelSelectionStore: modelSelectionStore,
-            mcpToolsStore: mcpToolsStore,
+            nativeToolsStore: nativeToolsStore,
             chatRepository: chatRepository,
             chatEventsStore: chatEventsStore
         )

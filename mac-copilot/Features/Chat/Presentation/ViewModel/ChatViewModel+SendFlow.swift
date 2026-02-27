@@ -58,21 +58,7 @@ extension ChatViewModel {
             var assembledAssistantText = ""
             var renderedSegments: [AssistantTranscriptSegment] = []
             var flushedAssistantText = ""
-            let enabledMCPTools = mcpToolsStore.enabledToolIDs()
-            let allToolIDs = MCPToolsCatalog.all.map(\.id)
-            let effectiveAllowedTools: [String]? = {
-                if enabledMCPTools.isEmpty {
-                    return nil
-                }
-
-                let enabledSet = Set(enabledMCPTools)
-                let allSet = Set(allToolIDs)
-                if enabledSet == allSet {
-                    return nil
-                }
-
-                return enabledMCPTools
-            }()
+            let effectiveAllowedTools = resolveAllowedToolsForCurrentContext()
 
             func textTailSinceLastFlush() -> String {
                 guard !assembledAssistantText.isEmpty else { return "" }
@@ -181,5 +167,29 @@ extension ChatViewModel {
         streamingAssistantMessageID = nil
         isSending = false
         chatEventsStore.publishChatResponseDidFinish(projectPath: projectPath)
+    }
+
+    private func resolveAllowedToolsForCurrentContext() -> [String]? {
+        let normalizedProjectPath = projectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isProjectChat = !normalizedProjectPath.isEmpty
+
+        if isProjectChat {
+            let enabledNativeTools = nativeToolsStore.enabledNativeToolIDs()
+            let allToolIDs = NativeToolsCatalog.all.map(\.id)
+
+            if enabledNativeTools.isEmpty {
+                return nil
+            }
+
+            let enabledSet = Set(enabledNativeTools)
+            let allSet = Set(allToolIDs)
+            if enabledSet == allSet {
+                return nil
+            }
+
+            return enabledNativeTools
+        }
+
+        return NativeToolsCatalog.defaultAgentToolIDs
     }
 }

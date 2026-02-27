@@ -4,7 +4,7 @@ This document captures the next product direction for CopilotForge:
 
 - Move from generic “workflow” framing to **Apps for non-technical users**
 - Keep technical complexity hidden behind AI and guardrails and agent Skills folder.
-- Use the same Copilot brain/tooling stack under the hood, MCP and Skills or custom one if needed.
+- Use the same Copilot brain/tooling stack under the hood, Native tools and Skills or custom one if needed.
 
 It is intentionally product-first and not tied to a specific implementation.
 
@@ -18,7 +18,7 @@ Each app starts from a trusted **Base Template** and can be customized by AI for
   - output shape and quality checks
   - non-editable guardrails
   - an agent skill folder for that app. agent aksill gets update absed on user custimsation.
-  - Custom MCP Tool and agen Tool if required for that flows
+  - Custom native tool and agent tool if required for those flows
 - User Customization (owned by user):
   - tone, audience, format preferences
   - app-specific behavior adjustments through natural language

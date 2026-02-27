@@ -117,7 +117,7 @@ struct ChatView: View {
 #if DEBUG
 private extension ChatView {
     func copyDebugContext() {
-        let enabledTools = viewModel.mcpToolsStore.enabledToolIDs()
+        let enabledTools = viewModel.nativeToolsStore.enabledNativeToolIDs()
         let resolvedTools = enabledTools.isEmpty ? ["<all-tools-enabled>"] : enabledTools
 
         let payload = [
@@ -125,7 +125,7 @@ private extension ChatView {
             "chatTitle=\(viewModel.chatTitle)",
             "projectPath=\(viewModel.projectPath)",
             "selectedModel=\(viewModel.selectedModel)",
-            "enabledTools=\(resolvedTools.joined(separator: ","))",
+            "enabledNativeTools=\(resolvedTools.joined(separator: ","))",
             "streamingAssistantMessageID=\(viewModel.streamingAssistantMessageID?.uuidString ?? "nil")",
             "messageCount=\(viewModel.messages.count)",
             "timestamp=\(ISO8601DateFormatter().string(from: Date()))"

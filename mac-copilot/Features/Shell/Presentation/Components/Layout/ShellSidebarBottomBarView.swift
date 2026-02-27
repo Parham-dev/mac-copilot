@@ -9,7 +9,7 @@ struct ShellSidebarBottomBarView: View {
     let onCheckForUpdates: () -> Void
     let onManageCompanion: () -> Void
     let onManageModels: () -> Void
-    let onManageMCPTools: () -> Void
+    let onManageNativeTools: () -> Void
     let onSignOut: () -> Void
 
     @State private var showsProfileMenu = false
@@ -110,8 +110,8 @@ struct ShellSidebarBottomBarView: View {
                 showsProfileMenu = false
             }
 
-            profileMenuButton("MCP Tools", systemImage: "wrench.and.screwdriver") {
-                onManageMCPTools()
+            profileMenuButton("Native Tools", systemImage: "wrench.and.screwdriver") {
+                onManageNativeTools()
                 showsProfileMenu = false
             }
 

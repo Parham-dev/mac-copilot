@@ -4,7 +4,7 @@ Date: 2026-02-27
 
 This roadmap is based on the current mac-copilot architecture:
 - project-scoped chat runtime already exists
-- model selection and MCP tool allowlisting already exist
+- model selection and Native tool allowlisting already exist
 - sidecar prompt streaming (SSE) and tool execution traces already exist
 - Apps/Skills direction is already documented
 
@@ -24,7 +24,7 @@ Important V1 runtime decision:
    - mac app sends prompt + model + projectPath + optional allowedTools.
    - sidecar streams events and tool execution updates.
 2. **Tool control already in product**
-   - MCP tools can be enabled/disabled and persisted.
+   - Native tools can be enabled/disabled and persisted.
    - Prompt payload only sends `allowedTools` when narrowed (important SDK behavior).
 3. **Session context model exists**
    - sidecar session manager keys sessions by chat/project context.

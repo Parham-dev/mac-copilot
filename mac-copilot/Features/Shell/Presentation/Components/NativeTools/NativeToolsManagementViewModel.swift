@@ -2,18 +2,18 @@ import Foundation
 import Combine
 
 @MainActor
-final class MCPToolsManagementViewModel: ObservableObject {
-    @Published private(set) var tools: [MCPToolDefinition] = []
+final class NativeToolsManagementViewModel: ObservableObject {
+    @Published private(set) var tools: [NativeToolDefinition] = []
     @Published var enabledToolIDs: Set<String> = []
     @Published var focusedToolID: String?
 
-    private let store: MCPToolsStore
+    private let store: NativeToolsStore
 
-    init(store: MCPToolsStore) {
+    init(store: NativeToolsStore) {
         self.store = store
     }
 
-    var focusedTool: MCPToolDefinition? {
+    var focusedTool: NativeToolDefinition? {
         guard let focusedToolID else { return tools.first }
         return tools.first(where: { $0.id == focusedToolID })
     }
@@ -21,7 +21,7 @@ final class MCPToolsManagementViewModel: ObservableObject {
     func loadTools() {
         guard tools.isEmpty else { return }
 
-        tools = MCPToolsCatalog.all
+        tools = NativeToolsCatalog.all
             .sorted { lhs, rhs in
                 if lhs.group == rhs.group {
                     return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
@@ -29,7 +29,7 @@ final class MCPToolsManagementViewModel: ObservableObject {
                 return lhs.group.localizedCaseInsensitiveCompare(rhs.group) == .orderedAscending
             }
 
-        let persisted = Set(store.enabledToolIDs())
+        let persisted = Set(store.enabledNativeToolIDs())
         enabledToolIDs = persisted.isEmpty ? Set(tools.map(\.id)) : Set(tools.map(\.id).filter { persisted.contains($0) })
 
         if focusedToolID == nil {
@@ -54,6 +54,6 @@ final class MCPToolsManagementViewModel: ObservableObject {
     }
 
     func save() {
-        store.setEnabledToolIDs(Array(enabledToolIDs))
+        store.setEnabledNativeToolIDs(Array(enabledToolIDs))
     }
 }

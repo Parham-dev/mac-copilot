@@ -22,8 +22,8 @@ extension Container {
             .singleton
     }
 
-    var mcpToolsPreferencesStore: Factory<MCPToolsPreferencesStoring> {
-        self { @MainActor in UserDefaultsMCPToolsPreferencesStore() }
+    var nativeToolsPreferencesStore: Factory<NativeToolsPreferencesStoring> {
+        self { @MainActor in UserDefaultsNativeToolsPreferencesStore() }
             .singleton
     }
 
@@ -32,8 +32,8 @@ extension Container {
             .singleton
     }
 
-    var mcpToolsStore: Factory<MCPToolsStore> {
-        self { @MainActor in MCPToolsStore(preferencesStore: self.mcpToolsPreferencesStore()) }
+    var nativeToolsStore: Factory<NativeToolsStore> {
+        self { @MainActor in NativeToolsStore(preferencesStore: self.nativeToolsPreferencesStore()) }
             .singleton
     }
 

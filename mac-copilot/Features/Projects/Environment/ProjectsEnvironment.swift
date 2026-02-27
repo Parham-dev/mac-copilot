@@ -25,7 +25,7 @@ final class ProjectsEnvironment: ObservableObject {
     let modelRepository: ModelListingRepository
     let promptRepository: PromptStreamingRepository
     let modelSelectionStore: ModelSelectionStore
-    let mcpToolsStore: MCPToolsStore
+    let nativeToolsStore: NativeToolsStore
     let chatEventsStore: ChatEventsStore
 
     // MARK: - Context pane / control centre / git
@@ -51,7 +51,7 @@ final class ProjectsEnvironment: ObservableObject {
         controlCenterRuntimeManager: ControlCenterRuntimeManager,
         gitRepositoryManager: GitRepositoryManaging,
         modelSelectionStore: ModelSelectionStore,
-        mcpToolsStore: MCPToolsStore,
+        nativeToolsStore: NativeToolsStore,
         chatEventsStore: ChatEventsStore,
         modelRepository: ModelListingRepository,
         promptRepository: PromptStreamingRepository
@@ -65,7 +65,7 @@ final class ProjectsEnvironment: ObservableObject {
         self.controlCenterRuntimeManager = controlCenterRuntimeManager
         self.gitRepositoryManager = gitRepositoryManager
         self.modelSelectionStore = modelSelectionStore
-        self.mcpToolsStore = mcpToolsStore
+        self.nativeToolsStore = nativeToolsStore
         self.chatEventsStore = chatEventsStore
         self.modelRepository = modelRepository
         self.promptRepository = promptRepository

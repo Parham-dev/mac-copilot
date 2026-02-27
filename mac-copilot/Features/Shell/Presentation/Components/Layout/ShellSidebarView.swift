@@ -28,7 +28,7 @@ struct ShellSidebarView: View {
     let onOpenProfile: () -> Void
     let onManageModels: () -> Void
     let onManageCompanion: () -> Void
-    let onManageMCPTools: () -> Void
+    let onManageNativeTools: () -> Void
     let onSignOut: () -> Void
 
     /// Called exactly once per user-driven List selection change (including
@@ -126,7 +126,7 @@ struct ShellSidebarView: View {
             onCheckForUpdates: onCheckForUpdates,
             onManageCompanion: onManageCompanion,
             onManageModels: onManageModels,
-            onManageMCPTools: onManageMCPTools,
+            onManageNativeTools: onManageNativeTools,
             onSignOut: onSignOut
         )
     }

@@ -36,7 +36,7 @@ extension Container {
                 modelRepository: self.modelRepository(),
                 chatRepository: self.chatRepository(),
                 modelSelectionStore: self.modelSelectionStore(),
-                mcpToolsStore: self.mcpToolsStore(),
+                nativeToolsStore: self.nativeToolsStore(),
                 chatEventsStore: self.chatEventsStore()
             )
         }

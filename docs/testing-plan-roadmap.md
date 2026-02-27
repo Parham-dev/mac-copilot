@@ -62,7 +62,7 @@ Checklist:
 - [x] Persistent stores roundtrip correctly for model/tool preferences.
 
 Progress notes:
-- 2026-02-26: Added `mac-copilotTests/AppStoresPhaseAUnitTests.swift` covering `AppBootstrapService`, `ModelSelectionStore`, `MCPToolsStore`, `CompanionStatusStore`, and `AppEnvironment`/`AppContainer` wiring checks. Focused run passed with `-only-testing:mac-copilotTests/AppStoresPhaseAUnitTests`.
+- 2026-02-26: Added `mac-copilotTests/AppStoresPhaseAUnitTests.swift` covering `AppBootstrapService`, `ModelSelectionStore`, `NativeToolsStore`, `CompanionStatusStore`, and `AppEnvironment`/`AppContainer` wiring checks. Focused run passed with `-only-testing:mac-copilotTests/AppStoresPhaseAUnitTests`.
 - 2026-02-26: `mac-copilotUITests/mac_copilotUITests/testSmoke_launchShowsOnboardingOrShell` run is currently blocked by runner termination failure (`Failed to terminate co.uk.appwebdev.mac-copilot`), so launch-path checkbox remains open until UI runner stability is resolved.
 
 Target files:
@@ -77,8 +77,8 @@ Target files:
 - `mac-copilot/App/Environment/ChatViewModelProvider.swift`
 - `mac-copilot/App/Environment/Stores/ModelSelectionStore.swift`
 - `mac-copilot/App/Environment/Stores/ModelSelectionPreferencesStore.swift`
-- `mac-copilot/App/Environment/Stores/MCPToolsStore.swift`
-- `mac-copilot/App/Environment/Stores/MCPToolsPreferencesStore.swift`
+- `mac-copilot/App/Environment/Stores/NativeToolsStore.swift`
+- `mac-copilot/App/Environment/Stores/NativeToolsPreferencesStore.swift`
 - `mac-copilot/App/Environment/Stores/CompanionStatusStore.swift`
 
 Test types:
@@ -324,7 +324,7 @@ Examples:
 ## Suggested next 3 concrete batches
 
 1) App + stores batch
-- [x] Add tests for `AppBootstrapService`, `ModelSelectionStore`, `MCPToolsStore`, `CompanionStatusStore`.
+- [x] Add tests for `AppBootstrapService`, `ModelSelectionStore`, `NativeToolsStore`, `CompanionStatusStore`.
 
 2) Auth + Profile batch
 - Add repository/use-case/viewmodel unit tests.

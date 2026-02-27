@@ -44,7 +44,7 @@ extension Container {
                 controlCenterRuntimeManager: self.controlCenterRuntimeManager(),
                 gitRepositoryManager: self.gitRepositoryManager(),
                 modelSelectionStore: self.modelSelectionStore(),
-                mcpToolsStore: self.mcpToolsStore(),
+                nativeToolsStore: self.nativeToolsStore(),
                 chatEventsStore: self.chatEventsStore(),
                 modelRepository: self.modelRepository(),
                 promptRepository: self.promptRepository()

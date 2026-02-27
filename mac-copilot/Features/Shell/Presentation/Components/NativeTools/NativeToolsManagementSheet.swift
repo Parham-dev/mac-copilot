@@ -1,22 +1,22 @@
 import SwiftUI
 
-struct MCPToolsManagementSheet: View {
+struct NativeToolsManagementSheet: View {
     @Binding var isPresented: Bool
-    @StateObject private var viewModel: MCPToolsManagementViewModel
+    @StateObject private var viewModel: NativeToolsManagementViewModel
 
-    init(isPresented: Binding<Bool>, mcpToolsStore: MCPToolsStore) {
+    init(isPresented: Binding<Bool>, nativeToolsStore: NativeToolsStore) {
         self._isPresented = isPresented
-        self._viewModel = StateObject(wrappedValue: MCPToolsManagementViewModel(store: mcpToolsStore))
+        self._viewModel = StateObject(wrappedValue: NativeToolsManagementViewModel(store: nativeToolsStore))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("MCP Tools")
+                    Text("Native Tools")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("Enable or disable agent tools used by MCP workflows.")
+                    Text("Enable or disable native tools used by project workflows.")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -130,7 +130,7 @@ struct MCPToolsManagementSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Select a tool")
                     .font(.headline)
-                Text("Pick an MCP tool on the left to inspect and configure it.")
+                Text("Pick a native tool on the left to inspect and configure it.")
                     .foregroundStyle(.secondary)
             }
             .padding(20)

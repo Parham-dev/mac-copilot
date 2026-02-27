@@ -17,7 +17,7 @@ struct ContentView: View {
     @EnvironmentObject private var appEnvironment: AppEnvironment
     @State private var showsCompanionSheet = false
     @State private var showsModelsSheet = false
-    @State private var showsMCPToolsSheet = false
+    @State private var showsNativeToolsSheet = false
     @State private var showsProfileSheet = false
     @State private var updateStatusMessage: String?
     @State private var updateStatusTask: Task<Void, Never>?
@@ -48,7 +48,7 @@ struct ContentView: View {
                 onOpenProfile: { showsProfileSheet = true },
                 onManageModels: { showsModelsSheet = true },
                 onManageCompanion: { showsCompanionSheet = true },
-                onManageMCPTools: { showsMCPToolsSheet = true },
+                onManageNativeTools: { showsNativeToolsSheet = true },
                 onSignOut: authViewModel.signOut,
                 // Shell → VM: called exactly once per user List tap.
                 // Syncs the feature VM from the shell selection without relying
@@ -111,10 +111,10 @@ struct ContentView: View {
             )
             .frame(minWidth: 980, minHeight: 640)
         }
-        .sheet(isPresented: $showsMCPToolsSheet) {
-            MCPToolsManagementSheet(
-                isPresented: $showsMCPToolsSheet,
-                mcpToolsStore: projectsEnvironment.mcpToolsStore
+        .sheet(isPresented: $showsNativeToolsSheet) {
+            NativeToolsManagementSheet(
+                isPresented: $showsNativeToolsSheet,
+                nativeToolsStore: projectsEnvironment.nativeToolsStore
             )
             .frame(minWidth: 980, minHeight: 640)
         }
