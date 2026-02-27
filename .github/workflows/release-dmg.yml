@@ -220,9 +220,19 @@ jobs:
           mkdir -p "$APPCAST_DIR"
           cp "${{ steps.assets.outputs.versioned_dmg }}" "$APPCAST_DIR/"
 
-          ED_KEY_PATH="$RUNNER_TEMP/sparkle_ed25519_private_key"
-          printf '%s' "$APPCAST_SIGNING_PRIVATE_KEY" > "$ED_KEY_PATH"
-          chmod 600 "$ED_KEY_PATH"
+          RAW_KEY_PATH="$RUNNER_TEMP/sparkle_ed25519_private_key_raw"
+          DECODED_KEY_PATH="$RUNNER_TEMP/sparkle_ed25519_private_key_decoded"
+          printf '%s' "$APPCAST_SIGNING_PRIVATE_KEY" > "$RAW_KEY_PATH"
+          chmod 600 "$RAW_KEY_PATH"
+
+          ED_KEY_PATH="$RAW_KEY_PATH"
+          if printf '%s' "$APPCAST_SIGNING_PRIVATE_KEY" | base64 --decode > "$DECODED_KEY_PATH" 2>/dev/null; then
+            # New-format Sparkle private keys may be base64-encoded 32-byte seeds.
+            if [ "$(wc -c < "$DECODED_KEY_PATH" | tr -d ' ')" -eq 32 ]; then
+              ED_KEY_PATH="$DECODED_KEY_PATH"
+            fi
+          fi
+          chmod 600 "$DECODED_KEY_PATH" 2>/dev/null || true
 
           DOWNLOAD_URL_PREFIX="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
           "$GENERATE_APPCAST_BIN" "$APPCAST_DIR" \
@@ -230,6 +240,7 @@ jobs:
             --download-url-prefix "$DOWNLOAD_URL_PREFIX"
 
           test -f "$APPCAST_DIR/appcast.xml"
+          grep -q "sparkle:edSignature=" "$APPCAST_DIR/appcast.xml"
           cp "$APPCAST_DIR/appcast.xml" dist/appcast.xml
 
       - name: Upload appcast artifact
