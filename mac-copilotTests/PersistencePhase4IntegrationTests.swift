@@ -10,8 +10,8 @@ struct PersistencePhase4IntegrationTests {
         let projectRepository = SwiftDataProjectRepository(context: context)
         let chatRepository = SwiftDataChatRepository(context: context)
 
-        let project = projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
-        let chat = chatRepository.createChat(projectID: project.id, title: "Phase4")
+        let project = try projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
+        let chat = try chatRepository.createChat(projectID: project.id, title: "Phase4")
 
         let createdAtFirst = Date(timeIntervalSince1970: 1_700_000_000)
         let createdAtSecond = createdAtFirst.addingTimeInterval(5)
@@ -30,10 +30,10 @@ struct PersistencePhase4IntegrationTests {
             createdAt: createdAtSecond
         )
 
-        chatRepository.saveMessage(chatID: chat.id, message: secondMessage)
-        chatRepository.saveMessage(chatID: chat.id, message: firstMessage)
+        try chatRepository.saveMessage(chatID: chat.id, message: secondMessage)
+        try chatRepository.saveMessage(chatID: chat.id, message: firstMessage)
 
-        var loaded = chatRepository.loadMessages(chatID: chat.id)
+        var loaded = try chatRepository.loadMessages(chatID: chat.id)
         #expect(loaded.count == 2)
         #expect(loaded[0].id == firstMessage.id)
         #expect(loaded[1].id == secondMessage.id)
@@ -41,23 +41,23 @@ struct PersistencePhase4IntegrationTests {
         #expect(loaded[0].metadata?.toolExecutions.first?.toolName == "list_dir")
 
         let updatedMetadata = ChatMessage.Metadata(statusChips: ["Planning", "Completed"], toolExecutions: [])
-        chatRepository.updateMessage(
+        try chatRepository.updateMessage(
             chatID: chat.id,
             messageID: secondMessage.id,
             text: "second-updated",
             metadata: updatedMetadata
         )
 
-        loaded = chatRepository.loadMessages(chatID: chat.id)
+        loaded = try chatRepository.loadMessages(chatID: chat.id)
         let updated = try #require(loaded.first(where: { $0.id == secondMessage.id }))
         #expect(updated.text == "second-updated")
         #expect(updated.metadata?.statusChips == ["Planning", "Completed"])
 
-        let fetchedChats = chatRepository.fetchChats(projectID: project.id)
+        let fetchedChats = try chatRepository.fetchChats(projectID: project.id)
         #expect(fetchedChats.count == 1)
         #expect(fetchedChats.first?.id == chat.id)
 
-        let fetchedProjects = projectRepository.fetchProjects()
+        let fetchedProjects = try projectRepository.fetchProjects()
         #expect(fetchedProjects.count == 1)
         #expect(fetchedProjects.first?.id == project.id)
     }
@@ -67,17 +67,17 @@ struct PersistencePhase4IntegrationTests {
         let projectRepository = SwiftDataProjectRepository(context: context)
         let chatRepository = SwiftDataChatRepository(context: context)
 
-        let project = projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
-        let chat = chatRepository.createChat(projectID: project.id, title: "DeleteMe")
-        chatRepository.saveMessage(chatID: chat.id, message: ChatMessage(role: .user, text: "hello"))
+        let project = try projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
+        let chat = try chatRepository.createChat(projectID: project.id, title: "DeleteMe")
+        try chatRepository.saveMessage(chatID: chat.id, message: ChatMessage(role: .user, text: "hello"))
 
-        #expect(chatRepository.fetchChats(projectID: project.id).count == 1)
-        #expect(chatRepository.loadMessages(chatID: chat.id).count == 1)
+        #expect(try chatRepository.fetchChats(projectID: project.id).count == 1)
+        #expect(try chatRepository.loadMessages(chatID: chat.id).count == 1)
 
-        chatRepository.deleteChat(chatID: chat.id)
+        try chatRepository.deleteChat(chatID: chat.id)
 
-        #expect(chatRepository.fetchChats(projectID: project.id).isEmpty)
-        #expect(chatRepository.loadMessages(chatID: chat.id).isEmpty)
+        #expect(try chatRepository.fetchChats(projectID: project.id).isEmpty)
+        #expect(try chatRepository.loadMessages(chatID: chat.id).isEmpty)
     }
 
     @Test func swiftData_loadMessages_decodesLegacyMetadataWithoutToolExecutionID() throws {
@@ -85,8 +85,8 @@ struct PersistencePhase4IntegrationTests {
         let projectRepository = SwiftDataProjectRepository(context: context)
         let chatRepository = SwiftDataChatRepository(context: context)
 
-        let project = projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
-        let chat = chatRepository.createChat(projectID: project.id, title: "Legacy")
+        let project = try projectRepository.createProject(name: "Workspace", localPath: "/tmp/workspace")
+        let chat = try chatRepository.createChat(projectID: project.id, title: "Legacy")
 
         let legacyMetadata = "{\"statusChips\":[\"Queued\"],\"toolExecutions\":[{\"toolName\":\"read_file\",\"success\":true,\"details\":\"ok\"}]}"
         let legacyMessage = ChatMessageEntity(
@@ -102,7 +102,7 @@ struct PersistencePhase4IntegrationTests {
         context.insert(legacyMessage)
         try context.save()
 
-        let loaded = chatRepository.loadMessages(chatID: chat.id)
+        let loaded = try chatRepository.loadMessages(chatID: chat.id)
 
         #expect(loaded.count == 1)
         #expect(loaded[0].metadata?.statusChips == ["Queued"])

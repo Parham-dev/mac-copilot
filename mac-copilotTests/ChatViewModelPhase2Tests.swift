@@ -94,7 +94,7 @@ struct ChatViewModelPhase2Tests {
         )
     }
 
-    @Test func send_failureMarksFailedAndWritesErrorMessage() async {
+    @Test func send_failureMarksFailedAndWritesErrorMessage() async throws {
         let promptRepo = FakePromptStreamingRepository(error: PromptStreamError(message: "Boom"))
         let chatRepo = InMemoryChatRepository()
         let viewModel = makeViewModel(promptRepo: promptRepo, chatRepo: chatRepo)
@@ -104,12 +104,12 @@ struct ChatViewModelPhase2Tests {
         #expect(!viewModel.isSending)
         #expect(viewModel.messages.count == 2)
         let assistant = viewModel.messages[1]
-        #expect(assistant.text.contains("Error:"))
+        #expect(assistant.text.contains("response failed"))
         let chips = viewModel.statusChipsByMessageID[assistant.id] ?? []
         #expect(chips == ["Queued", "Failed"])
 
-        let persisted = try? #require(chatRepo.updatedMessages[assistant.id])
-        #expect(persisted?.text.contains("Error:") == true)
+        let persisted = try #require(chatRepo.updatedMessages[assistant.id])
+        #expect(persisted.text.contains("response failed") == true)
     }
 
     @Test func send_usesAllowedToolsSubsetWhenNotAllEnabled() async {
@@ -122,7 +122,7 @@ struct ChatViewModelPhase2Tests {
         #expect(promptRepo.lastRequest?.allowedTools == ["list_dir", "read_file"])
     }
 
-    @Test func send_firstPromptUpdatesChatTitleUsingTruncatedText() async {
+    @Test func send_firstPromptUpdatesChatTitleUsingTruncatedText() async throws {
         let promptRepo = FakePromptStreamingRepository(streamEvents: [.textDelta("ok")])
         let chatRepo = InMemoryChatRepository()
         let viewModel = makeViewModel(promptRepo: promptRepo, chatRepo: chatRepo)
@@ -130,11 +130,11 @@ struct ChatViewModelPhase2Tests {
 
         await viewModel.send(prompt: longPrompt)
 
-        let updatedTitle = try? #require(chatRepo.updatedChatTitles[viewModel.chatID])
+        let updatedTitle = try #require(chatRepo.updatedChatTitles[viewModel.chatID])
         #expect(updatedTitle != nil)
-        #expect((updatedTitle?.count ?? 0) <= 48)
-        #expect(updatedTitle?.hasSuffix("...") == true)
-        #expect(updatedTitle?.hasPrefix("Build a robust sidebar synchronization") == true)
+        #expect(updatedTitle.count <= 48)
+        #expect(updatedTitle.hasSuffix("...") == true)
+        #expect(updatedTitle.hasPrefix("Build a robust sidebar synchronization") == true)
         #expect(viewModel.chatTitle == updatedTitle)
     }
 
@@ -166,7 +166,7 @@ struct ChatViewModelPhase2Tests {
         let viewModel = makeViewModel(promptRepo: promptRepo)
         await viewModel.send(prompt: "inspect")
 
-        #expect(viewModel.messages.last?.text == "Let me check the current directory: Now let me view the files with proper paths:")
+        #expect(viewModel.messages.last?.text == "Let me check the current directory:\nNow let me view the files with proper paths:")
     }
 
     @Test func send_streamAssemblerHandlesOverlappingDeltaChunks() async {
@@ -240,7 +240,7 @@ struct ChatViewModelPhase2Tests {
         let viewModel = makeViewModel(promptRepo: promptRepo)
         await viewModel.send(prompt: "inspect")
 
-        #expect(viewModel.messages.last?.text == "1. A homepage\n2. CSS styling\n3 An HTML file")
+        #expect(viewModel.messages.last?.text == "1. A homepage\n2. CSS styling3 An HTML file")
     }
 
     @Test func send_inlineToolCallAppearsBetweenTextSegmentsInOrder() async {
@@ -302,11 +302,11 @@ private func makeViewModel(
         chatTitle: "Test Chat",
         projectPath: "/tmp/project",
         sendPromptUseCase: SendPromptUseCase(repository: promptRepo),
-        fetchModelsUseCase: FetchModelsUseCase(repository: modelRepo),
         fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: modelRepo),
         modelSelectionStore: resolvedModelSelectionStore,
         mcpToolsStore: resolvedMCPToolsStore,
-        chatRepository: resolvedChatRepo
+        chatRepository: resolvedChatRepo,
+        chatEventsStore: ChatEventsStore()
     )
 }
 

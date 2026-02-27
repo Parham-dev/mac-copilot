@@ -16,7 +16,7 @@ struct CopilotModelCatalogClientPhase2Tests {
             delayScheduler: NoOpDelayScheduler()
         )
 
-        let models = await client.fetchModelCatalog()
+        let models = try await client.fetchModelCatalog()
         let byID = Dictionary(uniqueKeysWithValues: models.map { ($0.id, $0) })
         let gpt5 = try #require(byID["gpt-5"])
         let claude = try #require(byID["claude-opus-4"])
@@ -45,8 +45,8 @@ struct CopilotModelCatalogClientPhase2Tests {
             delayScheduler: NoOpDelayScheduler()
         )
 
-        let wrappedModels = await wrappedClient.fetchModelCatalog()
-        let directModels = await directClient.fetchModelCatalog()
+        let wrappedModels = try await wrappedClient.fetchModelCatalog()
+        let directModels = try await directClient.fetchModelCatalog()
 
         let wrappedIDs = wrappedModels.map { $0.id }
         let directIDs = directModels.map { $0.id }
@@ -74,7 +74,7 @@ struct CopilotModelCatalogClientPhase2Tests {
             delayScheduler: delay
         )
 
-        let models = await client.fetchModelCatalog()
+        let models = try await client.fetchModelCatalog()
 
         #expect(models.count == 2)
         #expect(transport.callCount == 2)
@@ -91,8 +91,12 @@ struct CopilotModelCatalogClientPhase2Tests {
             delayScheduler: NoOpDelayScheduler()
         )
 
-        let models = await client.fetchModelCatalog()
-        #expect(models.isEmpty)
+        await #expect {
+            try await client.fetchModelCatalog()
+        } throws: { error in
+            guard case CopilotModelCatalogError.server(let statusCode, _) = error else { return false }
+            return statusCode == 500
+        }
     }
 }
 

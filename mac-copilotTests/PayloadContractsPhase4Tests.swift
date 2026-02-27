@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct PayloadContractsPhase4Tests {
-    @Test func modelCatalog_fetchUsesModelsGetRouteContract() async {
+    @Test func modelCatalog_fetchUsesModelsGetRouteContract() async throws {
         let transport = CapturingHTTPDataTransport(
             result: .success((
                 Data("[\"gpt-5\"]".utf8),
@@ -19,13 +19,13 @@ struct PayloadContractsPhase4Tests {
             delayScheduler: NoOpDelaySchedulerPhase4()
         )
 
-        let models = await client.fetchModelCatalog()
-        let request = try? #require(transport.lastRequest)
+        let models = try await client.fetchModelCatalog()
+        let request = try #require(transport.lastRequest)
 
         #expect(models.map(\.id) == ["gpt-5"])
-        #expect(request?.httpMethod == "GET")
-        #expect(request?.url?.path == "/models")
-        #expect(request?.timeoutInterval == 8)
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.path == "/models")
+        #expect(request.timeoutInterval == 8)
     }
 
     @Test func promptStream_postPayloadIncludesExpectedFields() async throws {
