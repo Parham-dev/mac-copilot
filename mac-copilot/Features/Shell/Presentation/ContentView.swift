@@ -78,7 +78,7 @@ struct ContentView: View {
         // the List selection binding. Without this, shellViewModel.selectionByFeature
         // ["projects"] stays nil and ShellDetailView always renders "Select a chat".
         .onReceive(projectsEnvironment.projectsViewModel.$selectedItem) { newItem in
-            projectsEnvironment.syncSelectionToShell(newItem, shellViewModel: shellViewModel)
+            projectsEnvironment.syncSelectionToShell(newItem, selectionSync: shellViewModel)
         }
         .onReceive(projectsEnvironment.chatEventsStore.chatTitleDidUpdate) { event in
             projectsEnvironment.handleChatTitleDidUpdate(chatID: event.chatID, title: event.title)

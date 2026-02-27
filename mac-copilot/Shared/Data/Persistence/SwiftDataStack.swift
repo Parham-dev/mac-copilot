@@ -27,12 +27,19 @@ final class SwiftDataStack: SwiftDataStoreProviding {
             let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             return (try ModelContainer(for: schema, configurations: [configuration]), nil)
         } catch {
-            let message = "Persistent database initialization failed: \(error.localizedDescription)"
-            NSLog("[CopilotForge][SwiftData] %@", message)
+            let persistentMessage = "Persistent database initialization failed: \(error.localizedDescription)"
+            NSLog("[CopilotForge][SwiftData] %@", persistentMessage)
 
-            let inMemory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            let container = try! ModelContainer(for: schema, configurations: [inMemory])
-            return (container, message)
+            do {
+                let inMemory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                let container = try ModelContainer(for: schema, configurations: [inMemory])
+                return (container, persistentMessage)
+            } catch {
+                let fallbackMessage = "In-memory database initialization also failed: \(error.localizedDescription)"
+                NSLog("[CopilotForge][SwiftData] %@", fallbackMessage)
+                let combined = "\(persistentMessage) | \(fallbackMessage)"
+                preconditionFailure(combined)
+            }
         }
     }
 }

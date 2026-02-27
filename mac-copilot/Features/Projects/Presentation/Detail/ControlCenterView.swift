@@ -227,7 +227,8 @@ struct ControlCenterView: View {
     }
 
     private func scheduleLogsScrollToBottom(using proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
+            await Task.yield()
             scrollLogsToBottom(using: proxy, animated: false)
         }
     }

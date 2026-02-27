@@ -57,3 +57,9 @@ final class ShellViewModel: ObservableObject {
         activeFeatureID = featureID
     }
 }
+
+extension ShellViewModel: FeatureSelectionSyncing {
+    func setSelection(_ selection: AnyHashable?, for featureID: String) {
+        selectionBinding(for: featureID).wrappedValue = selection
+    }
+}

@@ -1,6 +1,11 @@
 import Foundation
 import Combine
-import SwiftUI
+
+@MainActor
+protocol FeatureSelectionSyncing: AnyObject {
+    func selection(for featureID: String) -> AnyHashable?
+    func setSelection(_ selection: AnyHashable?, for featureID: String)
+}
 
 /// Self-contained environment for the Projects feature.
 ///
@@ -96,12 +101,12 @@ final class ProjectsEnvironment: ObservableObject {
         projectsViewModel.didSelectItem(decoded)
     }
 
-    func syncSelectionToShell(_ newItem: ProjectsViewModel.SidebarItem?, shellViewModel: ShellViewModel) {
+    func syncSelectionToShell(_ newItem: ProjectsViewModel.SidebarItem?, selectionSync: FeatureSelectionSyncing) {
         let featureID = ProjectsFeatureModule.featureID
-        let current = shellViewModel.selectionByFeature[featureID]
+        let current = selectionSync.selection(for: featureID)
         let newHashable = newItem.map { AnyHashable($0) }
         guard current != newHashable else { return }
-        shellViewModel.selectionBinding(for: featureID).wrappedValue = newHashable
+        selectionSync.setSelection(newHashable, for: featureID)
     }
 
     func handleChatTitleDidUpdate(chatID: UUID, title: String) {

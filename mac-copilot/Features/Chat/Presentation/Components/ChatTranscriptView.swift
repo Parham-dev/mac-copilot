@@ -68,13 +68,15 @@ struct ChatTranscriptView: View {
         guard !messages.isEmpty else { return }
 
         hasScrolledInitially = true
-        DispatchQueue.main.async {
+        Task { @MainActor in
+            await Task.yield()
             scrollToBottom(using: proxy, animated: false)
         }
     }
 
     private func scheduleScrollToBottom(using proxy: ScrollViewProxy) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+        Task { @MainActor in
+            await Task.yield()
             scrollToBottom(using: proxy, animated: false)
         }
     }

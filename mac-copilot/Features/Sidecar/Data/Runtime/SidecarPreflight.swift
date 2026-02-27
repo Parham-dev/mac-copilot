@@ -7,12 +7,20 @@ final class SidecarPreflight {
 
     init(
         minimumNodeMajorVersion: Int,
-        scriptResolver: SidecarScriptResolver = SidecarScriptResolver(),
-        nodeRuntimeResolver: SidecarNodeRuntimeResolver = SidecarNodeRuntimeResolver()
+        scriptResolver: SidecarScriptResolver,
+        nodeRuntimeResolver: SidecarNodeRuntimeResolver
     ) {
         self.minimumNodeMajorVersion = minimumNodeMajorVersion
         self.scriptResolver = scriptResolver
         self.nodeRuntimeResolver = nodeRuntimeResolver
+    }
+
+    convenience init(minimumNodeMajorVersion: Int) {
+        self.init(
+            minimumNodeMajorVersion: minimumNodeMajorVersion,
+            scriptResolver: SidecarScriptResolver(),
+            nodeRuntimeResolver: SidecarNodeRuntimeResolver()
+        )
     }
 
     func check() throws -> SidecarStartupConfig {
