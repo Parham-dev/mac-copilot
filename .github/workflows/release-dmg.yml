@@ -83,27 +83,34 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=15.5 \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY='Developer ID Application' \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             build
 
           test -d "$APP_PATH"
 
-          # Re-sign all embedded Mach-O artifacts (native node modules/helpers/binaries)
-          # that ship inside sidecar resources to satisfy notarization requirements.
+          SIGNING_IDENTITY_HASH="$(security find-identity -v -p codesigning | awk '/Developer ID Application/ {print $2; exit}')"
+          if [ -z "$SIGNING_IDENTITY_HASH" ]; then
+            echo "error: Could not resolve Developer ID Application signing identity."
+            exit 1
+          fi
+
+          # Sign all nested Mach-O files first so framework/xpc/app containers can
+          # be signed afterwards without stale nested signatures.
           while IFS= read -r -d '' candidate; do
             if file -b "$candidate" | grep -q "Mach-O"; then
-              echo "Signing embedded binary: $candidate"
-              codesign --force --sign 'Developer ID Application' --options runtime --timestamp "$candidate"
+              codesign --force --sign "$SIGNING_IDENTITY_HASH" --options runtime --timestamp "$candidate"
             fi
-          done < <(find "$APP_PATH/Contents/Resources/sidecar" -type f -print0)
+          done < <(find "$APP_PATH" -type f -print0)
 
-          # Re-sign the outer app after nested code signatures change.
-          codesign --force \
-            --sign 'Developer ID Application' \
-            --options runtime \
-            --timestamp \
-            --preserve-metadata=identifier,entitlements,requirements,flags \
-            "$APP_PATH"
+          # Sign code bundles from deepest path to shallowest.
+          while IFS= read -r bundle; do
+            [ -n "$bundle" ] || continue
+            codesign --force --sign "$SIGNING_IDENTITY_HASH" --options runtime --timestamp "$bundle"
+          done < <(find "$APP_PATH" -type d \( -name "*.xpc" -o -name "*.framework" -o -name "*.app" \) | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-)
+
+          # Final app signature.
+          codesign --force --sign "$SIGNING_IDENTITY_HASH" --options runtime --timestamp "$APP_PATH"
 
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
