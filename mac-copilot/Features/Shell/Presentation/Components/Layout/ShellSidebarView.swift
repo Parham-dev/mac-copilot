@@ -5,15 +5,14 @@ struct ShellSidebarView: View {
     let isAuthenticated: Bool
     let onCreateProject: () -> Void
     let onOpenProject: () -> Void
-    let onCheckForUpdates: () throws -> Void
     let companionStatusLabel: String
+    let isUpdateAvailable: Bool
+    let onCheckForUpdates: () -> Void
     let onManageModels: () -> Void
     let onManageCompanion: () -> Void
     let onManageMCPTools: () -> Void
     let onSignOut: () -> Void
 
-    @State private var showsUpdateError = false
-    @State private var updateErrorMessage = ""
     @State private var hoveredChatID: ChatThreadRef.ID?
 
     var body: some View {
@@ -33,11 +32,6 @@ struct ShellSidebarView: View {
                     .padding(.vertical, 6)
                     .background(.ultraThinMaterial)
             }
-            .alert("Update", isPresented: $showsUpdateError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(updateErrorMessage)
-            }
         }
     }
 
@@ -47,6 +41,8 @@ struct ShellSidebarView: View {
             sidebarWidth: sidebarWidth,
             onOpenProfile: { shellViewModel.selectedItem = .profile },
             companionStatusLabel: companionStatusLabel,
+            isUpdateAvailable: isUpdateAvailable,
+            onCheckForUpdates: onCheckForUpdates,
             onManageCompanion: onManageCompanion,
             onManageModels: onManageModels,
             onManageMCPTools: onManageMCPTools,
@@ -57,18 +53,7 @@ struct ShellSidebarView: View {
     private var projectsHeader: some View {
         ShellSidebarProjectsHeaderView(
             onCreateProject: onCreateProject,
-            onOpenProject: onOpenProject,
-            onCheckForUpdates: {
-                do {
-                    try onCheckForUpdates()
-                } catch {
-                    updateErrorMessage = UserFacingErrorMapper.message(
-                        error,
-                        fallback: "Could not check for updates right now."
-                    )
-                    showsUpdateError = true
-                }
-            }
+            onOpenProject: onOpenProject
         )
     }
 

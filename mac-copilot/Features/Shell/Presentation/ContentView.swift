@@ -32,16 +32,21 @@ struct ContentView: View {
                 isAuthenticated: authViewModel.isAuthenticated,
                 onCreateProject: createProjectWithFolderBrowser,
                 onOpenProject: openProjectWithFolderBrowser,
-                onCheckForUpdates: {
-                    try shellEnvironment.appUpdateManager.checkForUpdates()
-                },
                 companionStatusLabel: companionStatusStore.statusLabel,
+                isUpdateAvailable: true,
+                onCheckForUpdates: {
+                    do {
+                        try shellEnvironment.appUpdateManager.checkForUpdates()
+                    } catch {
+                        // errors surfaced via shellViewModel warning banner
+                    }
+                },
                 onManageModels: { showsModelsSheet = true },
                 onManageCompanion: { showsCompanionSheet = true },
                 onManageMCPTools: { showsMCPToolsSheet = true },
                 onSignOut: authViewModel.signOut
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 350)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
         } detail: {
             ShellDetailPaneView(
                 shellViewModel: shellViewModel,

@@ -3,18 +3,11 @@ import SwiftUI
 struct ShellSidebarProjectsHeaderView: View {
     let onCreateProject: () -> Void
     let onOpenProject: () -> Void
-    let onCheckForUpdates: () -> Void
 
     var body: some View {
         HStack {
             Text("Projects")
             Spacer()
-
-            Button("Update") {
-                onCheckForUpdates()
-            }
-            .buttonStyle(.borderless)
-            .help("Check for app updates")
 
             Menu {
                 Button {

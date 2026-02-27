@@ -88,15 +88,15 @@ struct WindowFrameGuard: NSViewRepresentable {
             let maxWidth = max(visible.width - horizontalPadding, 700)
             let maxHeight = max(visible.height - verticalPadding, 560)
 
-            let preferredMinWidth: CGFloat = 760
-            let preferredMinHeight: CGFloat = 700
+            let preferredMinWidth: CGFloat = 680
+            let preferredMinHeight: CGFloat = 660
             let clampedMinWidth = min(preferredMinWidth, maxWidth)
             let clampedMinHeight = min(preferredMinHeight, maxHeight)
             window.minSize = NSSize(width: clampedMinWidth, height: clampedMinHeight)
 
             if initialPreferredClampPassesRemaining > 0 {
-                let preferredLaunchWidth: CGFloat = 920
-                let preferredLaunchHeight: CGFloat = 900
+                let preferredLaunchWidth: CGFloat = 820
+                let preferredLaunchHeight: CGFloat = 860
 
                 var preferredFrame = window.frame
                 preferredFrame.size.width = min(max(preferredLaunchWidth, clampedMinWidth), maxWidth)
