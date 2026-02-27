@@ -17,6 +17,16 @@ Important V1 runtime decision:
 
 ---
 
+## Agents
+
+### URL Summariser (Placeholder)
+- **Status:** Planned (V1 first built-in agent)
+- **Purpose:** Summarise a webpage URL into structured, decision-ready output.
+- **Primary input:** `url`
+- **Optional inputs:** `goal`, `audience`, `tone`, `length`, `outputFormat`
+- **Default tool scope:** `fetch_webpage` only (minimal and safe by default)
+- **Output shape:** TL;DR, Key Points, Risks/Unknowns, Suggested Next Actions, Source Metadata
+
 ## 1) Current System Fit (What you already have)
 
 ### Existing strengths
@@ -110,7 +120,8 @@ Machine contract (for UI rendering):
    - inputSchema (dynamic form config)
    - outputTemplate (section contract)
    - requiredConnections (empty for URL v1)
-   - optionalSkills
+   - optionalSkill
+   - cunstom insuctions
 
 2. `AgentRun`
    - id, agentID, projectID

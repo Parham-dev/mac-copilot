@@ -13,6 +13,7 @@ final class SwiftDataStack: SwiftDataStoreProviding {
             ProjectEntity.self,
             ChatThreadEntity.self,
             ChatMessageEntity.self,
+            AgentRunEntity.self,
         ])
 
         let bootstrap = Self.makeContainer(schema: schema)
