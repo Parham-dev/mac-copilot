@@ -3,7 +3,7 @@ import Foundation
 import Combine
 
 struct ContextPaneView: View {
-    @ObservedObject var shellViewModel: ShellViewModel
+    @ObservedObject var projectsViewModel: ProjectsViewModel
     let project: ProjectRef
     let controlCenterResolver: ProjectControlCenterResolver
     @ObservedObject var controlCenterRuntimeManager: ControlCenterRuntimeManager
@@ -12,7 +12,7 @@ struct ContextPaneView: View {
     let onFixLogsRequest: ((String) -> Void)?
 
     init(
-        shellViewModel: ShellViewModel,
+        projectsViewModel: ProjectsViewModel,
         project: ProjectRef,
         controlCenterResolver: ProjectControlCenterResolver,
         controlCenterRuntimeManager: ControlCenterRuntimeManager,
@@ -20,7 +20,7 @@ struct ContextPaneView: View {
         chatEventsStore: ChatEventsStore,
         onFixLogsRequest: ((String) -> Void)?
     ) {
-        self.shellViewModel = shellViewModel
+        self.projectsViewModel = projectsViewModel
         self.project = project
         self.controlCenterResolver = controlCenterResolver
         self.controlCenterRuntimeManager = controlCenterRuntimeManager
@@ -110,16 +110,3 @@ struct ContextPaneView: View {
         )
     }
 }
-
-//#Preview {
-//    let environment = AppEnvironment.preview()
-//    let project = environment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
-//    ContextPaneView(
-//        shellViewModel: environment.shellViewModel,
-//        project: project,
-//        controlCenterResolver: environment.controlCenterResolver,
-//        controlCenterRuntimeManager: environment.controlCenterRuntimeManager,
-//        gitRepositoryManager: environment.gitRepositoryManager,
-//        onFixLogsRequest: nil
-//    )
-//}

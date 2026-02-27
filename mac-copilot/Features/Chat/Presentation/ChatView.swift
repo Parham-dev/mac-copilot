@@ -81,10 +81,8 @@ struct ChatView: View {
 #if DEBUG
             NSLog("[CopilotForge][ChatView] modelSelection changeToken triggered chatID=%@", viewModel.chatID.uuidString)
 #endif
-            DispatchQueue.main.async {
-                Task {
-                    await viewModel.loadModelsIfNeeded(forceReload: true)
-                }
+            Task {
+                await viewModel.loadModelsIfNeeded(forceReload: true)
             }
         }
     }
@@ -142,12 +140,13 @@ private extension ChatView {
 #Preview {
     NavigationStack {
         let environment = AppEnvironment.preview()
-        let shellEnvironment = environment.shellEnvironment
-        let project = shellEnvironment.shellViewModel.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
-        let chat = shellEnvironment.shellViewModel.chats(for: project.id).first ?? ChatThreadRef(projectID: project.id, title: "General")
+        let projectsEnv = environment.projectsEnvironment
+        let vm = projectsEnv.projectsViewModel
+        let project = vm.activeProject ?? ProjectRef(name: "Preview", localPath: "~/CopilotForgeProjects/preview")
+        let chat = vm.chats(for: project.id).first ?? ChatThreadRef(projectID: project.id, title: "General")
         ChatView(
-            viewModel: shellEnvironment.chatViewModel(for: chat, project: project),
-            modelSelectionStore: shellEnvironment.modelSelectionStore
+            viewModel: projectsEnv.chatViewModel(for: chat, project: project),
+            modelSelectionStore: projectsEnv.modelSelectionStore
         )
     }
 }

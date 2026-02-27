@@ -2,74 +2,73 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @Binding var isPresented: Bool
     @ObservedObject var viewModel: ProfileViewModel
 
-    init(viewModel: ProfileViewModel) {
+    let copilotPricingURL = URL(string: "https://github.com/features/copilot")!
+
+    init(isPresented: Binding<Bool>, viewModel: ProfileViewModel) {
+        self._isPresented = isPresented
         self.viewModel = viewModel
     }
 
-    private let copilotPricingURL = URL(string: "https://github.com/features/copilot")!
-
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                headerView
+        VStack(spacing: 0) {
 
-                CopilotStatusCardView(report: viewModel.copilotReport, pricingURL: copilotPricingURL)
-
-                if let profile = viewModel.userProfile {
-                    UserProfileSummaryView(profile: profile)
+            // MARK: Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Profile")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Your GitHub account and Copilot connection status.")
+                        .foregroundStyle(.secondary)
                 }
-
-                if viewModel.isLoading {
-                    ProgressView("Loading GitHub data…")
+                Spacer()
+                Button("Done") {
+                    isPresented = false
                 }
-
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                }
-
-                if !viewModel.checks.isEmpty {
-                    Text("Available Options")
-                        .font(.headline)
-
-                    ForEach(viewModel.checks) { check in
-                        EndpointCheckCardView(check: check)
-                    }
-                }
-
-                if !viewModel.rawUserJSON.isEmpty {
-                    Text("Raw /user Preview")
-                        .font(.headline)
-
-                    Text(viewModel.rawUserJSON)
-                        .font(.caption.monospaced())
-                        .textSelection(.enabled)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.quaternary.opacity(0.2))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
+                .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            // MARK: Content split
+            HStack(spacing: 0) {
+                leftPane
+                    .frame(minWidth: 260, maxWidth: 300)
+
+                Divider()
+
+                rightPane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+
+            Divider()
+
+            // MARK: Footer
+            HStack {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading…")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    Task { await refresh() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(viewModel.isLoading)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
         .task {
             await refresh()
-        }
-    }
-
-    private var headerView: some View {
-        HStack {
-            Text("Profile")
-                .font(.title2.bold())
-
-            Spacer()
-
-            Button("Refresh") {
-                Task { await refresh() }
-            }
-            .disabled(viewModel.isLoading)
         }
     }
 
@@ -78,14 +77,16 @@ struct ProfileView: View {
             viewModel.setMissingTokenError()
             return
         }
-
         await viewModel.refresh(accessToken: token)
     }
-
 }
 
 #Preview {
     let environment = AppEnvironment.preview()
-    ProfileView(viewModel: environment.shellEnvironment.profileViewModel)
-        .environmentObject(environment.authEnvironment.authViewModel)
+    ProfileView(
+        isPresented: .constant(true),
+        viewModel: environment.profileEnvironment.profileViewModel
+    )
+    .environmentObject(environment.authEnvironment.authViewModel)
+    .frame(minWidth: 680, minHeight: 520)
 }

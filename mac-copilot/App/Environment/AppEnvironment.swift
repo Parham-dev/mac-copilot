@@ -13,8 +13,11 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var launchPhase: LaunchPhase = .checking
 
     let authEnvironment: AuthEnvironment
-    let shellEnvironment: ShellEnvironment
+    let shellViewModel: ShellViewModel
+    let projectsEnvironment: ProjectsEnvironment
+    let profileEnvironment: ProfileEnvironment
     let companionEnvironment: CompanionEnvironment
+    let featureRegistry: AppFeatureRegistry
 
     private let bootstrapService: AppBootstrapService
     private let swiftDataStore: any SwiftDataStoreProviding
@@ -22,44 +25,19 @@ final class AppEnvironment: ObservableObject {
     init(container: Container = .shared) {
         let swiftDataStore = container.swiftDataStack()
         let authViewModel = container.authViewModel()
-        let chatRepository = container.chatRepository()
-        let shellViewModel = ShellViewModel(
-            projectRepository: container.projectRepository(),
-            chatRepository: chatRepository
-        )
-        let appUpdateManager = container.appUpdateManager()
-        let modelRepository = container.modelRepository()
-        let promptRepository = container.promptRepository()
-        let controlCenterResolver = container.controlCenterResolver()
-        let controlCenterRuntimeManager = container.controlCenterRuntimeManager()
-        let gitRepositoryManager = container.gitRepositoryManager()
-        let modelSelectionStore = container.modelSelectionStore()
-        let mcpToolsStore = container.mcpToolsStore()
-        let chatEventsStore = container.chatEventsStore()
+        let shellViewModel = container.shellViewModel()
         let companionStatusStore = container.companionStatusStore()
-        let profileViewModel = container.profileViewModel()
-        let projectCreationService = container.projectCreationService()
-        let chatViewModelProvider = container.chatViewModelProvider()
-        let contextPaneViewModelProvider = container.contextPaneViewModelProvider()
+        let projectsEnv = container.projectsEnvironment()
+        let profileEnv = container.profileEnvironment()
 
         self.authEnvironment = AuthEnvironment(authViewModel: authViewModel)
-        self.shellEnvironment = ShellEnvironment(
-            shellViewModel: shellViewModel,
-            appUpdateManager: appUpdateManager,
-            modelRepository: modelRepository,
-            controlCenterResolver: controlCenterResolver,
-            controlCenterRuntimeManager: controlCenterRuntimeManager,
-            gitRepositoryManager: gitRepositoryManager,
-            promptRepository: promptRepository,
-            modelSelectionStore: modelSelectionStore,
-            mcpToolsStore: mcpToolsStore,
-            chatEventsStore: chatEventsStore,
-            profileViewModel: profileViewModel,
-            projectCreationService: projectCreationService,
-            chatViewModelProvider: chatViewModelProvider,
-            contextPaneViewModelProvider: contextPaneViewModelProvider
-        )
+        self.shellViewModel = shellViewModel
+        self.projectsEnvironment = projectsEnv
+        self.profileEnvironment = profileEnv
         self.companionEnvironment = CompanionEnvironment(companionStatusStore: companionStatusStore)
+        self.featureRegistry = AppFeatureRegistry(features: [
+            ProjectsFeatureModule.make(environment: projectsEnv),
+        ])
         self.bootstrapService = container.appBootstrapService()
         self.swiftDataStore = swiftDataStore
     }

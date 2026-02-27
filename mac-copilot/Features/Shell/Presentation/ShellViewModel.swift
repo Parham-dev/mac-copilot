@@ -1,208 +1,59 @@
 import Foundation
+import SwiftUI
 import Combine
 
+/// Shell-level navigation state only.
+///
+/// The shell no longer owns any feature-specific data (projects, chats, etc.).
+/// It tracks which feature is active (`activeFeatureID`) and the opaque
+/// per-feature selection value (`selectionByFeature`).
+///
+/// Each feature receives a `Binding<AnyHashable?>` that reads/writes the
+/// relevant entry in `selectionByFeature`.
 @MainActor
 final class ShellViewModel: ObservableObject {
-    enum SidebarItem: Hashable {
-        case profile
-        case chat(ProjectRef.ID, ChatThreadRef.ID)
+
+    // MARK: - Published state
+
+    /// The ID of the currently active feature (matches a `FeatureModule.id`).
+    @Published var activeFeatureID: String?
+
+    /// Opaque per-feature selection. Keyed by `FeatureModule.id`.
+    @Published var selectionByFeature: [String: AnyHashable] = [:]
+
+    // MARK: - Init
+
+    init(defaultFeatureID: String? = nil) {
+        self.activeFeatureID = defaultFeatureID
     }
 
-    enum ContextTab: String, CaseIterable, Identifiable {
-        case controlCenter
-        case git
+    // MARK: - Accessors
 
-        var id: String { rawValue }
+    /// Returns the current selection for the given feature as an `AnyHashable?`.
+    func selection(for featureID: String) -> AnyHashable? {
+        selectionByFeature[featureID]
     }
 
-    @Published private(set) var projects: [ProjectRef]
-    @Published private(set) var projectChats: [ProjectRef.ID: [ChatThreadRef]]
-    @Published private(set) var expandedProjectIDs: Set<ProjectRef.ID>
-    @Published var selectedItem: SidebarItem?
-    @Published var selectedContextTab: ContextTab = .controlCenter
-    @Published var activeProjectID: ProjectRef.ID?
-    @Published private(set) var workspaceLoadError: String?
-    @Published private(set) var chatCreationError: String?
-    @Published private(set) var chatDeletionError: String?
-    @Published private(set) var projectDeletionError: String?
-
-    private let workspaceCoordinator: ShellWorkspaceCoordinator
-
-    init(projectRepository: ProjectRepository, chatRepository: ChatRepository) {
-        let coordinator = ShellWorkspaceCoordinator(projectRepository: projectRepository, chatRepository: chatRepository)
-        let bootstrap = coordinator.makeBootstrapState()
-
-        self.workspaceCoordinator = coordinator
-        self.projects = bootstrap.projects
-        self.projectChats = bootstrap.projectChats
-        self.expandedProjectIDs = bootstrap.expandedProjectIDs
-        self.activeProjectID = bootstrap.activeProjectID
-        self.selectedItem = bootstrap.selectedItem
-        self.workspaceLoadError = bootstrap.loadErrorMessage
-    }
-
-    var activeProject: ProjectRef? {
-        guard let activeProjectID else { return nil }
-        return projects.first(where: { $0.id == activeProjectID })
-    }
-
-    func project(for projectID: ProjectRef.ID) -> ProjectRef? {
-        projects.first(where: { $0.id == projectID })
-    }
-
-    func chats(for projectID: ProjectRef.ID) -> [ChatThreadRef] {
-        projectChats[projectID] ?? []
-    }
-
-    func chat(for chatID: ChatThreadRef.ID, in projectID: ProjectRef.ID) -> ChatThreadRef? {
-        projectChats[projectID]?.first(where: { $0.id == chatID })
-    }
-
-    func isProjectExpanded(_ projectID: ProjectRef.ID) -> Bool {
-        expandedProjectIDs.contains(projectID)
-    }
-
-    func setProjectExpanded(_ projectID: ProjectRef.ID, isExpanded: Bool) {
-        if isExpanded {
-            expandedProjectIDs.insert(projectID)
-        } else {
-            expandedProjectIDs.remove(projectID)
-        }
-    }
-
-    func selectProject(_ projectID: ProjectRef.ID) {
-        activeProjectID = projectID
-        expandedProjectIDs.insert(projectID)
-    }
-
-    func createChatInActiveProject() {
-        guard let activeProjectID else {
-            chatCreationError = "Select a project before creating a new chat."
-            return
-        }
-        createChat(in: activeProjectID)
-    }
-
-    func createChat(in projectID: ProjectRef.ID) {
-        let existing = projectChats[projectID] ?? []
-
-        do {
-            let created = try workspaceCoordinator.createChat(projectID: projectID, existingCount: existing.count)
-            projectChats[projectID, default: []].append(created)
-            expandedProjectIDs.insert(projectID)
-            activeProjectID = projectID
-            selectedItem = .chat(projectID, created.id)
-            chatCreationError = nil
-        } catch {
-            chatCreationError = UserFacingErrorMapper.message(error, fallback: "Could not create chat right now.")
-        }
-    }
-
-    func deleteChat(chatID: ChatThreadRef.ID, in projectID: ProjectRef.ID) {
-        let updatedChats: [ChatThreadRef]
-        do {
-            updatedChats = try workspaceCoordinator.deleteChat(projectID: projectID, chatID: chatID)
-        } catch {
-            chatDeletionError = UserFacingErrorMapper.message(error, fallback: "Could not delete chat right now.")
-            return
-        }
-
-        let replacementSelection: SidebarItem?
-        if selectedItem == .chat(projectID, chatID) {
-            if let replacement = updatedChats.first {
-                replacementSelection = .chat(projectID, replacement.id)
-            } else {
-                replacementSelection = nil
+    /// Builds a two-way `Binding<AnyHashable?>` for a given feature's selection.
+    func selectionBinding(for featureID: String) -> Binding<AnyHashable?> {
+        Binding(
+            get: { [weak self] in self?.selectionByFeature[featureID] },
+            set: { [weak self] newValue in
+                guard let self else { return }
+                if let newValue {
+                    self.selectionByFeature[featureID] = newValue
+                } else {
+                    self.selectionByFeature.removeValue(forKey: featureID)
+                }
+                // Activating any feature item makes that feature active.
+                self.activeFeatureID = featureID
             }
-        } else {
-            replacementSelection = selectedItem
-        }
-
-        selectedItem = replacementSelection
-        projectChats[projectID] = updatedChats
-        chatDeletionError = nil
+        )
     }
 
-    func clearChatCreationError() {
-        chatCreationError = nil
-    }
-
-    func clearWorkspaceLoadError() {
-        workspaceLoadError = nil
-    }
-
-    func clearChatDeletionError() {
-        chatDeletionError = nil
-    }
-
-    func clearProjectDeletionError() {
-        projectDeletionError = nil
-    }
-
-    @discardableResult
-    func addProject(name: String, localPath: String) throws -> ProjectRef {
-        let created = try workspaceCoordinator.createProjectWithDefaultChat(name: name, localPath: localPath)
-        let project = created.project
-        projects.append(project)
-
-        let defaultChat = created.defaultChat
-        projectChats[project.id] = [defaultChat]
-        expandedProjectIDs.insert(project.id)
-        activeProjectID = project.id
-        selectedItem = .chat(project.id, defaultChat.id)
-
-        return project
-    }
-
-    func didSelectSidebarItem(_ item: SidebarItem?) {
-        guard let item else { return }
-        switch item {
-        case .profile:
-            break
-        case .chat(let projectID, _):
-            activeProjectID = projectID
-            expandedProjectIDs.insert(projectID)
-        }
-    }
-
-    func updateChatTitle(chatID: ChatThreadRef.ID, title: String) {
-        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedTitle.isEmpty else { return }
-
-        for projectID in projectChats.keys {
-            guard var chats = projectChats[projectID],
-                  let index = chats.firstIndex(where: { $0.id == chatID })
-            else {
-                continue
-            }
-
-            chats[index].title = normalizedTitle
-            projectChats[projectID] = chats
-            return
-        }
-    }
-
-    func deleteProject(projectID: ProjectRef.ID) {
-        let existed = projects.contains(where: { $0.id == projectID })
-        guard existed else {
-            projectDeletionError = "Project not found."
-            return
-        }
-
-        let bootstrap: ShellWorkspaceCoordinator.BootstrapState
-        do {
-            bootstrap = try workspaceCoordinator.deleteProject(projectID: projectID)
-        } catch {
-            projectDeletionError = UserFacingErrorMapper.message(error, fallback: "Could not delete project right now.")
-            return
-        }
-
-        projects = bootstrap.projects
-        projectChats = bootstrap.projectChats
-        expandedProjectIDs = bootstrap.expandedProjectIDs
-        activeProjectID = bootstrap.activeProjectID
-        selectedItem = bootstrap.selectedItem
-        workspaceLoadError = bootstrap.loadErrorMessage
-        projectDeletionError = nil
+    /// Activates a feature (e.g. when a sidebar section header is tapped)
+    /// without changing that feature's internal selection.
+    func activateFeature(_ featureID: String) {
+        activeFeatureID = featureID
     }
 }

@@ -21,10 +21,12 @@ struct mac_copilotApp: App {
             OnboardingRootView()
                 .environmentObject(appEnvironment)
                 .environmentObject(appEnvironment.authEnvironment.authViewModel)
-                .environmentObject(appEnvironment.shellEnvironment)
+                .environmentObject(appEnvironment.shellViewModel)
+                .environmentObject(appEnvironment.featureRegistry)
+                .environmentObject(appEnvironment.projectsEnvironment)
                 .environmentObject(appEnvironment.companionEnvironment)
                 .background(WindowFrameGuard())
         }
-        .defaultSize(width: 820, height: 860)
+        .defaultSize(width: 1060, height: 900)
     }
 }

@@ -284,6 +284,25 @@ Fix:
 
 ### D) Swift strict actor-isolation compile failures in Release
 
+## 12) Current End-to-End Status (Validated)
+
+As of February 27, 2026, the full stable-channel path is validated:
+
+1. Tag push (`vX.Y.Z`) triggers `.github/workflows/release-dmg.yml`.
+2. CI builds Release app, deep re-signs nested binaries/frameworks, notarizes DMG, staples ticket.
+3. CI publishes GitHub Release assets (`mac-copilot-vX.Y.Z.dmg`, `SHA256SUMS.txt`).
+4. CI generates `appcast.xml` and publishes it to `gh-pages`.
+
+Live endpoints:
+
+- Site root: `https://parham-dev.github.io/mac-copilot/`
+- Sparkle appcast feed: `https://parham-dev.github.io/mac-copilot/appcast.xml`
+
+Notes:
+
+- Root site content can be empty; Sparkle only needs `appcast.xml`.
+- Release workflow currently uses a single stable channel and manual in-app update checks.
+
 Symptom:
 
 - `main actor-isolated property/method ... in nonisolated context` errors (exit 65).

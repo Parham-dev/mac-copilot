@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class ShellWorkspaceCoordinator {
+final class ProjectsWorkspaceCoordinator {
     enum CoordinatorError: LocalizedError {
         case bootstrapLoadFailed(String)
         case chatCreationFailed
@@ -30,7 +30,7 @@ final class ShellWorkspaceCoordinator {
         let projectChats: [ProjectRef.ID: [ChatThreadRef]]
         let expandedProjectIDs: Set<ProjectRef.ID>
         let activeProjectID: ProjectRef.ID?
-        let selectedItem: ShellViewModel.SidebarItem?
+        let selectedItem: ProjectsViewModel.SidebarItem?
         let loadErrorMessage: String?
     }
 
@@ -93,7 +93,7 @@ final class ShellWorkspaceCoordinator {
         }
 
         let activeProjectID = projects.first?.id
-        let selectedItem: ShellViewModel.SidebarItem?
+        let selectedItem: ProjectsViewModel.SidebarItem?
         if let firstProject = projects.first,
            let firstChat = projectChats[firstProject.id]?.first {
             selectedItem = .chat(firstProject.id, firstChat.id)

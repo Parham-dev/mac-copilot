@@ -249,6 +249,8 @@ open mac-copilot.xcodeproj
 ## Documentation
 
 - Operational and release docs: [docs/README.md](docs/README.md)
+- Release + Sparkle updates runbook: [docs/release-cicd-and-updates-runbook.md](docs/release-cicd-and-updates-runbook.md)
+- Update button verification guide: [docs/update-button-verification.md](docs/update-button-verification.md)
 - Apps platform direction (Preview/Live, versioning, customization): [README_APPS.md](README_APPS.md)
 - Testing strategy and phased roadmap: [docs/testing-plan-roadmap.md](docs/testing-plan-roadmap.md)
 - Chat/session history architecture: [docs/chat-session-history.md](docs/chat-session-history.md)
@@ -256,6 +258,15 @@ open mac-copilot.xcodeproj
 - End-to-end release wrapper: `./scripts/release_dmg.sh --skip-notarize`
 - One-command local DMG build: `./scripts/build_dmg.sh`
 - One-command notarize + staple: `./scripts/notarize_dmg.sh --keychain-profile "<profile>"`
+
+## Release and Updates (Current)
+
+- Distribution: GitHub Releases (signed + notarized DMG).
+- In-app updater: Sparkle 2 (stable channel).
+- Appcast URL: `https://parham-dev.github.io/mac-copilot/appcast.xml`
+- Pages root URL: `https://parham-dev.github.io/mac-copilot/`
+
+The `Update` button is currently manual-trigger only. It now shows immediate local feedback ("Checking for updates..."), then Sparkle handles the update UI if an update is available.
 
 ## Notes for Contributors
 

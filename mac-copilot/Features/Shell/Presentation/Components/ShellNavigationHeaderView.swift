@@ -6,17 +6,17 @@ private func openProjectInTarget(projectURL: URL, target: OpenTarget) {
     NSWorkspace.shared.open([projectURL], withApplicationAt: target.appURL, configuration: configuration) { _, _ in }
 }
 
+/// Toolbar button that offers "Open In: <editor>" for the current project.
+///
+/// Now wired to `ProjectsViewModel` directly since the active project is
+/// owned by the Projects feature, not the shell.
 struct ShellOpenProjectMenuButton: View {
-    @ObservedObject var shellViewModel: ShellViewModel
-
-    private var state: ShellNavigationHeaderState {
-        ShellNavigationHeaderState(shellViewModel: shellViewModel)
-    }
+    @ObservedObject var projectsViewModel: ProjectsViewModel
 
     var body: some View {
-        if let projectURL = state.currentProjectURL, !state.availableOpenTargets.isEmpty {
+        if let projectURL = currentProjectURL, !availableOpenTargets.isEmpty {
             Menu {
-                ForEach(state.availableOpenTargets) { target in
+                ForEach(availableOpenTargets) { target in
                     Button {
                         openProjectInTarget(projectURL: projectURL, target: target)
                     } label: {
@@ -40,54 +40,16 @@ struct ShellOpenProjectMenuButton: View {
             .help("Open current project in a code editor")
         }
     }
-}
 
-@MainActor
-struct ShellNavigationHeaderState {
-    private let headerContext: HeaderContext
+    // MARK: - Derived state
 
-    init(shellViewModel: ShellViewModel) {
-        guard let selectedItem = shellViewModel.selectedItem else {
-            self.headerContext = .app
-            return
-        }
-
-        switch selectedItem {
-        case .profile:
-            self.headerContext = .profile
-        case .chat(let projectID, _):
-            guard let project = shellViewModel.project(for: projectID) else {
-                self.headerContext = .app
-                return
-            }
-            self.headerContext = .project(project)
-        }
+    private var currentProjectURL: URL? {
+        guard let project = projectsViewModel.activeProject else { return nil }
+        return URL(fileURLWithPath: project.localPath, isDirectory: true)
     }
 
-    var title: String {
-        switch headerContext {
-        case .app:
-            return "CopilotForge"
-        case .profile:
-            return "Profile"
-        case .project(let project):
-            return project.name
-        }
-    }
-
-    var currentProjectURL: URL? {
-        switch headerContext {
-        case .project(let project):
-            return URL(fileURLWithPath: project.localPath, isDirectory: true)
-        case .app, .profile:
-            return nil
-        }
-    }
-
-    var availableOpenTargets: [OpenTarget] {
-        guard currentProjectURL != nil else {
-            return []
-        }
+    private var availableOpenTargets: [OpenTarget] {
+        guard currentProjectURL != nil else { return [] }
 
         var targets: [OpenTarget] = []
         var seenPaths = Set<String>()
@@ -117,21 +79,12 @@ struct ShellNavigationHeaderState {
             guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
                 continue
             }
-
-            guard !seenPaths.contains(appURL.path) else {
-                continue
-            }
-
+            guard !seenPaths.contains(appURL.path) else { continue }
             seenPaths.insert(appURL.path)
             targets.append(OpenTarget(appURL: appURL))
         }
 
-        let preferredEditorAppNames = [
-            "Windsurf",
-            "Nova",
-            "Antigravity"
-        ]
-
+        let preferredEditorAppNames = ["Windsurf", "Nova", "Antigravity"]
         let searchDirectories: [URL] = [
             URL(fileURLWithPath: "/Applications", isDirectory: true),
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
@@ -140,14 +93,8 @@ struct ShellNavigationHeaderState {
         for appName in preferredEditorAppNames {
             for directory in searchDirectories {
                 let appURL = directory.appendingPathComponent("\(appName).app", isDirectory: true)
-                guard FileManager.default.fileExists(atPath: appURL.path) else {
-                    continue
-                }
-
-                guard !seenPaths.contains(appURL.path) else {
-                    continue
-                }
-
+                guard FileManager.default.fileExists(atPath: appURL.path) else { continue }
+                guard !seenPaths.contains(appURL.path) else { continue }
                 seenPaths.insert(appURL.path)
                 targets.append(OpenTarget(appURL: appURL))
             }
@@ -157,24 +104,19 @@ struct ShellNavigationHeaderState {
     }
 }
 
-private enum HeaderContext {
-    case app
-    case profile
-    case project(ProjectRef)
-}
+// MARK: - OpenTarget
 
 struct OpenTarget: Identifiable {
     let appURL: URL
     let displayName: String
     let icon: NSImage
 
-    var id: String {
-        appURL.path
-    }
+    var id: String { appURL.path }
 
     init(appURL: URL) {
         self.appURL = appURL
-        self.displayName = FileManager.default.displayName(atPath: appURL.path).replacingOccurrences(of: ".app", with: "")
+        self.displayName = FileManager.default.displayName(atPath: appURL.path)
+            .replacingOccurrences(of: ".app", with: "")
         self.icon = NSWorkspace.shared.icon(forFile: appURL.path)
     }
 }

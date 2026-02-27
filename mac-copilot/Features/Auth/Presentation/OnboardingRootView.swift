@@ -13,10 +13,7 @@ struct OnboardingRootView: View {
                 launchFailureView(message: message)
             case .ready:
                 if authViewModel.isAuthenticated {
-                    ContentView(
-                        shellViewModel: appEnvironment.shellEnvironment.shellViewModel,
-                        projectCreationService: appEnvironment.shellEnvironment.projectCreationService
-                    )
+                    ContentView()
                 } else {
                     onboardingView
                 }
@@ -109,7 +106,8 @@ struct OnboardingRootView: View {
     let environment = AppEnvironment.preview()
     OnboardingRootView()
         .environmentObject(environment)
-    .environmentObject(environment.authEnvironment.authViewModel)
-    .environmentObject(environment.shellEnvironment)
-    .environmentObject(environment.companionEnvironment)
+        .environmentObject(environment.authEnvironment.authViewModel)
+        .environmentObject(environment.featureRegistry)
+        .environmentObject(environment.projectsEnvironment)
+        .environmentObject(environment.companionEnvironment)
 }

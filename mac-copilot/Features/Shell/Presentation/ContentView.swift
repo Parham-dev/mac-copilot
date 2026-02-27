@@ -9,62 +9,94 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
-    @EnvironmentObject private var shellEnvironment: ShellEnvironment
+    @EnvironmentObject private var shellViewModel: ShellViewModel
+    @EnvironmentObject private var featureRegistry: AppFeatureRegistry
+    @EnvironmentObject private var projectsEnvironment: ProjectsEnvironment
     @EnvironmentObject private var companionEnvironment: CompanionEnvironment
-    @ObservedObject var shellViewModel: ShellViewModel
-    @State private var projectCreationError: String?
+    @EnvironmentObject private var appEnvironment: AppEnvironment
     @State private var showsCompanionSheet = false
     @State private var showsModelsSheet = false
     @State private var showsMCPToolsSheet = false
-    private let projectCreationService: ProjectCreationService
-
-    init(shellViewModel: ShellViewModel, projectCreationService: ProjectCreationService) {
-        self.shellViewModel = shellViewModel
-        self.projectCreationService = projectCreationService
-    }
+    @State private var showsProfileSheet = false
+    @State private var updateStatusMessage: String?
+    @State private var updateStatusTask: Task<Void, Never>?
 
     var body: some View {
         let companionStatusStore = companionEnvironment.companionStatusStore
+        let projectsVM = projectsEnvironment.projectsViewModel
 
         NavigationSplitView {
             ShellSidebarView(
                 shellViewModel: shellViewModel,
                 isAuthenticated: authViewModel.isAuthenticated,
-                onCreateProject: createProjectWithFolderBrowser,
-                onOpenProject: openProjectWithFolderBrowser,
                 companionStatusLabel: companionStatusStore.statusLabel,
                 isUpdateAvailable: true,
                 onCheckForUpdates: {
+                    showTransientUpdateStatus("Checking for updates...")
                     do {
-                        try shellEnvironment.appUpdateManager.checkForUpdates()
+                        try projectsEnvironment.appUpdateManager.checkForUpdates()
                     } catch {
-                        // errors surfaced via shellViewModel warning banner
+                        updateStatusTask?.cancel()
+                        updateStatusMessage = UserFacingErrorMapper.message(
+                            error,
+                            fallback: "Could not check for updates right now."
+                        )
                     }
                 },
+                onOpenProfile: { showsProfileSheet = true },
                 onManageModels: { showsModelsSheet = true },
                 onManageCompanion: { showsCompanionSheet = true },
                 onManageMCPTools: { showsMCPToolsSheet = true },
-                onSignOut: authViewModel.signOut
+                onSignOut: authViewModel.signOut,
+                // Shell → VM: called exactly once per user List tap.
+                // Syncs the feature VM from the shell selection without relying
+                // on $selectionByFeature which double-fires on Dictionary mutation.
+                onListSelectionChange: { featureID, newSelection in
+                    if featureID == ProjectsFeatureModule.featureID {
+                        let decoded = newSelection as? ProjectsViewModel.SidebarItem
+                        guard projectsVM.selectedItem != decoded else { return }
+                        projectsVM.selectedItem = decoded
+                        projectsVM.didSelectItem(decoded)
+                    }
+                }
             )
-            .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
+            .environmentObject(featureRegistry)
+            .environmentObject(authViewModel)
+            .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
         } detail: {
-            ShellDetailPaneView(
-                shellViewModel: shellViewModel,
-                shellEnvironment: shellEnvironment,
-                isAuthenticated: authViewModel.isAuthenticated
-            )
-            .navigationTitle(navigationHeaderState.title)
+            ShellDetailView(shellViewModel: shellViewModel)
+                .environmentObject(featureRegistry)
+                .environmentObject(authViewModel)
+                .navigationTitle(navigationTitle)
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
-                ShellOpenProjectMenuButton(shellViewModel: shellViewModel)
+                ShellOpenProjectMenuButton(projectsViewModel: projectsVM)
             }
         }
-        .onChange(of: shellViewModel.selectedItem) { _, newValue in
-            shellViewModel.didSelectSidebarItem(newValue)
+        // VM → Shell: keep shellViewModel in sync whenever ProjectsViewModel
+        // changes its selected item. This covers bootstrap (initial selection from
+        // persistence), createChat, deleteChat, deleteProject, and addProject —
+        // all paths that mutate ProjectsViewModel.selectedItem without going through
+        // the List selection binding. Without this, shellViewModel.selectionByFeature
+        // ["projects"] stays nil and ShellDetailView always renders "Select a chat".
+        .onReceive(projectsVM.$selectedItem) { newItem in
+            let featureID = ProjectsFeatureModule.featureID
+            let current = shellViewModel.selectionByFeature[featureID]
+            let newHashable = newItem.map { AnyHashable($0) }
+            guard current != newHashable else { return }
+            shellViewModel.selectionBinding(for: featureID).wrappedValue = newHashable
         }
-        .onReceive(shellEnvironment.chatEventsStore.chatTitleDidUpdate) { event in
-            shellViewModel.updateChatTitle(chatID: event.chatID, title: event.title)
+        .onReceive(projectsEnvironment.chatEventsStore.chatTitleDidUpdate) { event in
+            projectsVM.updateChatTitle(chatID: event.chatID, title: event.title)
+        }
+        .sheet(isPresented: $showsProfileSheet) {
+            ProfileView(
+                isPresented: $showsProfileSheet,
+                viewModel: appEnvironment.profileEnvironment.profileViewModel
+            )
+            .environmentObject(authViewModel)
+            .frame(minWidth: 680, minHeight: 520)
         }
         .sheet(isPresented: $showsCompanionSheet) {
             CompanionManagementSheet(
@@ -76,130 +108,97 @@ struct ContentView: View {
         .sheet(isPresented: $showsModelsSheet) {
             ModelsManagementSheet(
                 isPresented: $showsModelsSheet,
-                modelSelectionStore: shellEnvironment.modelSelectionStore,
-                modelRepository: shellEnvironment.modelRepository
+                modelSelectionStore: projectsEnvironment.modelSelectionStore,
+                modelRepository: projectsEnvironment.modelRepository
             )
-                .frame(minWidth: 980, minHeight: 640)
+            .frame(minWidth: 980, minHeight: 640)
         }
         .sheet(isPresented: $showsMCPToolsSheet) {
             MCPToolsManagementSheet(
                 isPresented: $showsMCPToolsSheet,
-                mcpToolsStore: shellEnvironment.mcpToolsStore
+                mcpToolsStore: projectsEnvironment.mcpToolsStore
             )
             .frame(minWidth: 980, minHeight: 640)
         }
         .safeAreaInset(edge: .top) {
-            if let warningMessage = activeWarningMessage {
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-
-                    Text(warningMessage)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-
-                    Spacer(minLength: 8)
-
-                    Button("Dismiss") {
-                        dismissActiveWarning()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
+            if let warningMessage = activeWarningMessage(projectsVM: projectsVM) {
+                warningBanner(message: warningMessage, projectsVM: projectsVM)
             }
         }
     }
 
-    private var activeWarningMessage: String? {
-        if let workspaceLoadError = shellViewModel.workspaceLoadError,
-           !workspaceLoadError.isEmpty {
-            return workspaceLoadError
-        }
-        if let projectCreationError,
-           !projectCreationError.isEmpty {
-            return projectCreationError
-        }
-        if let chatCreationError = shellViewModel.chatCreationError,
-           !chatCreationError.isEmpty {
-            return chatCreationError
-        }
-        if let chatDeletionError = shellViewModel.chatDeletionError,
-           !chatDeletionError.isEmpty {
-            return chatDeletionError
-        }
-        if let projectDeletionError = shellViewModel.projectDeletionError,
-           !projectDeletionError.isEmpty {
-            return projectDeletionError
-        }
+    // MARK: - Navigation title
 
+    private var navigationTitle: String {
+        guard let activeFeatureID = shellViewModel.activeFeatureID,
+              let feature = featureRegistry.features.first(where: { $0.id == activeFeatureID })
+        else { return "" }
+        return feature.navigationTitle(shellViewModel.selection(for: activeFeatureID))
+    }
+
+    // MARK: - Warning banner
+
+    private func activeWarningMessage(projectsVM: ProjectsViewModel) -> String? {
+        if let err = projectsVM.workspaceLoadError, !err.isEmpty { return err }
+        if let err = projectsVM.chatCreationError, !err.isEmpty { return err }
+        if let err = projectsVM.chatDeletionError, !err.isEmpty { return err }
+        if let err = projectsVM.projectDeletionError, !err.isEmpty { return err }
+        if let updateStatusMessage, !updateStatusMessage.isEmpty { return updateStatusMessage }
         return nil
     }
 
-    private func dismissActiveWarning() {
-        if shellViewModel.workspaceLoadError != nil {
-            shellViewModel.clearWorkspaceLoadError()
-            return
-        }
-        if projectCreationError != nil {
-            projectCreationError = nil
-            return
-        }
-        if shellViewModel.chatCreationError != nil {
-            shellViewModel.clearChatCreationError()
-            return
-        }
-        if shellViewModel.chatDeletionError != nil {
-            shellViewModel.clearChatDeletionError()
-            return
-        }
-        if shellViewModel.projectDeletionError != nil {
-            shellViewModel.clearProjectDeletionError()
-        }
-    }
+    @ViewBuilder
+    private func warningBanner(message: String, projectsVM: ProjectsViewModel) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
 
-    private var navigationHeaderState: ShellNavigationHeaderState {
-        ShellNavigationHeaderState(shellViewModel: shellViewModel)
-    }
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
 
-    private func createProjectWithFolderBrowser() {
-        do {
-            guard let created = try projectCreationService.createProjectInteractively() else {
-                return
+            Spacer(minLength: 8)
+
+            Button("Dismiss") {
+                dismissActiveWarning(projectsVM: projectsVM)
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+    }
 
-            try shellViewModel.addProject(name: created.name, localPath: created.localPath)
-        } catch {
-            let fallbackMessage = "Could not create project right now."
-            projectCreationError = UserFacingErrorMapper.message(error, fallback: fallbackMessage)
+    private func dismissActiveWarning(projectsVM: ProjectsViewModel) {
+        if projectsVM.workspaceLoadError != nil { projectsVM.clearWorkspaceLoadError(); return }
+        if projectsVM.chatCreationError != nil { projectsVM.clearChatCreationError(); return }
+        if projectsVM.chatDeletionError != nil { projectsVM.clearChatDeletionError(); return }
+        if projectsVM.projectDeletionError != nil { projectsVM.clearProjectDeletionError(); return }
+        if updateStatusMessage != nil {
+            updateStatusTask?.cancel()
+            updateStatusMessage = nil
         }
     }
 
-    private func openProjectWithFolderBrowser() {
-        do {
-            guard let opened = try projectCreationService.openProjectInteractively() else {
-                return
-            }
-
-            try shellViewModel.addProject(name: opened.name, localPath: opened.localPath)
-        } catch {
-            let fallbackMessage = "Could not open project right now."
-            projectCreationError = UserFacingErrorMapper.message(error, fallback: fallbackMessage)
+    private func showTransientUpdateStatus(_ message: String) {
+        updateStatusTask?.cancel()
+        updateStatusMessage = message
+        updateStatusTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            updateStatusMessage = nil
         }
     }
 }
 
 #Preview {
     let environment = AppEnvironment.preview()
-    ContentView(
-        shellViewModel: environment.shellEnvironment.shellViewModel,
-        projectCreationService: environment.shellEnvironment.projectCreationService
-    )
+    ContentView()
         .environmentObject(environment)
         .environmentObject(environment.authEnvironment.authViewModel)
-        .environmentObject(environment.shellEnvironment)
+        .environmentObject(environment.shellViewModel)
+        .environmentObject(environment.featureRegistry)
+        .environmentObject(environment.projectsEnvironment)
         .environmentObject(environment.companionEnvironment)
 }
