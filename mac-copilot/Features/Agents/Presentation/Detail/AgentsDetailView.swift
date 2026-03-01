@@ -3,13 +3,7 @@ import SwiftUI
 struct AgentsDetailView: View {
     @EnvironmentObject private var agentsEnvironment: AgentsEnvironment
     let selection: AnyHashable?
-
-    @State private var formValues: [String: String] = [:]
-    @State private var activeAgentID: String?
-    @State private var errorMessage: String?
-    @State private var isRunning = false
-    @State private var latestRun: AgentRun?
-    @State private var runActivity: String?
+    @StateObject private var viewModel = AgentsDetailViewModel()
 
     var body: some View {
         if let item = selection as? AgentsFeatureModule.SidebarItem {
@@ -18,11 +12,11 @@ struct AgentsDetailView: View {
                 if let definition = agentsEnvironment.definition(id: agentID) {
                     agentDetail(definition: definition)
                         .onAppear {
-                            activateAgentIfNeeded(definition)
+                            viewModel.activateAgentIfNeeded(definition, environment: agentsEnvironment)
                             Task { await agentsEnvironment.loadModels() }
                         }
                         .onChange(of: agentID) { _, _ in
-                            activateAgentIfNeeded(definition)
+                            viewModel.activateAgentIfNeeded(definition, environment: agentsEnvironment)
                         }
                 } else {
                     ContentUnavailableView("Agent not found", systemImage: "exclamationmark.triangle")
@@ -35,15 +29,36 @@ struct AgentsDetailView: View {
 
     @ViewBuilder
     private func agentDetail(definition: AgentDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(definition.description)
+                .foregroundStyle(.secondary)
+
+            switch viewModel.selectedTab {
+            case .run:
+                runTab(definition: definition)
+            case .history:
+                historyTab(definition: definition)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("View", selection: $viewModel.selectedTab) {
+                    ForEach(AgentsDetailViewModel.Tab.allCases) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 220)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func runTab(definition: AgentDefinition) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text(definition.name)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                Text(definition.description)
-                    .foregroundStyle(.secondary)
-
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Inputs")
                         .font(.headline)
@@ -59,7 +74,7 @@ struct AgentsDetailView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        .disabled(isRunning || agentsEnvironment.isLoadingModels)
+                        .disabled(viewModel.isRunning || agentsEnvironment.isLoadingModels)
 
                         if agentsEnvironment.isLoadingModels {
                             Text("Loading models…")
@@ -80,26 +95,38 @@ struct AgentsDetailView: View {
                         .foregroundStyle(.red)
                 }
 
-                if let errorMessage, !errorMessage.isEmpty {
+                if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
                     Text(errorMessage)
                         .font(.callout)
                         .foregroundStyle(.red)
                 }
 
                 HStack(spacing: 12) {
-                    Button(isRunning ? "Running..." : "Run") {
-                        runAgent(definition)
+                    Button(viewModel.primaryRunButtonTitle) {
+                        if viewModel.canOpenLatestResult {
+                            viewModel.selectedTab = .history
+                        } else {
+                            Task {
+                                await viewModel.runAgent(definition, environment: agentsEnvironment)
+                            }
+                        }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isRunning)
+                    .disabled(viewModel.isRunning)
 
-                    if let latestRun {
-                        Text("Latest run: \(latestRun.status.rawValue)")
-                            .foregroundStyle(.secondary)
+                    if let latestRun = viewModel.latestRun {
+                        HStack(spacing: 6) {
+                            Text("Latest run")
+                                .foregroundStyle(.secondary)
+                            AgentStatusBadgeView(status: latestRun.status)
+                        }
                     }
+
                 }
 
-                if isRunning, let runActivity, !runActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if viewModel.isRunning,
+                   let runActivity = viewModel.runActivity,
+                   !runActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
@@ -109,90 +136,76 @@ struct AgentsDetailView: View {
                     }
                 }
 
-                if let latestRun {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Result")
-                                .font(.headline)
-
-                            Spacer()
-
-                            let format = displayOutputFormat(for: latestRun)
-                            Text(format.uppercased())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            if let resultText = preferredResultText(for: latestRun),
-                               !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Button {
-                                    copyToClipboard(resultText)
-                                } label: {
-                                    Label("Copy", systemImage: "doc.on.doc")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-
-                        if let finalOutput = latestRun.finalOutput,
-                           !finalOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            ScrollView {
-                                Text(finalOutput)
-                                    .font(resultFont(for: latestRun))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(10)
-                            }
-                            .frame(minHeight: 140, maxHeight: 260)
-                            .background(.thinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        } else if let streamedOutput = latestRun.streamedOutput,
-                                  !streamedOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            ScrollView {
-                                Text(streamedOutput)
-                                    .font(.callout)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(10)
-                            }
-                            .frame(minHeight: 140, maxHeight: 260)
-                            .background(.thinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        } else {
-                            Text("No output body was produced for this run.")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if !latestRun.diagnostics.warnings.isEmpty {
-                            Text("Warnings: \(latestRun.diagnostics.warnings.joined(separator: ", "))")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                }
-
-                if !recentRuns(for: definition.id).isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Recent Runs")
-                            .font(.headline)
-
-                        ForEach(recentRuns(for: definition.id), id: \.id) { run in
-                            HStack {
-                                Text(run.startedAt, style: .time)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text(run.status.rawValue)
-                            }
-                            .font(.callout)
-                        }
-                    }
-                }
-
                 Spacer(minLength: 0)
             }
-            .padding(24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func historyTab(definition: AgentDefinition) -> some View {
+        let runs = viewModel.runsForCurrentAgent(definition.id, environment: agentsEnvironment)
+
+        if runs.isEmpty {
+            ContentUnavailableView(
+                "No History Yet",
+                systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                description: Text("Run the agent to populate history and review outputs here.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        } else {
+            HStack(spacing: 0) {
+                List(selection: $viewModel.selectedRunID) {
+                    ForEach(runs, id: \.id) { run in
+                        AgentRunHistoryRowView(
+                            run: run,
+                            format: viewModel.displayOutputFormat(for: run)
+                        )
+                        .tag(run.id)
+                    }
+                }
+                .frame(minWidth: 200, idealWidth: 220, maxWidth: 240)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    if let selected = viewModel.selectedRun(from: runs) {
+                        resultSection(for: selected)
+                    } else {
+                        ContentUnavailableView(
+                            "No Run Selected",
+                            systemImage: "clock",
+                            description: Text("Pick a run from the left to inspect output and export.")
+                        )
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .onAppear {
+                viewModel.ensureSelectedRun(from: runs)
+            }
+            .onChange(of: runs.map(\.id)) { _, _ in
+                viewModel.ensureSelectedRun(from: runs)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func resultSection(for run: AgentRun) -> some View {
+        AgentResultPanelView(
+            run: run,
+            format: viewModel.displayOutputFormat(for: run),
+            resultText: viewModel.preferredResultText(for: run),
+            resultFont: viewModel.resultFont(for: run),
+            onCopy: { value in
+                viewModel.copyToClipboard(value)
+            },
+            onDownload: {
+                viewModel.downloadRunContent(run)
+            }
+        )
     }
 
     @ViewBuilder
@@ -222,126 +235,8 @@ struct AgentsDetailView: View {
 
     private func binding(for key: String) -> Binding<String> {
         Binding(
-            get: { formValues[key] ?? "" },
-            set: { formValues[key] = $0 }
+            get: { viewModel.formValues[key] ?? "" },
+            set: { viewModel.formValues[key] = $0 }
         )
-    }
-
-    private func activateAgentIfNeeded(_ definition: AgentDefinition) {
-        guard activeAgentID != definition.id else { return }
-
-        activeAgentID = definition.id
-        errorMessage = nil
-        isRunning = false
-        latestRun = nil
-        runActivity = nil
-
-        var initialValues: [String: String] = [:]
-        for field in definition.inputSchema.fields {
-            if field.type == .select {
-                initialValues[field.id] = field.options.first ?? ""
-            } else {
-                initialValues[field.id] = ""
-            }
-        }
-        formValues = initialValues
-
-        agentsEnvironment.loadRuns(agentID: definition.id)
-    }
-
-    private func runAgent(_ definition: AgentDefinition) {
-        errorMessage = nil
-
-        let selectedModel = agentsEnvironment.selectedModelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !selectedModel.isEmpty else {
-            errorMessage = "Please select a model before running."
-            return
-        }
-
-        for field in definition.inputSchema.fields where field.required {
-            let value = (formValues[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty {
-                errorMessage = "Please fill required field: \(field.label)"
-                return
-            }
-        }
-
-        isRunning = true
-        runActivity = "Starting…"
-        Task { @MainActor in
-            do {
-                let run = try await agentsEnvironment.executeRun(
-                    definition: definition,
-                    projectID: nil,
-                    inputPayload: formValues,
-                    model: selectedModel,
-                    projectPath: nil,
-                    onProgress: { progress in
-                        runActivity = progress
-                    }
-                )
-
-                latestRun = run
-
-                if run.status == .failed {
-                    errorMessage = "Run completed with a validation or execution issue. See warnings for details."
-                }
-            } catch {
-                errorMessage = "Execution failed. Please retry."
-            }
-
-            isRunning = false
-            runActivity = nil
-        }
-    }
-
-    private func recentRuns(for agentID: String) -> [AgentRun] {
-        Array(agentsEnvironment.runs.filter { $0.agentID == agentID }.prefix(5))
-    }
-
-    private func preferredResultText(for run: AgentRun) -> String? {
-        if let finalOutput = run.finalOutput,
-           !finalOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return finalOutput
-        }
-
-        if let streamedOutput = run.streamedOutput,
-           !streamedOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return streamedOutput
-        }
-
-        return nil
-    }
-
-    private func displayOutputFormat(for run: AgentRun) -> String {
-        let value = run.inputPayload["outputFormat"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() ?? ""
-
-        switch value {
-        case "markdown", "markdown brief":
-            return "markdown"
-        case "json":
-            return "json"
-        case "text", "bullet":
-            return "text"
-        default:
-            if let finalOutput = run.finalOutput,
-               AgentRunResultParser.parse(from: finalOutput) != nil {
-                return "json"
-            }
-            return "text"
-        }
-    }
-
-    private func resultFont(for run: AgentRun) -> Font {
-        displayOutputFormat(for: run) == "json"
-            ? .system(.callout, design: .monospaced)
-            : .callout
-    }
-
-    private func copyToClipboard(_ value: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(value, forType: .string)
     }
 }
