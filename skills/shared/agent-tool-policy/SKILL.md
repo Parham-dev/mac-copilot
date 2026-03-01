@@ -5,10 +5,7 @@ description: Agent-aware tool routing and guardrails for native, custom, and MCP
 
 # Agent Tool Policy
 
-When handling a request, decide tools in this order:
-1. Use app custom tools first for product-specific operations.
-2. Use MCP tools for external capabilities (web, APIs, data sources).
-3. Use native tools only when policy allows and no higher-priority path exists.
+When handling a request, follow policy constraints without forcing fixed tool order.
 
 Rules:
 - Respect per-agent allowed tool set.

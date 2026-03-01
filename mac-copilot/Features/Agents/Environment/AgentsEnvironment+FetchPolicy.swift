@@ -16,34 +16,7 @@ extension AgentsEnvironment {
             return false
         }
 
-        if let explicitRequire = readBooleanEnvironmentValue("COPILOTFORGE_REQUIRE_FETCH_MCP") {
-            return explicitRequire
-        }
-
-        if let explicitAllowFallback = readBooleanEnvironmentValue("COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK") {
-            return !explicitAllowFallback
-        }
-
-        return false
-    }
-
-    func readBooleanEnvironmentValue(_ key: String) -> Bool? {
-        let raw = ProcessInfo.processInfo.environment[key]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() ?? ""
-        if raw.isEmpty {
-            return nil
-        }
-
-        if ["1", "true", "yes", "on"].contains(raw) {
-            return true
-        }
-
-        if ["0", "false", "no", "off"].contains(raw) {
-            return false
-        }
-
-        return nil
+        return definition.optionalSkills.contains(where: { $0.name == "url-fetch" })
     }
 
     func normalizedToolName(_ toolName: String) -> String {

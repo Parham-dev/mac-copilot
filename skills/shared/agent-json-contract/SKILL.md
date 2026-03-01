@@ -1,6 +1,6 @@
 ---
 name: agent-json-contract
-description: Enforce schema-safe JSON outputs for agent runs and repair stage behavior.
+description: Enforce schema-safe JSON outputs for agent runs and repair behavior.
 ---
 
 # Agent JSON Contract

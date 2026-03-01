@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_STRING_VALUE_BYTES, DEFAULT_MAX_TOOL_ARGS_BYTES, DEFAULT_MAX_TOOL_RESULT_BYTES, describeResultSize, isAllowedToolName, isNativeWebFetchTool, normalizeToolName, readBlockedTools, readPositiveIntegerEnv, redactString, redactValue, safeJSONStringify, shouldBlockNativeWebFetchInStrictMode, truncateString, } from "./copilotSessionHookUtils.js";
+import { DEFAULT_MAX_STRING_VALUE_BYTES, DEFAULT_MAX_TOOL_ARGS_BYTES, DEFAULT_MAX_TOOL_RESULT_BYTES, describeResultSize, isAllowedToolName, normalizeToolName, readBlockedTools, readPositiveIntegerEnv, redactString, redactValue, safeJSONStringify, truncateString, } from "./copilotSessionHookUtils.js";
 import { classifyToolName, isToolClassAllowed, resolveToolPolicy } from "./agentToolPolicyRegistry.js";
 export function buildSessionHooks(args) {
     const maxToolArgsBytes = readPositiveIntegerEnv("COPILOTFORGE_MAX_TOOL_ARGS_BYTES", DEFAULT_MAX_TOOL_ARGS_BYTES);
@@ -65,24 +65,6 @@ export function buildSessionHooks(args) {
                 return {
                     permissionDecision: "deny",
                     permissionDecisionReason: "Tool call denied: missing tool name.",
-                };
-            }
-            if (shouldBlockNativeWebFetchInStrictMode() && isNativeWebFetchTool(toolName)) {
-                console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
-                    sessionId: invocation?.sessionId,
-                    chatKey: args.chatKey,
-                    executionContext: args.executionContext,
-                    policyProfile: resolvedToolPolicy.profileName,
-                    policy_profile: resolvedToolPolicy.profileName,
-                    toolClass,
-                    tool_class: toolClass,
-                    decision: "deny",
-                    toolName,
-                    reason: "strict_fetch_mcp_mode",
-                }));
-                return {
-                    permissionDecision: "deny",
-                    permissionDecisionReason: `Tool '${toolName}' is disabled because strict Fetch MCP mode is enabled.`,
                 };
             }
             if (!isToolClassAllowed(resolvedToolPolicy, toolClass)) {

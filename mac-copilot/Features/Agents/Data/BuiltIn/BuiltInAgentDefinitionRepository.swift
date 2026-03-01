@@ -47,7 +47,7 @@ private extension BuiltInAgentDefinitionRepository {
                 requiredConnections: [],
                     optionalSkills: [
                         AgentSkillRef(
-                            name: "url-fetch-strict",
+                                name: "url-fetch",
                             description: "URL summarisation fetch policy and validation guardrails.",
                             location: "skills/agents/url-summariser"
                         ),

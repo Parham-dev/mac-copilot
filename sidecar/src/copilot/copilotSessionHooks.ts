@@ -11,14 +11,12 @@ import {
   DEFAULT_MAX_TOOL_RESULT_BYTES,
   describeResultSize,
   isAllowedToolName,
-  isNativeWebFetchTool,
   normalizeToolName,
   readBlockedTools,
   readPositiveIntegerEnv,
   redactString,
   redactValue,
   safeJSONStringify,
-  shouldBlockNativeWebFetchInStrictMode,
   truncateString,
 } from "./copilotSessionHookUtils.js";
 import type { AgentExecutionContext } from "./agentToolPolicyRegistry.js";
@@ -94,25 +92,6 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
         return {
           permissionDecision: "deny",
           permissionDecisionReason: "Tool call denied: missing tool name.",
-        };
-      }
-
-      if (shouldBlockNativeWebFetchInStrictMode() && isNativeWebFetchTool(toolName)) {
-        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
-          sessionId: invocation?.sessionId,
-          chatKey: args.chatKey,
-          executionContext: args.executionContext,
-          policyProfile: resolvedToolPolicy.profileName,
-          policy_profile: resolvedToolPolicy.profileName,
-          toolClass,
-          tool_class: toolClass,
-          decision: "deny",
-          toolName,
-          reason: "strict_fetch_mcp_mode",
-        }));
-        return {
-          permissionDecision: "deny",
-          permissionDecisionReason: `Tool '${toolName}' is disabled because strict Fetch MCP mode is enabled.`,
         };
       }
 

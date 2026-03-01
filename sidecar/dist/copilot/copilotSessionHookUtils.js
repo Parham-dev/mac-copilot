@@ -29,27 +29,6 @@ export function readBlockedTools() {
         .filter((entry) => entry.length > 0);
     return new Set(blocked);
 }
-function readBooleanEnvironmentValue(name) {
-    const raw = String(process.env[name] ?? "").trim().toLowerCase();
-    if (!raw) {
-        return null;
-    }
-    if (["1", "true", "yes", "on"].includes(raw)) {
-        return true;
-    }
-    if (["0", "false", "no", "off"].includes(raw)) {
-        return false;
-    }
-    return null;
-}
-export function shouldBlockNativeWebFetchInStrictMode() {
-    const requireFetchMCP = readBooleanEnvironmentValue("COPILOTFORGE_REQUIRE_FETCH_MCP");
-    if (requireFetchMCP !== true) {
-        return false;
-    }
-    const allowFallback = readBooleanEnvironmentValue("COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK");
-    return allowFallback !== true;
-}
 export function normalizeToolName(value) {
     return value
         .trim()
