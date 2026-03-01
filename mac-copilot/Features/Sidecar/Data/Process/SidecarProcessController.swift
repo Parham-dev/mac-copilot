@@ -45,6 +45,19 @@ final class SidecarProcessController {
 
         var environment = ProcessInfo.processInfo.environment
         environment["NODE_NO_WARNINGS"] = "1"
+        if environment["COPILOTFORGE_REQUIRE_FETCH_MCP"] == nil {
+            environment["COPILOTFORGE_REQUIRE_FETCH_MCP"] = "0"
+        }
+        if environment["COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK"] == nil {
+            environment["COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK"] = "1"
+        }
+        if environment["COPILOTFORGE_FETCH_MCP_COMMAND"] == nil {
+            let homeDirectory = NSHomeDirectory()
+            let uvxPath = (homeDirectory as NSString).appendingPathComponent(".local/bin/uvx")
+            if FileManager.default.fileExists(atPath: uvxPath) {
+                environment["COPILOTFORGE_FETCH_MCP_COMMAND"] = uvxPath
+            }
+        }
         process.environment = environment
 
         let outputPipe = Pipe()

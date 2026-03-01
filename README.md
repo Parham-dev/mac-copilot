@@ -170,6 +170,29 @@ Recent architecture updates:
 - Shared `UserFacingErrorMapper` enforces consistent, production-safe user messaging.
 - Large data files were split into focused helpers to keep behavior stable while improving maintainability.
 
+## Maintainability Guardrail
+
+- Production source files should remain at or below 300 lines to keep review and ownership manageable.
+- When a source file exceeds 300 lines, split behavior into focused helper/extension files in the same feature folder.
+- Scope for this guardrail: first-party app/sidecar source (`mac-copilot/**/*.swift`, `sidecar/src/**/*.ts`, `sidecar/src/**/*.js`).
+- Exclusions: generated artifacts, dependency/vendor content, lockfiles, and long-form docs/runbooks.
+- Suggested local check:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+root = Path('.')
+targets = [Path('mac-copilot'), Path('sidecar/src')]
+exts = {'.swift', '.ts', '.js'}
+for base in targets:
+  for p in base.rglob('*'):
+    if p.is_file() and p.suffix in exts:
+      lines = sum(1 for _ in p.open('r', encoding='utf-8'))
+      if lines > 300:
+        print(f"{lines:4d} {p}")
+PY
+```
+
 ## Runtime Components
 
 1. macOS app starts and initializes feature environment.

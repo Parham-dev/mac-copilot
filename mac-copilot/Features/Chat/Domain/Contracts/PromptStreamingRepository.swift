@@ -23,6 +23,21 @@ enum PromptStreamEvent: Equatable {
     case completed
 }
 
+struct PromptExecutionContext: Equatable {
+    let agentID: String
+    let feature: String
+    let policyProfile: String
+    let skillNames: [String]
+    let requireSkills: Bool
+}
+
 protocol PromptStreamingRepository {
-    func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error>
+    func streamPrompt(
+        _ prompt: String,
+        chatID: UUID,
+        model: String?,
+        projectPath: String?,
+        allowedTools: [String]?,
+        executionContext: PromptExecutionContext?
+    ) -> AsyncThrowingStream<PromptStreamEvent, Error>
 }

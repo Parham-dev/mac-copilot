@@ -8,6 +8,13 @@ struct SendPromptUseCase {
     }
 
     func execute(prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
-        repository.streamPrompt(prompt, chatID: chatID, model: model, projectPath: projectPath, allowedTools: allowedTools)
+        repository.streamPrompt(
+            prompt,
+            chatID: chatID,
+            model: model,
+            projectPath: projectPath,
+            allowedTools: allowedTools,
+            executionContext: nil
+        )
     }
 }

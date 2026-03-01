@@ -41,6 +41,15 @@ else
   fail_or_warn "sidecar node_modules not found. Run 'cd sidecar && npm install'"
 fi
 
+SKILLS_DIR="${PROJECT_ROOT}/skills"
+if [ -d "$SKILLS_DIR" ]; then
+  mkdir -p "$RESOURCES_DIR/skills"
+  rsync -a --delete "$SKILLS_DIR/" "$RESOURCES_DIR/skills/"
+  log "Copied skills"
+else
+  fail_or_warn "skills directory not found at $SKILLS_DIR"
+fi
+
 NODE_SOURCE=""
 
 if [ -n "${COPILOTFORGE_NODE_PATH:-}" ] && [ -x "${COPILOTFORGE_NODE_PATH}" ]; then

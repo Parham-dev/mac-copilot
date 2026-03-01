@@ -127,7 +127,7 @@ export function registerCompanionRoutes(app) {
             res.flushHeaders();
         }
         try {
-            await sendPrompt(prompt, chatId, model, projectPath, allowedTools, requestId, (event) => {
+            await sendPrompt(prompt, chatId, model, projectPath, allowedTools, null, requestId, (event) => {
                 const payload = typeof event === "object" && event !== null
                     ? event
                     : { type: "text", text: String(event ?? "") };

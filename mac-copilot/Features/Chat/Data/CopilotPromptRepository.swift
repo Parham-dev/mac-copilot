@@ -7,8 +7,22 @@ final class CopilotPromptRepository: PromptStreamingRepository, ModelListingRepo
         self.apiService = apiService
     }
 
-    func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
-        apiService.streamPrompt(prompt, chatID: chatID, model: model, projectPath: projectPath, allowedTools: allowedTools)
+    func streamPrompt(
+        _ prompt: String,
+        chatID: UUID,
+        model: String?,
+        projectPath: String?,
+        allowedTools: [String]?,
+        executionContext: PromptExecutionContext?
+    ) -> AsyncThrowingStream<PromptStreamEvent, Error> {
+        apiService.streamPrompt(
+            prompt,
+            chatID: chatID,
+            model: model,
+            projectPath: projectPath,
+            allowedTools: allowedTools,
+            executionContext: executionContext
+        )
     }
 
     func fetchModelCatalog() async throws -> [CopilotModelCatalogItem] {

@@ -53,6 +53,48 @@ npm run start:dist
 - `COPILOTFORGE_BACKGROUND_COMPACTION_THRESHOLD` — overrides infinite session `backgroundCompactionThreshold`.
 - `COPILOTFORGE_BUFFER_EXHAUSTION_THRESHOLD` — overrides infinite session `bufferExhaustionThreshold`.
 - `COPILOTFORGE_OTEL_ENABLED=1` — enables optional OpenTelemetry span emission for prompt/tool lifecycle.
+- `COPILOTFORGE_ENABLE_FETCH_MCP` — enable/disable Fetch MCP server wiring (default enabled).
+- `COPILOTFORGE_FETCH_MCP_COMMAND` — command used to start Fetch MCP server (default `uvx`).
+- `COPILOTFORGE_FETCH_MCP_ARGS` — command arguments for Fetch MCP server (default `mcp-server-fetch`).
+- `COPILOTFORGE_FETCH_MCP_TIMEOUT_MS` — startup timeout for Fetch MCP server (default `30000`).
+- `COPILOTFORGE_REQUIRE_FETCH_MCP` — set to `1`/`true` to enforce MCP fetch-only URL behavior (default disabled).
+- `COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK` — legacy override for fallback behavior; when unset, fallback is enabled by default.
+- `COPILOTFORGE_REQUIRE_AGENT_SKILLS` — controls strict skill requirement for agent runs; default is enabled (`true`). Set `0`/`false` to relax.
+
+Fetch MCP note:
+- The sidecar starts Fetch MCP server automatically through `mcpServers`.
+- Default launch uses `uvx mcp-server-fetch`.
+- URL agent prefers MCP `fetch` and falls back to native `web_fetch` / `fetch_webpage` when allowed.
+- App runtime default keeps fallback enabled (`COPILOTFORGE_REQUIRE_FETCH_MCP=0`, `COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK=1`) unless you explicitly override.
+- To enforce strict MCP-only behavior, set `COPILOTFORGE_REQUIRE_FETCH_MCP=1`.
+- To force strict mode and disable native fetch fallback, set both:
+	- `COPILOTFORGE_REQUIRE_FETCH_MCP=1`
+	- `COPILOTFORGE_ALLOW_NATIVE_FETCH_FALLBACK=0`
+- In strict mode, URL Summariser narrows its allowed tool list to MCP `fetch` only.
+- App runtime auto-uses `~/.local/bin/uvx` for `COPILOTFORGE_FETCH_MCP_COMMAND` when available (unless you explicitly set the variable).
+
+Fetch MCP troubleshooting:
+- If strict mode is enabled and logs show `web_fetch` denied while `fetch` is never called, the MCP server likely failed to start or expose tools.
+- Verify command availability in the app runtime environment (GUI apps may not inherit your shell PATH):
+	- Prefer an absolute command path via `COPILOTFORGE_FETCH_MCP_COMMAND`.
+	- Confirm the command runs manually with the same args.
+- Keep `tools: ["*"]` in MCP config (already set by the sidecar).
+
+Skills loading notes:
+- If `COPILOTFORGE_SKILL_DIRECTORIES` is unset, sidecar auto-discovers common local paths relative to runtime cwd (`./skills`, `../skills`, `../../skills`).
+- Skills follow MCP SDK format: `<skill-folder>/SKILL.md` under a parent skills directory.
+- Recommended scalable layout:
+	- `skills/shared/<skill-name>/SKILL.md`
+	- `skills/agents/<agent-id>/<skill-name>/SKILL.md`
+- For agent runs, sidecar prefers scoped directories (`shared` + `agents/<agent-id>`) when available.
+- Agent-provided skill names are applied by disabling non-selected skills in the active scoped directories.
+- To disable specific skills at runtime, use `COPILOTFORGE_DISABLED_SKILLS=name1,name2`.
+- For app packaging, include the skills directory in app resources if you want skills available outside local dev.
+
+Probe strict/default tool-path behavior:
+- Run `scripts/probe_tool_path.sh` from repo root.
+- It executes two `/prompt` runs (`strict-fetch-mcp`, `default`) and prints inferred `tool_path` + `fallback_used` from SSE tool events.
+- Raw SSE captures are written to `/tmp/copilotforge-probe-strict.sse` and `/tmp/copilotforge-probe-default.sse`.
 
 ## Release vs Debug Node Policy
 
@@ -62,6 +104,7 @@ npm run start:dist
 	- `node` executable
 	- `sidecar/dist`
 	- `sidecar/node_modules`
+	- `skills` (if skill-based behavior should be available in packaged builds)
 
 An Xcode build phase script can automate this copy step from the repository sidecar folder.
 

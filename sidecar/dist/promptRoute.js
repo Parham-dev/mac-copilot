@@ -1,4 +1,5 @@
 import { sendPrompt, isAuthenticated } from "./copilot/copilot.js";
+import { classifyToolName, summarizeToolPath } from "./copilot/agentToolPolicyRegistry.js";
 import { companionChatStore } from "./companion/chatStore.js";
 import { startPromptTelemetry } from "./telemetry/otel.js";
 const protocolMarkerPattern = /<\s*\/?\s*(function_calls|system_notification|invoke|parameter|function|function_)\b[^>]*>/i;
@@ -11,6 +12,39 @@ export function registerPromptRoute(app) {
         const projectPath = typeof req.body?.projectPath === "string" ? req.body.projectPath : undefined;
         const allowedTools = Array.isArray(req.body?.allowedTools)
             ? req.body.allowedTools.filter((entry) => typeof entry === "string")
+            : null;
+        const rawExecutionContext = req.body?.executionContext;
+        const executionContext = rawExecutionContext && typeof rawExecutionContext === "object"
+            ? {
+                agentID: typeof rawExecutionContext.agentID === "string"
+                    ? rawExecutionContext.agentID
+                    : "",
+                feature: typeof rawExecutionContext.feature === "string"
+                    ? rawExecutionContext.feature
+                    : "",
+                policyProfile: typeof rawExecutionContext.policyProfile === "string"
+                    ? rawExecutionContext.policyProfile
+                    : "",
+                skillNames: Array.isArray(rawExecutionContext.skillNames)
+                    ? rawExecutionContext.skillNames
+                        .filter((entry) => typeof entry === "string")
+                    : [],
+                requireSkills: rawExecutionContext.requireSkills === true,
+            }
+            : null;
+        const normalizedExecutionContext = executionContext
+            && executionContext.agentID.trim().length > 0
+            && executionContext.feature.trim().length > 0
+            && executionContext.policyProfile.trim().length > 0
+            ? {
+                agentID: executionContext.agentID.trim(),
+                feature: executionContext.feature.trim(),
+                policyProfile: executionContext.policyProfile.trim(),
+                skillNames: executionContext.skillNames
+                    .map((entry) => entry.trim())
+                    .filter((entry) => entry.length > 0),
+                requireSkills: executionContext.requireSkills,
+            }
             : null;
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
@@ -26,6 +60,7 @@ export function registerPromptRoute(app) {
         let toolStartCount = 0;
         let toolCompleteCount = 0;
         const toolNamesUsed = new Set();
+        const toolClassesUsed = new Set();
         companionChatStore.recordUserPrompt({
             chatId: chatID,
             projectPath,
@@ -37,6 +72,7 @@ export function registerPromptRoute(app) {
             authenticated: isAuthenticated(),
             allowedToolsCount: allowedTools?.length ?? null,
             allowedToolsSample: allowedTools?.slice(0, 8) ?? null,
+            executionContext: normalizedExecutionContext,
         }));
         const telemetry = await startPromptTelemetry({
             requestId,
@@ -44,7 +80,7 @@ export function registerPromptRoute(app) {
             chatId: chatID,
         });
         try {
-            await sendPrompt(promptText, chatID, req.body?.model, projectPath, allowedTools, requestId, (event) => {
+            await sendPrompt(promptText, chatID, req.body?.model, projectPath, allowedTools, normalizedExecutionContext, requestId, (event) => {
                 const payload = typeof event === "object" && event !== null
                     ? event
                     : { type: "text", text: String(event ?? "") };
@@ -65,11 +101,13 @@ export function registerPromptRoute(app) {
                 if (payload.type === "tool_start" && typeof payload.toolName === "string") {
                     toolStartCount += 1;
                     toolNamesUsed.add(payload.toolName);
+                    toolClassesUsed.add(classifyToolName(payload.toolName));
                     telemetry.onToolStart(payload.toolName, typeof payload.toolCallID === "string" ? payload.toolCallID : undefined);
                 }
                 if (payload.type === "tool_complete" && typeof payload.toolName === "string") {
                     toolCompleteCount += 1;
                     toolNamesUsed.add(payload.toolName);
+                    toolClassesUsed.add(classifyToolName(payload.toolName));
                     telemetry.onToolComplete(payload.toolName, payload.success !== false, typeof payload.details === "string" ? payload.details : undefined, typeof payload.toolCallID === "string" ? payload.toolCallID : undefined);
                 }
                 if (payload.type === "text" && typeof payload.text === "string") {
@@ -90,6 +128,8 @@ export function registerPromptRoute(app) {
                 toolStartCount,
                 toolCompleteCount,
                 toolNamesUsed: Array.from(toolNamesUsed),
+                tool_path: summarizeToolPath(toolClassesUsed).toolPath,
+                fallback_used: summarizeToolPath(toolClassesUsed).fallbackUsed,
                 usage: lastUsageSnapshot,
             }));
             telemetry.end();

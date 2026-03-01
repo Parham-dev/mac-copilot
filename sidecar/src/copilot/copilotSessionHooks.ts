@@ -2,98 +2,38 @@ type SessionHooksBuildArgs = {
   chatKey: string;
   workingDirectory: string | null;
   allowedTools: string[] | null;
+  executionContext: AgentExecutionContext | null;
 };
 
-const DEFAULT_MAX_TOOL_ARGS_BYTES = 24_000;
-const DEFAULT_MAX_TOOL_RESULT_BYTES = 20_000;
-const DEFAULT_MAX_STRING_VALUE_BYTES = 8_000;
-const DEFAULT_MAX_LOG_PREVIEW_BYTES = 1_000;
-
-const REDACTION_PATTERNS = [
-  /(gh[pousr]_[A-Za-z0-9_]{20,})/g,
-  /(github_pat_[A-Za-z0-9_]{20,})/g,
-  /(api[_-]?key\s*[:=]\s*["']?[^\s"']+["']?)/gi,
-  /(token\s*[:=]\s*["']?[^\s"']+["']?)/gi,
-  /(password\s*[:=]\s*["']?[^\s"']+["']?)/gi,
-  /(secret\s*[:=]\s*["']?[^\s"']+["']?)/gi,
-];
-
-function readPositiveIntegerEnv(name: string, fallback: number) {
-  const raw = process.env[name];
-  if (!raw) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function readBlockedTools() {
-  const value = String(process.env.COPILOTFORGE_BLOCKED_TOOLS ?? "").trim();
-  if (!value) {
-    return new Set<string>();
-  }
-
-  const blocked = value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-  return new Set(blocked);
-}
-
-function safeJSONStringify(value: unknown) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "[unserializable]";
-  }
-}
-
-function redactString(input: string) {
-  let current = input;
-  for (const pattern of REDACTION_PATTERNS) {
-    current = current.replace(pattern, "[REDACTED]");
-  }
-  return current;
-}
-
-function redactValue(value: unknown): unknown {
-  if (typeof value === "string") {
-    return redactString(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => redactValue(entry));
-  }
-  if (value && typeof value === "object") {
-    const output: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      output[key] = redactValue(entry);
-    }
-    return output;
-  }
-  return value;
-}
-
-function truncateString(value: string, maxBytes: number) {
-  if (value.length <= maxBytes) {
-    return value;
-  }
-  return `${value.slice(0, maxBytes)}...[truncated ${value.length - maxBytes} chars]`;
-}
-
-function describeResultSize(value: unknown) {
-  const serialized = safeJSONStringify(value);
-  return {
-    bytes: serialized.length,
-    preview: truncateString(redactString(serialized), readPositiveIntegerEnv("COPILOTFORGE_MAX_LOG_PREVIEW_BYTES", DEFAULT_MAX_LOG_PREVIEW_BYTES)),
-  };
-}
+import {
+  DEFAULT_MAX_STRING_VALUE_BYTES,
+  DEFAULT_MAX_TOOL_ARGS_BYTES,
+  DEFAULT_MAX_TOOL_RESULT_BYTES,
+  describeResultSize,
+  isAllowedToolName,
+  isNativeWebFetchTool,
+  normalizeToolName,
+  readBlockedTools,
+  readPositiveIntegerEnv,
+  redactString,
+  redactValue,
+  safeJSONStringify,
+  shouldBlockNativeWebFetchInStrictMode,
+  truncateString,
+} from "./copilotSessionHookUtils.js";
+import type { AgentExecutionContext } from "./agentToolPolicyRegistry.js";
+import { classifyToolName, isToolClassAllowed, resolveToolPolicy } from "./agentToolPolicyRegistry.js";
 
 export function buildSessionHooks(args: SessionHooksBuildArgs) {
   const maxToolArgsBytes = readPositiveIntegerEnv("COPILOTFORGE_MAX_TOOL_ARGS_BYTES", DEFAULT_MAX_TOOL_ARGS_BYTES);
   const maxToolResultBytes = readPositiveIntegerEnv("COPILOTFORGE_MAX_TOOL_RESULT_BYTES", DEFAULT_MAX_TOOL_RESULT_BYTES);
   const maxStringValueBytes = readPositiveIntegerEnv("COPILOTFORGE_MAX_STRING_VALUE_BYTES", DEFAULT_MAX_STRING_VALUE_BYTES);
   const blockedTools = readBlockedTools();
+  const resolvedToolPolicy = resolveToolPolicy(args.executionContext);
   const allowedToolSet = args.allowedTools ? new Set(args.allowedTools) : null;
+  const normalizedAllowedToolSet = allowedToolSet
+    ? new Set(Array.from(allowedToolSet).map((toolName) => normalizeToolName(toolName)).filter((toolName) => toolName.length > 0))
+    : null;
 
   return {
     onUserPromptSubmitted: async (input: any, invocation: any) => {
@@ -101,6 +41,8 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       console.log("[CopilotForge][Hooks] user_prompt_submitted", JSON.stringify({
         sessionId: invocation?.sessionId,
         chatKey: args.chatKey,
+        executionContext: args.executionContext,
+        policyProfile: resolvedToolPolicy.profileName,
         promptLength: prompt.length,
         cwd: input?.cwd,
       }));
@@ -111,6 +53,8 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       console.log("[CopilotForge][Hooks] session_start", JSON.stringify({
         sessionId: invocation?.sessionId,
         chatKey: args.chatKey,
+        executionContext: args.executionContext,
+        policyProfile: resolvedToolPolicy.profileName,
         source: input?.source,
         cwd: input?.cwd,
         workingDirectory: args.workingDirectory,
@@ -122,6 +66,8 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       console.log("[CopilotForge][Hooks] session_end", JSON.stringify({
         sessionId: invocation?.sessionId,
         chatKey: args.chatKey,
+        executionContext: args.executionContext,
+        policyProfile: resolvedToolPolicy.profileName,
         reason: input?.reason,
         hasError: typeof input?.error === "string" && input.error.length > 0,
       }));
@@ -130,6 +76,7 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
 
     onPreToolUse: async (input: any, invocation: any) => {
       const toolName = typeof input?.toolName === "string" ? input.toolName : "";
+      const toolClass = classifyToolName(toolName);
       const toolArgs = input?.toolArgs;
       const serializedArgs = safeJSONStringify(toolArgs);
 
@@ -137,6 +84,11 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
         console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
           sessionId: invocation?.sessionId,
           chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          tool_class: "unknown",
+          decision: "deny",
           reason: "missing_tool_name",
         }));
         return {
@@ -145,10 +97,54 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
         };
       }
 
+      if (shouldBlockNativeWebFetchInStrictMode() && isNativeWebFetchTool(toolName)) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          toolClass,
+          tool_class: toolClass,
+          decision: "deny",
+          toolName,
+          reason: "strict_fetch_mcp_mode",
+        }));
+        return {
+          permissionDecision: "deny",
+          permissionDecisionReason: `Tool '${toolName}' is disabled because strict Fetch MCP mode is enabled.`,
+        };
+      }
+
+      if (!isToolClassAllowed(resolvedToolPolicy, toolClass)) {
+        console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
+          sessionId: invocation?.sessionId,
+          chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          toolClass,
+          tool_class: toolClass,
+          toolName,
+          decision: "deny",
+          reason: "blocked_by_policy_profile",
+        }));
+        return {
+          permissionDecision: "deny",
+          permissionDecisionReason: `Tool '${toolName}' (${toolClass}) is not allowed by policy profile '${resolvedToolPolicy.profileName}'.`,
+        };
+      }
+
       if (blockedTools.has(toolName)) {
         console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
           sessionId: invocation?.sessionId,
           chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          toolClass,
+          tool_class: toolClass,
+          decision: "deny",
           toolName,
           reason: "blocked_by_policy",
         }));
@@ -158,10 +154,18 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
         };
       }
 
-      if (allowedToolSet && !allowedToolSet.has(toolName)) {
+      if (allowedToolSet
+          && normalizedAllowedToolSet
+          && !isAllowedToolName(toolName, allowedToolSet, normalizedAllowedToolSet)) {
         console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
           sessionId: invocation?.sessionId,
           chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          toolClass,
+          tool_class: toolClass,
+          decision: "deny",
           toolName,
           reason: "not_in_allowed_list",
           allowedToolsCount: allowedToolSet.size,
@@ -176,6 +180,12 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
         console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
           sessionId: invocation?.sessionId,
           chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          toolClass,
+          tool_class: toolClass,
+          decision: "deny",
           toolName,
           reason: "args_too_large",
           argsBytes: serializedArgs.length,
@@ -191,6 +201,12 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
         console.warn("[CopilotForge][Hooks] tool_denied", JSON.stringify({
           sessionId: invocation?.sessionId,
           chatKey: args.chatKey,
+          executionContext: args.executionContext,
+          policyProfile: resolvedToolPolicy.profileName,
+          policy_profile: resolvedToolPolicy.profileName,
+          toolClass,
+          tool_class: toolClass,
+          decision: "deny",
           toolName,
           reason: "command_too_large",
           commandLength: toolArgs.command.length,
@@ -205,6 +221,12 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       console.log("[CopilotForge][Hooks] pre_tool_use", JSON.stringify({
         sessionId: invocation?.sessionId,
         chatKey: args.chatKey,
+        executionContext: args.executionContext,
+        policyProfile: resolvedToolPolicy.profileName,
+        policy_profile: resolvedToolPolicy.profileName,
+        toolClass,
+        tool_class: toolClass,
+        decision: "allow",
         toolName,
         argsBytes: serializedArgs.length,
       }));
@@ -216,6 +238,7 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
 
     onPostToolUse: async (input: any, invocation: any) => {
       const toolName = typeof input?.toolName === "string" ? input.toolName : "unknown";
+      const toolClass = classifyToolName(toolName);
       const rawResult = input?.toolResult;
       const redactedResult = redactValue(rawResult);
       const size = describeResultSize(redactedResult);
@@ -223,6 +246,12 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       console.log("[CopilotForge][Hooks] post_tool_use", JSON.stringify({
         sessionId: invocation?.sessionId,
         chatKey: args.chatKey,
+        executionContext: args.executionContext,
+        policyProfile: resolvedToolPolicy.profileName,
+        policy_profile: resolvedToolPolicy.profileName,
+        toolClass,
+        tool_class: toolClass,
+        decision: "post_tool_use",
         toolName,
         resultBytes: size.bytes,
         resultPreview: size.preview,
@@ -252,6 +281,10 @@ export function buildSessionHooks(args: SessionHooksBuildArgs) {
       console.error("[CopilotForge][Hooks] error_occurred", JSON.stringify({
         sessionId: invocation?.sessionId,
         chatKey: args.chatKey,
+        executionContext: args.executionContext,
+        policyProfile: resolvedToolPolicy.profileName,
+        policy_profile: resolvedToolPolicy.profileName,
+        decision: "error",
         context: input?.errorContext,
         recoverable: input?.recoverable,
         error: redactString(String(input?.error ?? "unknown error")),

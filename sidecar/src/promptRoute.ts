@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { sendPrompt, isAuthenticated } from "./copilot/copilot.js";
+import { classifyToolName, summarizeToolPath, type ToolClass } from "./copilot/agentToolPolicyRegistry.js";
 import { companionChatStore } from "./companion/chatStore.js";
 import { startPromptTelemetry } from "./telemetry/otel.js";
 
@@ -14,6 +15,39 @@ export function registerPromptRoute(app: Express) {
     const projectPath = typeof req.body?.projectPath === "string" ? req.body.projectPath : undefined;
     const allowedTools = Array.isArray(req.body?.allowedTools)
       ? req.body.allowedTools.filter((entry: unknown) => typeof entry === "string") as string[]
+      : null;
+    const rawExecutionContext = req.body?.executionContext;
+    const executionContext = rawExecutionContext && typeof rawExecutionContext === "object"
+      ? {
+          agentID: typeof (rawExecutionContext as Record<string, unknown>).agentID === "string"
+            ? (rawExecutionContext as Record<string, unknown>).agentID as string
+            : "",
+          feature: typeof (rawExecutionContext as Record<string, unknown>).feature === "string"
+            ? (rawExecutionContext as Record<string, unknown>).feature as string
+            : "",
+          policyProfile: typeof (rawExecutionContext as Record<string, unknown>).policyProfile === "string"
+            ? (rawExecutionContext as Record<string, unknown>).policyProfile as string
+            : "",
+          skillNames: Array.isArray((rawExecutionContext as Record<string, unknown>).skillNames)
+            ? ((rawExecutionContext as Record<string, unknown>).skillNames as unknown[])
+              .filter((entry) => typeof entry === "string") as string[]
+            : [],
+          requireSkills: (rawExecutionContext as Record<string, unknown>).requireSkills === true,
+        }
+      : null;
+    const normalizedExecutionContext = executionContext
+      && executionContext.agentID.trim().length > 0
+      && executionContext.feature.trim().length > 0
+      && executionContext.policyProfile.trim().length > 0
+      ? {
+          agentID: executionContext.agentID.trim(),
+          feature: executionContext.feature.trim(),
+          policyProfile: executionContext.policyProfile.trim(),
+          skillNames: executionContext.skillNames
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0),
+          requireSkills: executionContext.requireSkills,
+        }
       : null;
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -31,6 +65,7 @@ export function registerPromptRoute(app: Express) {
     let toolStartCount = 0;
     let toolCompleteCount = 0;
     const toolNamesUsed = new Set<string>();
+    const toolClassesUsed = new Set<ToolClass>();
 
     companionChatStore.recordUserPrompt({
       chatId: chatID,
@@ -44,6 +79,7 @@ export function registerPromptRoute(app: Express) {
       authenticated: isAuthenticated(),
       allowedToolsCount: allowedTools?.length ?? null,
       allowedToolsSample: allowedTools?.slice(0, 8) ?? null,
+      executionContext: normalizedExecutionContext,
     }));
 
     const telemetry = await startPromptTelemetry({
@@ -53,7 +89,15 @@ export function registerPromptRoute(app: Express) {
     });
 
     try {
-      await sendPrompt(promptText, chatID, req.body?.model, projectPath, allowedTools, requestId, (event) => {
+      await sendPrompt(
+        promptText,
+        chatID,
+        req.body?.model,
+        projectPath,
+        allowedTools,
+        normalizedExecutionContext,
+        requestId,
+        (event) => {
         const payload = typeof event === "object" && event !== null
           ? event
           : { type: "text", text: String(event ?? "") };
@@ -76,6 +120,7 @@ export function registerPromptRoute(app: Express) {
         if (payload.type === "tool_start" && typeof payload.toolName === "string") {
           toolStartCount += 1;
           toolNamesUsed.add(payload.toolName);
+          toolClassesUsed.add(classifyToolName(payload.toolName));
           telemetry.onToolStart(
             payload.toolName,
             typeof payload.toolCallID === "string" ? payload.toolCallID : undefined
@@ -84,6 +129,7 @@ export function registerPromptRoute(app: Express) {
         if (payload.type === "tool_complete" && typeof payload.toolName === "string") {
           toolCompleteCount += 1;
           toolNamesUsed.add(payload.toolName);
+          toolClassesUsed.add(classifyToolName(payload.toolName));
           telemetry.onToolComplete(
             payload.toolName,
             payload.success !== false,
@@ -111,6 +157,8 @@ export function registerPromptRoute(app: Express) {
         toolStartCount,
         toolCompleteCount,
         toolNamesUsed: Array.from(toolNamesUsed),
+        tool_path: summarizeToolPath(toolClassesUsed).toolPath,
+        fallback_used: summarizeToolPath(toolClassesUsed).fallbackUsed,
         usage: lastUsageSnapshot,
       }));
 

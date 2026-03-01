@@ -28,7 +28,7 @@ private extension BuiltInAgentDefinitionRepository {
                 id: "url-summariser",
                 name: "URL Summariser",
                 description: "Summarise a webpage URL into structured, decision-ready output.",
-                allowedToolsDefault: ["fetch_webpage"],
+                allowedToolsDefault: ["fetch", "web_fetch", "fetch_webpage"],
                 inputSchema: AgentInputSchema(fields: [
                     AgentInputField(id: "url", label: "URL", type: .url, required: true),
                     AgentInputField(id: "goal", label: "Goal", type: .select, required: false, options: ["summary", "key takeaways", "action items", "compare"]),
@@ -45,7 +45,23 @@ private extension BuiltInAgentDefinitionRepository {
                     "Source Metadata"
                 ]),
                 requiredConnections: [],
-                optionalSkills: [],
+                    optionalSkills: [
+                        AgentSkillRef(
+                            name: "url-fetch-strict",
+                            description: "URL summarisation fetch policy and validation guardrails.",
+                            location: "skills/agents/url-summariser"
+                        ),
+                        AgentSkillRef(
+                            name: "agent-json-contract",
+                            description: "Schema-safe JSON output contract and repair behavior.",
+                            location: "skills/shared"
+                        ),
+                        AgentSkillRef(
+                            name: "agent-tool-policy",
+                            description: "Tool class policy, observability and fallback guardrails.",
+                            location: "skills/shared"
+                        )
+                    ],
                 customInstructions: nil
             )
         ]

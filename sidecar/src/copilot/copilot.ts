@@ -2,6 +2,7 @@ import { CopilotClient } from "@github/copilot-sdk";
 import { listModelCatalog } from "./copilotModelCatalog.js";
 import { streamPromptWithSession } from "./copilotPromptStreaming.js";
 import { CopilotSessionManager } from "./copilotSessionManager.js";
+import type { AgentExecutionContext } from "./agentToolPolicyRegistry.js";
 
 let client: CopilotClient | null = null;
 let lastAuthError: string | null = null;
@@ -122,6 +123,7 @@ export async function sendPrompt(
   model: string | undefined,
   projectPath: string | undefined,
   allowedTools: string[] | null | undefined,
+  executionContext: AgentExecutionContext | null | undefined,
   requestId: string | undefined,
   onEvent: (event: Record<string, unknown>) => void
 ) {
@@ -137,6 +139,7 @@ export async function sendPrompt(
     model,
     projectPath,
     allowedTools: allowedTools ?? null,
+    executionContext: executionContext ?? null,
   });
 
   const debugLabel = requestId?.trim().length ? requestId.trim() : chatID;

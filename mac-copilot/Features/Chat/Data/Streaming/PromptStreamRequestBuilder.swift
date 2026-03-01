@@ -7,7 +7,8 @@ enum PromptStreamRequestBuilder {
         chatID: UUID,
         model: String?,
         projectPath: String?,
-        allowedTools: [String]?
+        allowedTools: [String]?,
+        executionContext: PromptExecutionContext?
     ) throws -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent("prompt"))
         request.httpMethod = "POST"
@@ -26,6 +27,16 @@ enum PromptStreamRequestBuilder {
 
         if let allowedTools {
             payload["allowedTools"] = allowedTools
+        }
+
+        if let executionContext {
+            payload["executionContext"] = [
+                "agentID": executionContext.agentID,
+                "feature": executionContext.feature,
+                "policyProfile": executionContext.policyProfile,
+                "skillNames": executionContext.skillNames,
+                "requireSkills": executionContext.requireSkills,
+            ]
         }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)

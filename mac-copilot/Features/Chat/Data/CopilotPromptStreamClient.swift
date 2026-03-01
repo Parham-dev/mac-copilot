@@ -24,7 +24,14 @@ final class CopilotPromptStreamClient {
         self.delayScheduler = delayScheduler ?? TaskAsyncDelayScheduler()
     }
 
-    func streamPrompt(_ prompt: String, chatID: UUID, model: String?, projectPath: String?, allowedTools: [String]?) -> AsyncThrowingStream<PromptStreamEvent, Error> {
+    func streamPrompt(
+        _ prompt: String,
+        chatID: UUID,
+        model: String?,
+        projectPath: String?,
+        allowedTools: [String]?,
+        executionContext: PromptExecutionContext?
+    ) -> AsyncThrowingStream<PromptStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -36,7 +43,8 @@ final class CopilotPromptStreamClient {
                         chatID: chatID,
                         model: model,
                         projectPath: projectPath,
-                        allowedTools: allowedTools
+                        allowedTools: allowedTools,
+                        executionContext: executionContext
                     )
 
                     let stream = try await connectWithRetry(request: request)

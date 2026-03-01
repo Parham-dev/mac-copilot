@@ -100,7 +100,7 @@ export async function listAvailableModels() {
     }
     return listModelCatalog(client);
 }
-export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, requestId, onEvent) {
+export async function sendPrompt(prompt, chatID, model, projectPath, allowedTools, executionContext, requestId, onEvent) {
     await ensureAuthenticatedClient("prompt");
     if (!client) {
         onEvent({ type: "text", text: "Not authenticated yet. Please complete GitHub auth first." });
@@ -111,6 +111,7 @@ export async function sendPrompt(prompt, chatID, model, projectPath, allowedTool
         model,
         projectPath,
         allowedTools: allowedTools ?? null,
+        executionContext: executionContext ?? null,
     });
     const debugLabel = requestId?.trim().length ? requestId.trim() : chatID;
     await streamPromptWithSession(activeSession, prompt, onEvent, debugLabel);
