@@ -1,5 +1,7 @@
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { buildSessionHooks } from "./copilotSessionHooks.js";
 import type { AgentExecutionContext } from "./agentToolPolicyRegistry.js";
 import { resolveToolPolicy } from "./agentToolPolicyRegistry.js";
@@ -18,6 +20,7 @@ import { resolveSkillSelection } from "./copilotSkillResolver.js";
 
 const DEFAULT_BACKGROUND_COMPACTION_THRESHOLD = 120_000;
 const DEFAULT_BUFFER_EXHAUSTION_THRESHOLD = 200_000;
+const DEFAULT_AGENT_RUNS_ROOT = resolve(homedir(), "Library", "Application Support", "CopilotForge", "agent-runs");
 
 export type SessionState = {
   chatKey: string;
@@ -41,10 +44,12 @@ type EnsureSessionArgs = {
 
 export class CopilotSessionManager {
   private readonly sessionByChatKey = new Map<string, SessionState>();
+  private readonly ensureChainByChatKey = new Map<string, Promise<unknown>>();
   private lastSessionState: SessionState | null = null;
 
   reset() {
     this.sessionByChatKey.clear();
+    this.ensureChainByChatKey.clear();
     this.lastSessionState = null;
   }
 
@@ -96,71 +101,97 @@ export class CopilotSessionManager {
 
     const requestedToolPolicy = resolveToolPolicy(requestedExecutionContext);
     const chatKey = normalizeChatKey(args.chatID, requestedWorkingDirectory ?? undefined);
-    const existing = this.sessionByChatKey.get(chatKey);
 
-    console.log("[CopilotForge][Session] ensure_context", JSON.stringify({
-      chatKey,
-      model: requestedModel,
-      workingDirectory: requestedWorkingDirectory,
-      requestedAllowedToolsCount: requestedAvailableTools?.length ?? null,
-      requestedAllowedToolsSample: requestedAvailableTools?.slice(0, 8) ?? null,
-      nativeAvailableToolsCount: selectedTools.nativeAvailableTools?.length ?? null,
-      nativeAvailableToolsSample: selectedTools.nativeAvailableTools?.slice(0, 8) ?? null,
-      skillSelectionMode: resolvedSkills.mode,
-      selectedSkillNames: resolvedSkills.selectedSkillNames,
-      missingRequiredSkills: resolvedSkills.missingRequiredSkills,
-      skillDirectoriesCount: resolvedSkills.skillDirectories?.length ?? null,
-      skillDirectoriesSample: resolvedSkills.skillDirectories?.slice(0, 4) ?? null,
-      disabledSkillsCount: resolvedSkills.disabledSkills?.length ?? null,
-      disabledSkillsSample: resolvedSkills.disabledSkills?.slice(0, 8) ?? null,
-      executionContext: requestedExecutionContext,
-      policyProfile: requestedToolPolicy.profileName,
-      hasExistingSession: Boolean(existing),
-    }));
+    return this.enqueueEnsure(chatKey, async () => {
+      const requestedSessionID = buildSessionIdentifier(chatKey);
+      const resolvedWorkingDirectory = resolveWorkingDirectory({
+        requestedWorkingDirectory,
+        executionContext: requestedExecutionContext,
+        sessionId: requestedSessionID,
+      });
+      const existing = this.sessionByChatKey.get(chatKey);
 
-    if (existing
-        && existing.model === requestedModel
-        && existing.workingDirectory === requestedWorkingDirectory
-        && sameAllowedTools(existing.availableTools, requestedAvailableTools)
-        && sameStringList(existing.skillDirectories, resolvedSkills.skillDirectories)
-        && sameStringList(existing.disabledSkills, resolvedSkills.disabledSkills)
-        && JSON.stringify(existing.executionContext) === JSON.stringify(requestedExecutionContext)) {
-      console.log("[CopilotForge][Session] reuse", JSON.stringify({
+      console.log("[CopilotForge][Session] ensure_context", JSON.stringify({
         chatKey,
-        sessionId: existing.sessionId,
-        allowedToolsCount: existing.availableTools?.length ?? null,
+        model: requestedModel,
+        workingDirectory: resolvedWorkingDirectory,
+        requestedAllowedToolsCount: requestedAvailableTools?.length ?? null,
+        requestedAllowedToolsSample: requestedAvailableTools?.slice(0, 8) ?? null,
+        nativeAvailableToolsCount: selectedTools.nativeAvailableTools?.length ?? null,
+        nativeAvailableToolsSample: selectedTools.nativeAvailableTools?.slice(0, 8) ?? null,
+        skillSelectionMode: resolvedSkills.mode,
+        selectedSkillNames: resolvedSkills.selectedSkillNames,
+        missingRequiredSkills: resolvedSkills.missingRequiredSkills,
+        skillDirectoriesCount: resolvedSkills.skillDirectories?.length ?? null,
+        skillDirectoriesSample: resolvedSkills.skillDirectories?.slice(0, 4) ?? null,
+        disabledSkillsCount: resolvedSkills.disabledSkills?.length ?? null,
+        disabledSkillsSample: resolvedSkills.disabledSkills?.slice(0, 8) ?? null,
+        executionContext: requestedExecutionContext,
+        policyProfile: requestedToolPolicy.profileName,
+        hasExistingSession: Boolean(existing),
       }));
-      this.lastSessionState = existing;
-      return existing.session;
-    }
 
-    if (existing?.session && typeof existing.session.destroy === "function") {
-      try {
-        await existing.session.destroy();
-      } catch {
+      if (existing
+          && existing.model === requestedModel
+          && existing.workingDirectory === resolvedWorkingDirectory
+          && sameAllowedTools(existing.availableTools, requestedAvailableTools)
+          && sameStringList(existing.skillDirectories, resolvedSkills.skillDirectories)
+          && sameStringList(existing.disabledSkills, resolvedSkills.disabledSkills)
+          && JSON.stringify(existing.executionContext) === JSON.stringify(requestedExecutionContext)) {
+        console.log("[CopilotForge][Session] reuse", JSON.stringify({
+          chatKey,
+          sessionId: existing.sessionId,
+          allowedToolsCount: existing.availableTools?.length ?? null,
+        }));
+        this.lastSessionState = existing;
+        return existing.session;
+      }
+
+      if (existing?.session && typeof existing.session.destroy === "function") {
+        try {
+          await existing.session.destroy();
+        } catch {
+        }
+      }
+
+      const state = await createOrResumeSessionForContext(client, {
+        chatKey,
+        model: requestedModel,
+        workingDirectory: resolvedWorkingDirectory,
+        allowedTools: requestedAvailableTools,
+        nativeAvailableTools: selectedTools.nativeAvailableTools,
+        skillDirectories: resolvedSkills.skillDirectories,
+        disabledSkills: resolvedSkills.disabledSkills,
+        executionContext: requestedExecutionContext,
+      });
+
+      this.sessionByChatKey.set(chatKey, state);
+      this.lastSessionState = state;
+      console.log("[CopilotForge][Session] active", JSON.stringify({
+        chatKey,
+        sessionId: state.sessionId,
+        allowedToolsCount: state.availableTools?.length ?? null,
+        allowedToolsSample: state.availableTools?.slice(0, 8) ?? null,
+      }));
+      return state.session;
+    });
+  }
+
+  private async enqueueEnsure<T>(chatKey: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.ensureChainByChatKey.get(chatKey) ?? Promise.resolve();
+    const current = previous
+      .catch(() => undefined)
+      .then(async () => operation());
+
+    this.ensureChainByChatKey.set(chatKey, current);
+
+    try {
+      return await current;
+    } finally {
+      if (this.ensureChainByChatKey.get(chatKey) === current) {
+        this.ensureChainByChatKey.delete(chatKey);
       }
     }
-
-    const state = await createOrResumeSessionForContext(client, {
-      chatKey,
-      model: requestedModel,
-      workingDirectory: requestedWorkingDirectory,
-      allowedTools: requestedAvailableTools,
-      nativeAvailableTools: selectedTools.nativeAvailableTools,
-      skillDirectories: resolvedSkills.skillDirectories,
-      disabledSkills: resolvedSkills.disabledSkills,
-      executionContext: requestedExecutionContext,
-    });
-
-    this.sessionByChatKey.set(chatKey, state);
-    this.lastSessionState = state;
-    console.log("[CopilotForge][Session] active", JSON.stringify({
-      chatKey,
-      sessionId: state.sessionId,
-      allowedToolsCount: state.availableTools?.length ?? null,
-      allowedToolsSample: state.availableTools?.slice(0, 8) ?? null,
-    }));
-    return state.session;
   }
 }
 
@@ -191,11 +222,8 @@ async function createOrResumeSessionForContext(
     throw new Error("Copilot client is not initialized.");
   }
 
-  if (args.workingDirectory) {
-    mkdirSync(args.workingDirectory, { recursive: true });
-  }
-
   const sessionId = buildSessionIdentifier(args.chatKey);
+  const workingDirectory = ensureSessionWorkingDirectory(args.workingDirectory, args.executionContext);
   const backgroundCompactionThreshold = readPositiveIntegerEnv(
     "COPILOTFORGE_BACKGROUND_COMPACTION_THRESHOLD",
     DEFAULT_BACKGROUND_COMPACTION_THRESHOLD
@@ -208,7 +236,7 @@ async function createOrResumeSessionForContext(
   const resolvedToolPolicy = resolveToolPolicy(args.executionContext);
   const customTools = buildCustomTools({
     chatKey: args.chatKey,
-    workingDirectory: args.workingDirectory,
+    workingDirectory,
     executionContext: args.executionContext,
     policy: resolvedToolPolicy,
   });
@@ -221,7 +249,7 @@ async function createOrResumeSessionForContext(
     ...(customTools ? { tools: customTools } : {}),
     hooks: buildSessionHooks({
       chatKey: args.chatKey,
-      workingDirectory: args.workingDirectory,
+      workingDirectory,
       allowedTools: args.allowedTools,
       executionContext: args.executionContext,
     }),
@@ -231,7 +259,7 @@ async function createOrResumeSessionForContext(
       bufferExhaustionThreshold,
     },
     ...(mcpServers ? { mcpServers } : {}),
-    ...(args.workingDirectory ? { workingDirectory: args.workingDirectory } : {}),
+    ...(workingDirectory ? { workingDirectory } : {}),
     ...(args.nativeAvailableTools ? { availableTools: args.nativeAvailableTools } : {}),
     ...(args.skillDirectories ? { skillDirectories: args.skillDirectories } : {}),
     ...(args.disabledSkills ? { disabledSkills: args.disabledSkills } : {}),
@@ -249,10 +277,39 @@ async function createOrResumeSessionForContext(
     sessionId,
     session: createdSession,
     model: args.model,
-    workingDirectory: args.workingDirectory,
+    workingDirectory,
     availableTools: args.allowedTools,
     skillDirectories: args.skillDirectories,
     disabledSkills: args.disabledSkills,
     executionContext: args.executionContext,
   };
+}
+
+function isAgentsExecutionContext(executionContext: AgentExecutionContext | null) {
+  return executionContext?.feature?.trim() === "agents";
+}
+
+function resolveWorkingDirectory(args: {
+  requestedWorkingDirectory: string | null;
+  executionContext: AgentExecutionContext | null;
+  sessionId: string;
+}) {
+  if (!isAgentsExecutionContext(args.executionContext)) {
+    return args.requestedWorkingDirectory;
+  }
+
+  const configuredRoot = String(process.env.COPILOTFORGE_AGENT_RUNS_ROOT ?? "").trim();
+  const agentRunsRoot = configuredRoot.length > 0 ? configuredRoot : DEFAULT_AGENT_RUNS_ROOT;
+  return resolve(agentRunsRoot, args.sessionId);
+}
+
+function ensureSessionWorkingDirectory(
+  workingDirectory: string | null,
+  executionContext: AgentExecutionContext | null
+) {
+  if (workingDirectory && isAgentsExecutionContext(executionContext)) {
+    mkdirSync(workingDirectory, { recursive: true });
+  }
+
+  return workingDirectory;
 }

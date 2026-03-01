@@ -206,7 +206,7 @@ final class AgentsEnvironment: ObservableObject {
                     requestedURL
                 )
                 try updateRun(completed)
-                loadRuns(agentID: definition.id)
+                loadRuns(projectID: projectID, agentID: definition.id)
                 return completed
             }
 
@@ -238,7 +238,7 @@ final class AgentsEnvironment: ObservableObject {
             }
 
             try updateRun(completed)
-            loadRuns(agentID: definition.id)
+            loadRuns(projectID: projectID, agentID: definition.id)
             return completed
         } catch {
             var failed = running
@@ -255,7 +255,7 @@ final class AgentsEnvironment: ObservableObject {
             )
 
             try updateRun(failed)
-            loadRuns(agentID: definition.id)
+            loadRuns(projectID: projectID, agentID: definition.id)
             throw error
         }
     }

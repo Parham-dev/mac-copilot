@@ -9,6 +9,7 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
         case saveFailed(String)
         case updateFetchFailed(String)
         case updateSaveFailed(String)
+        case invalidStatus(String)
         case encodeInputPayloadFailed(String)
         case decodeInputPayloadFailed(String)
         case encodeDiagnosticsFailed(String)
@@ -26,6 +27,8 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
                 return "Update agent run fetch failed: \(details)"
             case .updateSaveFailed(let details):
                 return "Update agent run save failed: \(details)"
+            case .invalidStatus(let value):
+                return "Decode agent run status failed: invalid raw value '\(value)'"
             case .encodeInputPayloadFailed(let details):
                 return "Encode agent run input payload failed: \(details)"
             case .decodeInputPayloadFailed(let details):
@@ -58,13 +61,24 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
             throw wrapped
         }
 
-        return entities
-            .compactMap(mapToDomain)
-            .filter { run in
-                let projectMatches = projectID.map { run.projectID == $0 } ?? true
-                let agentMatches = agentID.map { run.agentID == $0 } ?? true
-                return projectMatches && agentMatches
+        do {
+            return try entities
+                .map(mapToDomain)
+                .filter { run in
+                    let projectMatches = projectID.map { run.projectID == $0 } ?? true
+                    let agentMatches = agentID.map { run.agentID == $0 } ?? true
+                    return projectMatches && agentMatches
+                }
+        } catch {
+            let wrapped: RepositoryError
+            if let repositoryError = error as? RepositoryError {
+                wrapped = repositoryError
+            } else {
+                wrapped = RepositoryError.fetchRunsFailed(error.localizedDescription)
             }
+            log(wrapped)
+            throw wrapped
+        }
     }
 
     func fetchRun(id: UUID) throws -> AgentRun? {
@@ -74,9 +88,17 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
         )
 
         do {
-            return try context.fetch(descriptor).first.flatMap(mapToDomain)
+            guard let entity = try context.fetch(descriptor).first else {
+                return nil
+            }
+            return try mapToDomain(entity)
         } catch {
-            let wrapped = RepositoryError.fetchRunFailed(error.localizedDescription)
+            let wrapped: RepositoryError
+            if let repositoryError = error as? RepositoryError {
+                wrapped = repositoryError
+            } else {
+                wrapped = RepositoryError.fetchRunFailed(error.localizedDescription)
+            }
             log(wrapped)
             throw wrapped
         }
@@ -88,13 +110,13 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
             id: run.id,
             agentID: run.agentID,
             projectID: run.projectID,
-            inputPayloadJSON: encodeInputPayload(run.inputPayload),
+            inputPayloadJSON: try encodeInputPayload(run.inputPayload),
             statusRaw: run.status.rawValue,
             streamedOutput: run.streamedOutput,
             finalOutput: run.finalOutput,
             startedAt: run.startedAt,
             completedAt: run.completedAt,
-            diagnosticsJSON: encodeDiagnostics(run.diagnostics)
+            diagnosticsJSON: try encodeDiagnostics(run.diagnostics)
         )
 
         context.insert(entity)
@@ -129,13 +151,13 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
 
         entity.agentID = run.agentID
         entity.projectID = run.projectID
-        entity.inputPayloadJSON = encodeInputPayload(run.inputPayload)
+        entity.inputPayloadJSON = try encodeInputPayload(run.inputPayload)
         entity.statusRaw = run.status.rawValue
         entity.streamedOutput = run.streamedOutput
         entity.finalOutput = run.finalOutput
         entity.startedAt = run.startedAt
         entity.completedAt = run.completedAt
-        entity.diagnosticsJSON = encodeDiagnostics(run.diagnostics)
+        entity.diagnosticsJSON = try encodeDiagnostics(run.diagnostics)
 
         do {
             try context.save()
@@ -146,64 +168,76 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
         }
     }
 
-    private func mapToDomain(_ entity: AgentRunEntity) -> AgentRun? {
+    private func mapToDomain(_ entity: AgentRunEntity) throws -> AgentRun {
         guard let status = AgentRunStatus(rawValue: entity.statusRaw) else {
-            return nil
+            throw RepositoryError.invalidStatus(entity.statusRaw)
         }
 
         return AgentRun(
             id: entity.id,
             agentID: entity.agentID,
             projectID: entity.projectID,
-            inputPayload: decodeInputPayload(entity.inputPayloadJSON),
+            inputPayload: try decodeInputPayload(entity.inputPayloadJSON),
             status: status,
             streamedOutput: entity.streamedOutput,
             finalOutput: entity.finalOutput,
             startedAt: entity.startedAt,
             completedAt: entity.completedAt,
-            diagnostics: decodeDiagnostics(entity.diagnosticsJSON)
+            diagnostics: try decodeDiagnostics(entity.diagnosticsJSON)
         )
     }
 
-    private func encodeInputPayload(_ payload: [String: String]) -> String {
+    private func encodeInputPayload(_ payload: [String: String]) throws -> String {
         do {
             let data = try JSONEncoder().encode(payload)
-            return String(data: data, encoding: .utf8) ?? "{}"
+            guard let encoded = String(data: data, encoding: .utf8) else {
+                throw RepositoryError.encodeInputPayloadFailed("UTF-8 conversion failed")
+            }
+            return encoded
         } catch {
-            log(.encodeInputPayloadFailed(error.localizedDescription))
-            return "{}"
+            if let repositoryError = error as? RepositoryError {
+                throw repositoryError
+            }
+            throw RepositoryError.encodeInputPayloadFailed(error.localizedDescription)
         }
     }
 
-    private func decodeInputPayload(_ json: String) -> [String: String] {
-        guard let data = json.data(using: .utf8) else { return [:] }
+    private func decodeInputPayload(_ json: String) throws -> [String: String] {
+        guard let data = json.data(using: .utf8) else {
+            throw RepositoryError.decodeInputPayloadFailed("Invalid UTF-8 payload")
+        }
 
         do {
             return try JSONDecoder().decode([String: String].self, from: data)
         } catch {
-            log(.decodeInputPayloadFailed(error.localizedDescription))
-            return [:]
+            throw RepositoryError.decodeInputPayloadFailed(error.localizedDescription)
         }
     }
 
-    private func encodeDiagnostics(_ diagnostics: AgentRunDiagnostics) -> String {
+    private func encodeDiagnostics(_ diagnostics: AgentRunDiagnostics) throws -> String {
         do {
             let data = try JSONEncoder().encode(diagnostics)
-            return String(data: data, encoding: .utf8) ?? "{}"
+            guard let encoded = String(data: data, encoding: .utf8) else {
+                throw RepositoryError.encodeDiagnosticsFailed("UTF-8 conversion failed")
+            }
+            return encoded
         } catch {
-            log(.encodeDiagnosticsFailed(error.localizedDescription))
-            return "{}"
+            if let repositoryError = error as? RepositoryError {
+                throw repositoryError
+            }
+            throw RepositoryError.encodeDiagnosticsFailed(error.localizedDescription)
         }
     }
 
-    private func decodeDiagnostics(_ json: String) -> AgentRunDiagnostics {
-        guard let data = json.data(using: .utf8) else { return .init() }
+    private func decodeDiagnostics(_ json: String) throws -> AgentRunDiagnostics {
+        guard let data = json.data(using: .utf8) else {
+            throw RepositoryError.decodeDiagnosticsFailed("Invalid UTF-8 payload")
+        }
 
         do {
             return try JSONDecoder().decode(AgentRunDiagnostics.self, from: data)
         } catch {
-            log(.decodeDiagnosticsFailed(error.localizedDescription))
-            return .init()
+            throw RepositoryError.decodeDiagnosticsFailed(error.localizedDescription)
         }
     }
 

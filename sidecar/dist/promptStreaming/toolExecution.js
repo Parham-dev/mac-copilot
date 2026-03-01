@@ -1,5 +1,13 @@
 export function extractToolExecutionResult(event, toolNameByCallID) {
-    const success = event?.data?.success !== false;
+    const resultTypeRaw = typeof event?.data?.result?.resultType === "string"
+        ? event.data.result.resultType
+        : (typeof event?.data?.resultType === "string" ? event.data.resultType : null);
+    const resultType = typeof resultTypeRaw === "string" ? resultTypeRaw.trim().toLowerCase() : null;
+    const explicitSuccess = typeof event?.data?.success === "boolean" ? event.data.success : null;
+    const inferredSuccessFromResultType = resultType
+        ? !(resultType === "failure" || resultType === "denied" || resultType === "error")
+        : null;
+    const success = explicitSuccess ?? inferredSuccessFromResultType ?? true;
     const toolCallID = event?.data?.toolCallId;
     const toolName = event?.data?.toolName
         ?? (typeof toolCallID === "string" ? toolNameByCallID.get(toolCallID) : null)
@@ -22,6 +30,9 @@ export function extractToolExecutionResult(event, toolNameByCallID) {
             .find((value) => typeof value === "string" && value.trim().length > 0)
         : null;
     const resultContent = event?.data?.result?.content;
+    const textResultForLlm = typeof event?.data?.result?.textResultForLlm === "string"
+        ? event.data.result.textResultForLlm
+        : null;
     const errorMessage = event?.data?.error?.message
         ?? (typeof event?.data?.error === "string" ? event.data.error : null)
         ?? (typeof event?.error === "string" ? event.error : null)
@@ -29,6 +40,7 @@ export function extractToolExecutionResult(event, toolNameByCallID) {
         ?? (typeof event?.data?.reason === "string" ? event.data.reason : null);
     const detailsRaw = (typeof firstContentText === "string" && firstContentText.length > 0 ? firstContentText : null)
         ?? (typeof resultContent === "string" && resultContent.length > 0 ? resultContent : null)
+        ?? (typeof textResultForLlm === "string" && textResultForLlm.length > 0 ? textResultForLlm : null)
         ?? (typeof errorMessage === "string" && errorMessage.length > 0 ? errorMessage : null);
     let details = typeof detailsRaw === "string" ? detailsRaw : "";
     details = details
