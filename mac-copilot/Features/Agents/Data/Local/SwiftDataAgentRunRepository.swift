@@ -9,6 +9,8 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
         case saveFailed(String)
         case updateFetchFailed(String)
         case updateSaveFailed(String)
+        case deleteFetchFailed(String)
+        case deleteSaveFailed(String)
         case invalidStatus(String)
         case encodeInputPayloadFailed(String)
         case decodeInputPayloadFailed(String)
@@ -27,6 +29,10 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
                 return "Update agent run fetch failed: \(details)"
             case .updateSaveFailed(let details):
                 return "Update agent run save failed: \(details)"
+            case .deleteFetchFailed(let details):
+                return "Delete agent run fetch failed: \(details)"
+            case .deleteSaveFailed(let details):
+                return "Delete agent run save failed: \(details)"
             case .invalidStatus(let value):
                 return "Decode agent run status failed: invalid raw value '\(value)'"
             case .encodeInputPayloadFailed(let details):
@@ -163,6 +169,36 @@ final class SwiftDataAgentRunRepository: AgentRunRepository {
             try context.save()
         } catch {
             let wrapped = RepositoryError.updateSaveFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
+        }
+    }
+
+    func deleteRun(id: UUID) throws {
+        let predicateID = id
+        let descriptor = FetchDescriptor<AgentRunEntity>(
+            predicate: #Predicate { $0.id == predicateID }
+        )
+
+        let entity: AgentRunEntity?
+        do {
+            entity = try context.fetch(descriptor).first
+        } catch {
+            let wrapped = RepositoryError.deleteFetchFailed(error.localizedDescription)
+            log(wrapped)
+            throw wrapped
+        }
+
+        guard let entity else {
+            return
+        }
+
+        context.delete(entity)
+
+        do {
+            try context.save()
+        } catch {
+            let wrapped = RepositoryError.deleteSaveFailed(error.localizedDescription)
             log(wrapped)
             throw wrapped
         }

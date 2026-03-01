@@ -3,7 +3,9 @@ import SwiftUI
 struct AgentRunHistoryRowView: View {
     let run: AgentRun
     let format: String
+    let onDelete: () -> Void
     private let urlPreviewMaxCharacters = 42
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -17,6 +19,20 @@ struct AgentRunHistoryRowView: View {
                 Text(format.uppercased())
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+
+                if isHovered {
+                    Menu {
+                        Button(role: .destructive, action: onDelete) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                }
             }
 
             HStack(spacing: 8) {
@@ -31,6 +47,9 @@ struct AgentRunHistoryRowView: View {
             }
         }
         .padding(.vertical, 4)
+        .onHover { inside in
+            isHovered = inside
+        }
     }
 
     private func truncated(_ value: String, maxCharacters: Int) -> String {

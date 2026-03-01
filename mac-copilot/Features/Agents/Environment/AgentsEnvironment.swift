@@ -14,6 +14,7 @@ final class AgentsEnvironment: ObservableObject {
     private let fetchRunsUseCase: FetchAgentRunsUseCase
     private let createRunUseCase: CreateAgentRunUseCase
     private let updateRunUseCase: UpdateAgentRunUseCase
+    private let deleteRunUseCase: DeleteAgentRunUseCase
     private let executionService: AgentExecutionServing
     private let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     private let modelSelectionStore: ModelSelectionStore
@@ -23,6 +24,7 @@ final class AgentsEnvironment: ObservableObject {
         fetchRunsUseCase: FetchAgentRunsUseCase,
         createRunUseCase: CreateAgentRunUseCase,
         updateRunUseCase: UpdateAgentRunUseCase,
+        deleteRunUseCase: DeleteAgentRunUseCase,
         executionService: AgentExecutionServing,
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
         modelSelectionStore: ModelSelectionStore
@@ -31,6 +33,7 @@ final class AgentsEnvironment: ObservableObject {
         self.fetchRunsUseCase = fetchRunsUseCase
         self.createRunUseCase = createRunUseCase
         self.updateRunUseCase = updateRunUseCase
+        self.deleteRunUseCase = deleteRunUseCase
         self.executionService = executionService
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
         self.modelSelectionStore = modelSelectionStore
@@ -110,6 +113,12 @@ final class AgentsEnvironment: ObservableObject {
         if let index = runs.firstIndex(where: { $0.id == run.id }) {
             runs[index] = run
         }
+    }
+
+    func deleteRun(id: UUID, projectID: UUID? = nil, agentID: String? = nil) throws {
+        try deleteRunUseCase.execute(runID: id)
+        runs.removeAll { $0.id == id }
+        loadRuns(projectID: projectID, agentID: agentID)
     }
 
     @discardableResult

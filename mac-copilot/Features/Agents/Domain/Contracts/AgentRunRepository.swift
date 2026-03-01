@@ -9,4 +9,5 @@ protocol AgentRunRepository {
     func createRun(_ run: AgentRun) throws -> AgentRun
 
     func updateRun(_ run: AgentRun) throws
+    func deleteRun(id: UUID) throws
 }

@@ -52,3 +52,16 @@ struct UpdateAgentRunUseCase {
         try repository.updateRun(run)
     }
 }
+
+@MainActor
+struct DeleteAgentRunUseCase {
+    private let repository: AgentRunRepository
+
+    init(repository: AgentRunRepository) {
+        self.repository = repository
+    }
+
+    func execute(runID: UUID) throws {
+        try repository.deleteRun(id: runID)
+    }
+}

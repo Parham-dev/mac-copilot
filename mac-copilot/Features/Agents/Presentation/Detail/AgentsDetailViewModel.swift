@@ -19,22 +19,44 @@ final class AgentsDetailViewModel: ObservableObject {
     @Published var runActivity: String?
     @Published var selectedTab: Tab = .run
     @Published var selectedRunID: UUID?
+    @Published var pendingDeleteRun: AgentRun?
 
     private var activeAgentID: String?
-
-    var canOpenLatestResult: Bool {
-        guard let latestRun else { return false }
-        return latestRun.status == .completed
-    }
 
     var primaryRunButtonTitle: String {
         if isRunning {
             return "Running..."
         }
-        if canOpenLatestResult {
-            return "Open Result"
-        }
         return "Run"
+    }
+
+    func selectedValue(for field: AgentInputField) -> String {
+        formValues[field.id] ?? ""
+    }
+
+    func selectOption(_ option: String, for field: AgentInputField) {
+        if option.caseInsensitiveCompare("other") == .orderedSame {
+            if formValues[field.id]?.lowercased() != "other" {
+                formValues[customValueKey(for: field.id)] = ""
+            }
+            formValues[field.id] = "other"
+            return
+        }
+
+        formValues[field.id] = option
+        formValues[customValueKey(for: field.id)] = ""
+    }
+
+    func isOtherSelected(for field: AgentInputField) -> Bool {
+        selectedValue(for: field).lowercased() == "other"
+    }
+
+    func customValue(for field: AgentInputField) -> String {
+        formValues[customValueKey(for: field.id)] ?? ""
+    }
+
+    func setCustomValue(_ value: String, for field: AgentInputField) {
+        formValues[customValueKey(for: field.id)] = value
     }
 
     func activateAgentIfNeeded(_ definition: AgentDefinition, environment: AgentsEnvironment) {
@@ -46,6 +68,7 @@ final class AgentsDetailViewModel: ObservableObject {
         latestRun = nil
         runActivity = nil
         selectedRunID = nil
+        pendingDeleteRun = nil
 
         var initialValues: [String: String] = [:]
         for field in definition.inputSchema.fields {
@@ -65,6 +88,7 @@ final class AgentsDetailViewModel: ObservableObject {
 
     func runAgent(_ definition: AgentDefinition, environment: AgentsEnvironment) async {
         errorMessage = nil
+        let submissionPayload = submissionInputPayload(for: definition)
 
         let selectedModel = environment.selectedModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !selectedModel.isEmpty else {
@@ -73,7 +97,7 @@ final class AgentsDetailViewModel: ObservableObject {
         }
 
         for field in definition.inputSchema.fields where field.required {
-            let value = (formValues[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = (submissionPayload[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if value.isEmpty {
                 errorMessage = "Please fill required field: \(field.label)"
                 return
@@ -91,7 +115,7 @@ final class AgentsDetailViewModel: ObservableObject {
             let run = try await environment.executeRun(
                 definition: definition,
                 projectID: nil,
-                inputPayload: formValues,
+                inputPayload: submissionPayload,
                 model: selectedModel,
                 projectPath: nil,
                 onProgress: { [weak self] progress in
@@ -108,6 +132,36 @@ final class AgentsDetailViewModel: ObservableObject {
             }
         } catch {
             errorMessage = "Execution failed. Please retry."
+        }
+    }
+
+    func requestDeleteRun(_ run: AgentRun) {
+        pendingDeleteRun = run
+    }
+
+    func cancelDeleteRun() {
+        pendingDeleteRun = nil
+    }
+
+    func confirmDeleteRun(definition: AgentDefinition, environment: AgentsEnvironment) {
+        guard let run = pendingDeleteRun else { return }
+        pendingDeleteRun = nil
+        deleteRun(run, definition: definition, environment: environment)
+    }
+
+    private func deleteRun(_ run: AgentRun, definition: AgentDefinition, environment: AgentsEnvironment) {
+        errorMessage = nil
+
+        do {
+            try environment.deleteRun(id: run.id, agentID: definition.id)
+
+            let refreshedRuns = runsForCurrentAgent(definition.id, environment: environment)
+            if latestRun?.id == run.id {
+                latestRun = refreshedRuns.first
+            }
+            ensureSelectedRun(from: refreshedRuns)
+        } catch {
+            errorMessage = "Failed to delete run. Please try again."
         }
     }
 
@@ -228,5 +282,30 @@ final class AgentsDetailViewModel: ObservableObject {
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let timestamp = formatter.string(from: run.startedAt)
         return "agent-\(run.agentID)-\(timestamp).\(fileExtension)"
+    }
+
+    private func customValueKey(for fieldID: String) -> String {
+        "\(fieldID)__custom"
+    }
+
+    private func submissionInputPayload(for definition: AgentDefinition) -> [String: String] {
+        var payload: [String: String] = formValues
+
+        for field in definition.inputSchema.fields where field.type == .select {
+            let selected = (formValues[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard selected.lowercased() == "other" else {
+                continue
+            }
+
+            let custom = (formValues[customValueKey(for: field.id)] ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            payload[field.id] = custom
+        }
+
+        for field in definition.inputSchema.fields {
+            payload.removeValue(forKey: customValueKey(for: field.id))
+        }
+
+        return payload
     }
 }

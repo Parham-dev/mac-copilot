@@ -57,87 +57,72 @@ struct AgentsDetailView: View {
 
     @ViewBuilder
     private func runTab(definition: AgentDefinition) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Inputs")
-                        .font(.headline)
+        let requirementsFields = definition.inputSchema.fields.filter(isRequirementsField)
+        let selectFields = definition.inputSchema.fields.filter { $0.type == .select }
+        let primaryFields = definition.inputSchema.fields.filter {
+            $0.type != .select && !isRequirementsField($0)
+        }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Model")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    AgentRunModelSectionView(
+                        selectedModelID: $agentsEnvironment.selectedModelID,
+                        availableModels: agentsEnvironment.availableModels,
+                        isLoadingModels: agentsEnvironment.isLoadingModels,
+                        isDisabled: viewModel.isRunning
+                    )
 
-                        Picker("Model", selection: $agentsEnvironment.selectedModelID) {
-                            ForEach(agentsEnvironment.availableModels, id: \.self) { modelID in
-                                Text(modelID).tag(modelID)
+                    if !primaryFields.isEmpty {
+                        AgentRunPrimaryFieldsSectionView(
+                            fields: primaryFields,
+                            bindingForFieldID: binding(for:)
+                        )
+                    }
+
+                    if !selectFields.isEmpty {
+                        AgentRunPreferencesSectionView(
+                            fields: selectFields,
+                            selectedValue: { field in
+                                viewModel.selectedValue(for: field)
+                            },
+                            onSelectOption: { field, option in
+                                viewModel.selectOption(option, for: field)
+                            },
+                            isOtherSelected: { field in
+                                viewModel.isOtherSelected(for: field)
+                            },
+                            customValueBinding: { field in
+                                customBinding(for: field)
                             }
-                        }
-                        .pickerStyle(.menu)
-                        .disabled(viewModel.isRunning || agentsEnvironment.isLoadingModels)
-
-                        if agentsEnvironment.isLoadingModels {
-                            Text("Loading models…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        )
                     }
 
-                    ForEach(definition.inputSchema.fields, id: \.id) { field in
-                        fieldInput(field)
+                    if !requirementsFields.isEmpty {
+                        AgentRunRequirementsSectionView(
+                            fields: requirementsFields,
+                            bindingForFieldID: binding(for:)
+                        )
                     }
                 }
-
-                if let modelLoadErrorMessage = agentsEnvironment.modelLoadErrorMessage,
-                   !modelLoadErrorMessage.isEmpty {
-                    Text(modelLoadErrorMessage)
-                        .font(.callout)
-                        .foregroundStyle(.red)
-                }
-
-                if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.callout)
-                        .foregroundStyle(.red)
-                }
-
-                HStack(spacing: 12) {
-                    Button(viewModel.primaryRunButtonTitle) {
-                        if viewModel.canOpenLatestResult {
-                            viewModel.selectedTab = .history
-                        } else {
-                            Task {
-                                await viewModel.runAgent(definition, environment: agentsEnvironment)
-                            }
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.isRunning)
-
-                    if let latestRun = viewModel.latestRun {
-                        HStack(spacing: 6) {
-                            Text("Latest run")
-                                .foregroundStyle(.secondary)
-                            AgentStatusBadgeView(status: latestRun.status)
-                        }
-                    }
-
-                }
-
-                if viewModel.isRunning,
-                   let runActivity = viewModel.runActivity,
-                   !runActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("AI is working: \(runActivity)")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: 0)
+                .padding(.bottom, 10)
             }
+
+            Divider()
+
+            AgentRunFooterBarView(
+                modelErrorMessage: agentsEnvironment.modelLoadErrorMessage,
+                errorMessage: viewModel.errorMessage,
+                isRunning: viewModel.isRunning,
+                runButtonTitle: viewModel.primaryRunButtonTitle,
+                latestRun: viewModel.latestRun,
+                runActivity: viewModel.runActivity,
+                onRun: {
+                    Task {
+                        await viewModel.runAgent(definition, environment: agentsEnvironment)
+                    }
+                }
+            )
         }
     }
 
@@ -158,7 +143,10 @@ struct AgentsDetailView: View {
                     ForEach(runs, id: \.id) { run in
                         AgentRunHistoryRowView(
                             run: run,
-                            format: viewModel.displayOutputFormat(for: run)
+                            format: viewModel.displayOutputFormat(for: run),
+                            onDelete: {
+                                viewModel.requestDeleteRun(run)
+                            }
                         )
                         .tag(run.id)
                     }
@@ -189,6 +177,28 @@ struct AgentsDetailView: View {
             .onChange(of: runs.map(\.id)) { _, _ in
                 viewModel.ensureSelectedRun(from: runs)
             }
+            .confirmationDialog(
+                "Delete run?",
+                isPresented: Binding(
+                    get: { viewModel.pendingDeleteRun != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            viewModel.cancelDeleteRun()
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    viewModel.confirmDeleteRun(definition: definition, environment: agentsEnvironment)
+                }
+
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelDeleteRun()
+                }
+            } message: {
+                Text("This run and its output will be permanently removed.")
+            }
         }
     }
 
@@ -208,35 +218,22 @@ struct AgentsDetailView: View {
         )
     }
 
-    @ViewBuilder
-    private func fieldInput(_ field: AgentInputField) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            let suffix = field.required ? " *" : ""
-            Text("\(field.label)\(suffix)")
-                .font(.subheadline)
-                .fontWeight(.medium)
-
-            switch field.type {
-            case .url, .text:
-                TextField(field.id, text: binding(for: field.id))
-                    .textFieldStyle(.roundedBorder)
-
-            case .select:
-                Picker(field.label, selection: binding(for: field.id)) {
-                    Text("Select...").tag("")
-                    ForEach(field.options, id: \.self) { option in
-                        Text(option).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-        }
-    }
-
     private func binding(for key: String) -> Binding<String> {
         Binding(
             get: { viewModel.formValues[key] ?? "" },
             set: { viewModel.formValues[key] = $0 }
         )
+    }
+
+    private func customBinding(for field: AgentInputField) -> Binding<String> {
+        Binding(
+            get: { viewModel.customValue(for: field) },
+            set: { viewModel.setCustomValue($0, for: field) }
+        )
+    }
+
+    private func isRequirementsField(_ field: AgentInputField) -> Bool {
+        let fieldID = field.id.lowercased()
+        return fieldID.contains("requirement") || fieldID.contains("constraint")
     }
 }

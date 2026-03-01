@@ -16,6 +16,7 @@ extension Container {
                 fetchRunsUseCase: FetchAgentRunsUseCase(repository: self.agentRunRepository()),
                 createRunUseCase: CreateAgentRunUseCase(repository: self.agentRunRepository()),
                 updateRunUseCase: UpdateAgentRunUseCase(repository: self.agentRunRepository()),
+                deleteRunUseCase: DeleteAgentRunUseCase(repository: self.agentRunRepository()),
                 executionService: self.agentExecutionService(),
                 fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: self.modelRepository()),
                 modelSelectionStore: self.modelSelectionStore()
