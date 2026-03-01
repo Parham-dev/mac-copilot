@@ -19,7 +19,7 @@ run_probe() {
   chat="$(chat_id "$profile")"
 
   payload=$(cat <<JSON
-{"prompt":"Summarize this URL in 3 bullets: ${TARGET_URL}","chatID":"${chat}","model":"${MODEL}","allowedTools":["fetch","web_fetch","fetch_webpage"],"executionContext":{"agentID":"url-summariser","feature":"agents","policyProfile":"${profile}"}}
+{"prompt":"Summarize this URL in 3 bullets: ${TARGET_URL}","chatID":"${chat}","model":"${MODEL}","allowedTools":["fetch","web_fetch","fetch_webpage"],"executionContext":{"agentID":"content-summariser","feature":"agents","policyProfile":"${profile}"}}
 JSON
 )
 

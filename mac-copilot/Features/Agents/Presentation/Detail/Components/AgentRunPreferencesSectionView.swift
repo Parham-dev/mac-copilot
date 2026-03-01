@@ -41,8 +41,16 @@ struct AgentRunPreferencesSectionView: View {
                     }
 
                     if isOtherSelected(field) {
-                        TextField("Type custom \(field.label.lowercased())", text: customValueBinding(field))
-                            .textFieldStyle(.roundedBorder)
+                        GrowingTextInputView(
+                            text: customValueBinding(field),
+                            placeholder: "Type custom \(field.label.lowercased())",
+                            minLines: 2,
+                            maxLines: 6,
+                            isEditable: true,
+                            onShiftEnter: nil,
+                            showsTextMetrics: true,
+                            validationMessageProvider: nil
+                        )
                     }
                 }
             }

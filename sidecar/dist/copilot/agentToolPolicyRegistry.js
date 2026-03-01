@@ -13,7 +13,7 @@ const POLICY_PROFILES = {
     },
 };
 const AGENT_DEFAULT_POLICY_PROFILE = {
-    "url-summariser": "default",
+    "content-summariser": "default",
 };
 function normalizeName(value) {
     return value

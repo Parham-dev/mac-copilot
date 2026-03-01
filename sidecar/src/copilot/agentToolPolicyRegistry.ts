@@ -40,7 +40,7 @@ const POLICY_PROFILES: Record<string, PolicyProfileConfig> = {
 };
 
 const AGENT_DEFAULT_POLICY_PROFILE: Record<string, string> = {
-  "url-summariser": "default",
+  "content-summariser": "default",
 };
 
 function normalizeName(value: string) {

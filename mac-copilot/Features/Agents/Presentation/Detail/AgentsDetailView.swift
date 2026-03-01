@@ -58,9 +58,11 @@ struct AgentsDetailView: View {
     @ViewBuilder
     private func runTab(definition: AgentDefinition) -> some View {
         let requirementsFields = definition.inputSchema.fields.filter(isRequirementsField)
-        let selectFields = definition.inputSchema.fields.filter { $0.type == .select }
+        let advancedFields = advancedFields(for: definition)
+        let advancedFieldIDs = Set(advancedFields.map(\ .id))
+        let selectFields = definition.inputSchema.fields.filter { $0.type == .select && !advancedFieldIDs.contains($0.id) }
         let primaryFields = definition.inputSchema.fields.filter {
-            $0.type != .select && !isRequirementsField($0)
+            $0.type != .select && !isRequirementsField($0) && !advancedFieldIDs.contains($0.id)
         }
 
         VStack(spacing: 0) {
@@ -76,7 +78,15 @@ struct AgentsDetailView: View {
                     if !primaryFields.isEmpty {
                         AgentRunPrimaryFieldsSectionView(
                             fields: primaryFields,
-                            bindingForFieldID: binding(for:)
+                            bindingForFieldID: binding(for:),
+                            hasUploadedFiles: viewModel.hasUploadedFiles,
+                            uploadedFiles: viewModel.uploadedFileItems,
+                            onUploadFiles: {
+                                viewModel.addUploadedFiles()
+                            },
+                            onRemoveUploadedFile: { fileID in
+                                viewModel.removeUploadedFile(id: fileID)
+                            }
                         )
                     }
 
@@ -95,6 +105,26 @@ struct AgentsDetailView: View {
                             customValueBinding: { field in
                                 customBinding(for: field)
                             }
+                        )
+                    }
+
+                    if !advancedFields.isEmpty {
+                        AgentRunAdvancedSectionView(
+                            isExpanded: $viewModel.isAdvancedExpanded,
+                            fields: advancedFields,
+                            selectedValue: { field in
+                                viewModel.selectedValue(for: field)
+                            },
+                            onSelectOption: { field, option in
+                                viewModel.selectOption(option, for: field)
+                            },
+                            isOtherSelected: { field in
+                                viewModel.isOtherSelected(for: field)
+                            },
+                            customValueBinding: { field in
+                                customBinding(for: field)
+                            },
+                            extraContext: binding(for: viewModel.advancedExtraContextFieldID)
                         )
                     }
 
@@ -235,5 +265,29 @@ struct AgentsDetailView: View {
     private func isRequirementsField(_ field: AgentInputField) -> Bool {
         let fieldID = field.id.lowercased()
         return fieldID.contains("requirement") || fieldID.contains("constraint")
+    }
+
+    private func advancedFields(for definition: AgentDefinition) -> [AgentInputField] {
+        guard definition.id == "content-summariser" else {
+            return []
+        }
+
+        var fields: [AgentInputField] = []
+
+        if let audienceField = definition.inputSchema.fields.first(where: { $0.id == "audience" }) {
+            fields.append(audienceField)
+        }
+
+        fields.append(
+            AgentInputField(
+                id: viewModel.advancedCitationModeFieldID,
+                label: "Citation Mode",
+                type: .select,
+                required: false,
+                options: ["auto", "inline links", "references"]
+            )
+        )
+
+        return fields
     }
 }

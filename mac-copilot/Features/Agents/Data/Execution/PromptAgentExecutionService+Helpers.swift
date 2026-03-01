@@ -163,18 +163,14 @@ extension PromptAgentExecutionService {
     }
 
     func shouldRequireFetchMCP(for definition: AgentDefinition, requestedURL: String) -> Bool {
-        guard definition.id == "url-summariser", !requestedURL.isEmpty else {
-            return false
-        }
-
-        return definition.optionalSkills.contains(where: { $0.name == "url-fetch" })
+        false
     }
 
     func allowedToolsForExecution(
         definition: AgentDefinition,
         inputPayload: [String: String]
     ) -> [String]? {
-        if definition.id == "url-summariser" {
+        if definition.id == "content-summariser" {
             let requestedURL = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if shouldRequireFetchMCP(for: definition, requestedURL: requestedURL) {
                 return ["fetch"]

@@ -12,11 +12,7 @@ extension AgentsEnvironment {
     }
 
     func shouldRequireFetchMCP(for definition: AgentDefinition, requestedURL: String) -> Bool {
-        guard definition.id == "url-summariser", !requestedURL.isEmpty else {
-            return false
-        }
-
-        return definition.optionalSkills.contains(where: { $0.name == "url-fetch" })
+        false
     }
 
     func normalizedToolName(_ toolName: String) -> String {

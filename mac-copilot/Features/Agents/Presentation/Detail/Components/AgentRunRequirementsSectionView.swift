@@ -15,9 +15,16 @@ struct AgentRunRequirementsSectionView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    TextField(field.id, text: bindingForFieldID(field.id), axis: .vertical)
-                        .lineLimit(3...6)
-                        .textFieldStyle(.roundedBorder)
+                    GrowingTextInputView(
+                        text: bindingForFieldID(field.id),
+                        placeholder: field.id,
+                        minLines: 3,
+                        maxLines: 8,
+                        isEditable: true,
+                        onShiftEnter: nil,
+                        showsTextMetrics: true,
+                        validationMessageProvider: nil
+                    )
                 }
             }
         }

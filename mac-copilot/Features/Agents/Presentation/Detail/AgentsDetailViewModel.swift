@@ -5,6 +5,14 @@ import Combine
 
 @MainActor
 final class AgentsDetailViewModel: ObservableObject {
+    struct UploadedFile: Identifiable {
+        let id: UUID
+        let name: String
+        let type: String
+        let url: URL
+        let content: String
+    }
+
     enum Tab: String, CaseIterable, Identifiable {
         case run = "Run"
         case history = "History"
@@ -20,6 +28,11 @@ final class AgentsDetailViewModel: ObservableObject {
     @Published var selectedTab: Tab = .run
     @Published var selectedRunID: UUID?
     @Published var pendingDeleteRun: AgentRun?
+    @Published var isAdvancedExpanded = false
+    @Published private(set) var uploadedFiles: [UploadedFile] = []
+
+    let advancedCitationModeFieldID = "advancedCitationMode"
+    let advancedExtraContextFieldID = "advancedExtraContext"
 
     private var activeAgentID: String?
 
@@ -28,6 +41,16 @@ final class AgentsDetailViewModel: ObservableObject {
             return "Running..."
         }
         return "Run"
+    }
+
+    var uploadedFileItems: [AgentUploadedFileItem] {
+        uploadedFiles.map { file in
+            AgentUploadedFileItem(id: file.id, name: file.name, type: file.type)
+        }
+    }
+
+    var hasUploadedFiles: Bool {
+        !uploadedFiles.isEmpty
     }
 
     func selectedValue(for field: AgentInputField) -> String {
@@ -69,6 +92,8 @@ final class AgentsDetailViewModel: ObservableObject {
         runActivity = nil
         selectedRunID = nil
         pendingDeleteRun = nil
+        isAdvancedExpanded = false
+        uploadedFiles = []
 
         var initialValues: [String: String] = [:]
         for field in definition.inputSchema.fields {
@@ -79,6 +104,7 @@ final class AgentsDetailViewModel: ObservableObject {
             }
         }
         formValues = initialValues
+        applyAdvancedDefaultsIfNeeded(definition: definition)
 
         environment.loadRuns(agentID: definition.id)
         let runs = runsForCurrentAgent(definition.id, environment: environment)
@@ -98,6 +124,9 @@ final class AgentsDetailViewModel: ObservableObject {
 
         for field in definition.inputSchema.fields where field.required {
             let value = (submissionPayload[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if field.type == .url, value.isEmpty, hasUploadedFiles {
+                continue
+            }
             if value.isEmpty {
                 errorMessage = "Please fill required field: \(field.label)"
                 return
@@ -266,6 +295,54 @@ final class AgentsDetailViewModel: ObservableObject {
         NSPasteboard.general.setString(value, forType: .string)
     }
 
+    func addUploadedFiles() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.resolvesAliases = true
+        panel.prompt = "Add"
+
+        guard panel.runModal() == .OK else {
+            return
+        }
+
+        var newlyAdded: [UploadedFile] = []
+        var failedFiles: [String] = []
+
+        for url in panel.urls {
+            if uploadedFiles.contains(where: { $0.url == url }) {
+                continue
+            }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let content = String(decoding: data, as: UTF8.self)
+                let type = fileType(for: url)
+                let file = UploadedFile(
+                    id: UUID(),
+                    name: url.lastPathComponent,
+                    type: type,
+                    url: url,
+                    content: content
+                )
+                newlyAdded.append(file)
+            } catch {
+                failedFiles.append(url.lastPathComponent)
+            }
+        }
+
+        uploadedFiles.append(contentsOf: newlyAdded)
+
+        if !failedFiles.isEmpty {
+            errorMessage = "Some files could not be loaded: \(failedFiles.joined(separator: ", "))"
+        }
+    }
+
+    func removeUploadedFile(id: UUID) {
+        uploadedFiles.removeAll { $0.id == id }
+    }
+
     private func fileExtension(for format: String) -> String {
         switch format {
         case "json":
@@ -306,6 +383,50 @@ final class AgentsDetailViewModel: ObservableObject {
             payload.removeValue(forKey: customValueKey(for: field.id))
         }
 
+        payload = payload.filter { key, value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !trimmed.isEmpty
+        }
+
+        if !uploadedFiles.isEmpty {
+            payload["uploadedFiles"] = uploadedFiles.map(\ .name).joined(separator: ", ")
+
+            let combined = uploadedFiles
+                .map { file in
+                    """
+                    ### File: \(file.name)
+                    Type: \(file.type)
+                    \(file.content)
+                    """
+                }
+                .joined(separator: "\n\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if !combined.isEmpty {
+                payload["uploadedFilesContext"] = combined
+            }
+        }
+
         return payload
     }
+
+    private func applyAdvancedDefaultsIfNeeded(definition: AgentDefinition) {
+        guard definition.id == "content-summariser" else {
+            return
+        }
+
+        if formValues[advancedCitationModeFieldID]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            formValues[advancedCitationModeFieldID] = "auto"
+        }
+
+        if formValues[advancedExtraContextFieldID] == nil {
+            formValues[advancedExtraContextFieldID] = ""
+        }
+    }
+
+    private func fileType(for url: URL) -> String {
+        let ext = url.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ext.isEmpty ? "file" : ext
+    }
+
 }

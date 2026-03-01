@@ -62,8 +62,7 @@ npm run start:dist
 Fetch MCP note:
 - The sidecar starts Fetch MCP server automatically through `mcpServers`.
 - Default launch uses `uvx mcp-server-fetch`.
-- URL Summariser strict behavior is controlled by agent skill/policy (`url-fetch`) rather than environment flags.
-- In strict mode, URL Summariser narrows its allowed tool list to MCP `fetch` only.
+- Content Summariser URL guidance is documented in agent references (not enforced via an agent-specific runtime skill).
 - App runtime auto-uses `~/.local/bin/uvx` for `COPILOTFORGE_FETCH_MCP_COMMAND` when available (unless you explicitly set the variable).
 
 Fetch MCP troubleshooting:
