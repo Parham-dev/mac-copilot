@@ -15,7 +15,6 @@ final class PromptAgentExecutionService: AgentExecutionServing {
         projectPath: String?
     ) async throws -> AgentExecutionOutput {
         let executionContext = buildExecutionContext(definition: definition, inputPayload: inputPayload)
-        let requestedURL = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let executionAllowedTools = allowedToolsForExecution(
             definition: definition,
             inputPayload: inputPayload
@@ -35,53 +34,35 @@ final class PromptAgentExecutionService: AgentExecutionServing {
             executionContext: executionContext
         )
 
-        var candidateText = primary.finalText
-        var mergedStatuses = primary.statuses
-        var mergedToolEvents = primary.toolEvents
+        let requiredContract = executionContext.requiredContract?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let requiresJSONContract = requiredContract == "json"
 
-        if !requestedURL.isEmpty,
-              !hasSuccessfulURLFetch(in: primary.toolEvents) {
-            let forceFetchPrompt = buildForceFetchPrompt(
-                definition: definition,
-                inputPayload: inputPayload,
-                url: requestedURL
-            )
-
-            NSLog(
-                "[CopilotForge][AgentsExecution] force_fetch stage model=%@ projectPath=%@ allowedTools=%@",
-                model ?? "<none>",
-                projectPath ?? "<none>",
-                executionAllowedTools?.joined(separator: ",") ?? "<none>"
-            )
-
-            let forced = try await consumeStream(
-                prompt: forceFetchPrompt,
-                model: model,
-                projectPath: projectPath,
-                allowedTools: executionAllowedTools,
-                executionContext: executionContext
-            )
-
-            candidateText = forced.finalText
-            mergedStatuses.append("fetch_retry_attempted")
-            mergedStatuses.append(contentsOf: forced.statuses)
-            mergedToolEvents.append(contentsOf: forced.toolEvents)
-        }
-
-        if case .success = AgentRunResultParser.parseDetailed(from: candidateText) {
+        if !requiresJSONContract {
             return AgentExecutionOutput(
-                finalText: candidateText,
-                statuses: mergedStatuses,
-                toolEvents: mergedToolEvents
+                finalText: primary.finalText,
+                statuses: primary.statuses,
+                toolEvents: primary.toolEvents,
+                structured: AgentRunResultParser.parse(from: primary.finalText)
             )
         }
 
-        let repairPrompt = buildRepairPrompt(invalidOutput: candidateText)
+        if let parsed = AgentRunResultParser.parse(from: primary.finalText) {
+            return AgentExecutionOutput(
+                finalText: primary.finalText,
+                statuses: primary.statuses,
+                toolEvents: primary.toolEvents,
+                structured: parsed
+            )
+        }
+
+        let repairPrompt = buildRepairPrompt(invalidOutput: primary.finalText)
         NSLog(
-            "[CopilotForge][AgentsExecution] repair stage model=%@ projectPath=%@ allowedTools=<none>",
+            "[CopilotForge][AgentsExecution] repair stage model=%@ projectPath=%@ allowedTools=<none> requiredContract=%@",
             model ?? "<none>",
-            projectPath ?? "<none>"
+            projectPath ?? "<none>",
+            requiredContract
         )
+
         let repaired = try await consumeStream(
             prompt: repairPrompt,
             model: model,
@@ -90,13 +71,11 @@ final class PromptAgentExecutionService: AgentExecutionServing {
             executionContext: executionContext
         )
 
-        mergedStatuses.append("repair_attempted")
-        mergedStatuses.append(contentsOf: repaired.statuses)
-
         return AgentExecutionOutput(
             finalText: repaired.finalText,
-            statuses: mergedStatuses,
-            toolEvents: mergedToolEvents
+            statuses: primary.statuses + ["repair_attempted"] + repaired.statuses,
+            toolEvents: primary.toolEvents,
+            structured: AgentRunResultParser.parse(from: repaired.finalText)
         )
     }
 }

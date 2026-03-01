@@ -33,6 +33,12 @@ export function registerPromptRoute(app: Express) {
               .filter((entry) => typeof entry === "string") as string[]
             : [],
           requireSkills: (rawExecutionContext as Record<string, unknown>).requireSkills === true,
+          requestedOutputMode: typeof (rawExecutionContext as Record<string, unknown>).requestedOutputMode === "string"
+            ? (rawExecutionContext as Record<string, unknown>).requestedOutputMode as string
+            : "",
+          requiredContract: typeof (rawExecutionContext as Record<string, unknown>).requiredContract === "string"
+            ? (rawExecutionContext as Record<string, unknown>).requiredContract as string
+            : "",
         }
       : null;
     const normalizedExecutionContext = executionContext
@@ -47,6 +53,8 @@ export function registerPromptRoute(app: Express) {
             .map((entry) => entry.trim())
             .filter((entry) => entry.length > 0),
           requireSkills: executionContext.requireSkills,
+          requestedOutputMode: executionContext.requestedOutputMode.trim(),
+          requiredContract: executionContext.requiredContract.trim(),
         }
       : null;
 

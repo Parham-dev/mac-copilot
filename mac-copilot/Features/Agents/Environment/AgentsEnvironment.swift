@@ -210,23 +210,35 @@ final class AgentsEnvironment: ObservableObject {
                 return completed
             }
 
-            switch AgentRunResultParser.parseDetailed(from: output.finalText) {
-            case .success(let parsed):
-                completed.status = .completed
-                completed.finalOutput = AgentRunResultParser.encodePretty(parsed)
-            case .failure(let parseError):
-                completed.status = .failed
-                completed.finalOutput = nil
-                completed.diagnostics.warnings.append("schema_parse_failed")
-                completed.diagnostics.warnings.append(parseError.localizedDescription)
+            let requestedOutputMode = normalizedOutputMode(inputPayload["outputFormat"])
+            let requiresJSONContract = requestedOutputMode == "json"
 
-                NSLog(
-                    "[CopilotForge][AgentsEnvironment] schema validation failed agentID=%@ runID=%@ reason=%@ outputPreview=%@",
-                    definition.id,
-                    completed.id.uuidString,
-                    parseError.localizedDescription,
-                    String(output.finalText.prefix(800))
-                )
+            if requiresJSONContract {
+                switch AgentRunResultParser.parseDetailed(from: output.finalText) {
+                case .success(let parsed):
+                    completed.status = .completed
+                    completed.finalOutput = AgentRunResultParser.encodePretty(parsed)
+                case .failure(let parseError):
+                    completed.status = .failed
+                    completed.finalOutput = nil
+                    completed.diagnostics.warnings.append("schema_parse_failed")
+                    completed.diagnostics.warnings.append(parseError.localizedDescription)
+
+                    NSLog(
+                        "[CopilotForge][AgentsEnvironment] schema validation failed agentID=%@ runID=%@ reason=%@ outputPreview=%@",
+                        definition.id,
+                        completed.id.uuidString,
+                        parseError.localizedDescription,
+                        String(output.finalText.prefix(800))
+                    )
+                }
+            } else {
+                completed.status = .completed
+                completed.finalOutput = output.finalText
+
+                if output.structured != nil {
+                    completed.diagnostics.warnings.append("structured_output_available")
+                }
             }
 
             try updateRun(completed)
@@ -249,6 +261,28 @@ final class AgentsEnvironment: ObservableObject {
             try updateRun(failed)
             loadRuns(agentID: definition.id)
             throw error
+        }
+    }
+}
+
+private extension AgentsEnvironment {
+    func normalizedOutputMode(_ rawValue: String?) -> String {
+        let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if value.isEmpty {
+            return "text"
+        }
+
+        switch value {
+        case "markdown", "markdown brief":
+            return "markdown"
+        case "json":
+            return "json"
+        case "table":
+            return "table"
+        case "text", "bullet":
+            return "text"
+        default:
+            return "text"
         }
     }
 }

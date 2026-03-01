@@ -4,6 +4,7 @@ struct AgentExecutionOutput {
     var finalText: String
     var statuses: [String]
     var toolEvents: [PromptToolExecutionEvent]
+    var structured: AgentRunResult? = nil
 }
 
 @MainActor

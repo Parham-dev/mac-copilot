@@ -100,14 +100,33 @@ struct AgentsDetailView: View {
 
                 if let latestRun {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Result")
-                            .font(.headline)
+                        HStack {
+                            Text("Result")
+                                .font(.headline)
+
+                            Spacer()
+
+                            let format = displayOutputFormat(for: latestRun)
+                            Text(format.uppercased())
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            if let resultText = preferredResultText(for: latestRun),
+                               !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Button {
+                                    copyToClipboard(resultText)
+                                } label: {
+                                    Label("Copy", systemImage: "doc.on.doc")
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
 
                         if let finalOutput = latestRun.finalOutput,
                            !finalOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             ScrollView {
                                 Text(finalOutput)
-                                    .font(.system(.callout, design: .monospaced))
+                                    .font(resultFont(for: latestRun))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(10)
@@ -249,7 +268,7 @@ struct AgentsDetailView: View {
                 latestRun = run
 
                 if run.status == .failed {
-                    errorMessage = "Run completed but output schema validation failed."
+                    errorMessage = "Run completed with a validation or execution issue. See warnings for details."
                 }
             } catch {
                 errorMessage = "Execution failed. Please retry."
@@ -261,5 +280,51 @@ struct AgentsDetailView: View {
 
     private func recentRuns(for agentID: String) -> [AgentRun] {
         Array(agentsEnvironment.runs.filter { $0.agentID == agentID }.prefix(5))
+    }
+
+    private func preferredResultText(for run: AgentRun) -> String? {
+        if let finalOutput = run.finalOutput,
+           !finalOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return finalOutput
+        }
+
+        if let streamedOutput = run.streamedOutput,
+           !streamedOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return streamedOutput
+        }
+
+        return nil
+    }
+
+    private func displayOutputFormat(for run: AgentRun) -> String {
+        let value = run.inputPayload["outputFormat"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+
+        switch value {
+        case "markdown", "markdown brief":
+            return "markdown"
+        case "json":
+            return "json"
+        case "text", "bullet":
+            return "text"
+        default:
+            if let finalOutput = run.finalOutput,
+               AgentRunResultParser.parse(from: finalOutput) != nil {
+                return "json"
+            }
+            return "text"
+        }
+    }
+
+    private func resultFont(for run: AgentRun) -> Font {
+        displayOutputFormat(for: run) == "json"
+            ? .system(.callout, design: .monospaced)
+            : .callout
+    }
+
+    private func copyToClipboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
     }
 }

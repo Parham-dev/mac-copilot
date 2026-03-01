@@ -35,7 +35,7 @@ private extension BuiltInAgentDefinitionRepository {
                     AgentInputField(id: "audience", label: "Audience", type: .select, required: false, options: ["general", "founder", "engineer", "marketer"]),
                     AgentInputField(id: "tone", label: "Tone", type: .select, required: false, options: ["neutral", "concise", "executive"]),
                     AgentInputField(id: "length", label: "Length", type: .select, required: false, options: ["short", "medium", "long"]),
-                    AgentInputField(id: "outputFormat", label: "Output Format", type: .select, required: false, options: ["bullet", "markdown brief", "table"])
+                    AgentInputField(id: "outputFormat", label: "Output Format", type: .select, required: false, options: ["markdown", "text", "json"])
                 ]),
                 outputTemplate: AgentOutputTemplate(sectionOrder: [
                     "TL;DR",

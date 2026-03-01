@@ -30,6 +30,12 @@ export function registerPromptRoute(app) {
                         .filter((entry) => typeof entry === "string")
                     : [],
                 requireSkills: rawExecutionContext.requireSkills === true,
+                requestedOutputMode: typeof rawExecutionContext.requestedOutputMode === "string"
+                    ? rawExecutionContext.requestedOutputMode
+                    : "",
+                requiredContract: typeof rawExecutionContext.requiredContract === "string"
+                    ? rawExecutionContext.requiredContract
+                    : "",
             }
             : null;
         const normalizedExecutionContext = executionContext
@@ -44,6 +50,8 @@ export function registerPromptRoute(app) {
                     .map((entry) => entry.trim())
                     .filter((entry) => entry.length > 0),
                 requireSkills: executionContext.requireSkills,
+                requestedOutputMode: executionContext.requestedOutputMode.trim(),
+                requiredContract: executionContext.requiredContract.trim(),
             }
             : null;
         res.setHeader("Content-Type", "text/event-stream");

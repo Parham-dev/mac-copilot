@@ -30,13 +30,25 @@ enum PromptStreamRequestBuilder {
         }
 
         if let executionContext {
-            payload["executionContext"] = [
+            var contextPayload: [String: Any] = [
                 "agentID": executionContext.agentID,
                 "feature": executionContext.feature,
                 "policyProfile": executionContext.policyProfile,
                 "skillNames": executionContext.skillNames,
                 "requireSkills": executionContext.requireSkills,
             ]
+
+            if let requestedOutputMode = executionContext.requestedOutputMode,
+               !requestedOutputMode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                contextPayload["requestedOutputMode"] = requestedOutputMode
+            }
+
+            if let requiredContract = executionContext.requiredContract,
+               !requiredContract.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                contextPayload["requiredContract"] = requiredContract
+            }
+
+            payload["executionContext"] = contextPayload
         }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)

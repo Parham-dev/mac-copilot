@@ -4,6 +4,8 @@ export type AgentExecutionContext = {
   policyProfile: string;
   skillNames?: string[];
   requireSkills?: boolean;
+  requestedOutputMode?: string;
+  requiredContract?: string;
 };
 
 export type ToolClass = "native" | "custom" | "mcp" | "unknown";

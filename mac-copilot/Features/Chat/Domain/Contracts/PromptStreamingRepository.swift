@@ -29,6 +29,8 @@ struct PromptExecutionContext: Equatable {
     let policyProfile: String
     let skillNames: [String]
     let requireSkills: Bool
+    let requestedOutputMode: String?
+    let requiredContract: String?
 }
 
 protocol PromptStreamingRepository {

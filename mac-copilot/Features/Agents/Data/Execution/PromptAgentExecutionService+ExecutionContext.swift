@@ -21,14 +21,44 @@ extension PromptAgentExecutionService {
             .filter { !$0.isEmpty }
 
         let requireSkills = shouldRequireAgentSkills()
+        let requestedOutputMode = requestedOutputMode(from: inputPayload)
+        let requiredContract = requiredContract(for: definition, requestedOutputMode: requestedOutputMode)
 
         return PromptExecutionContext(
             agentID: definition.id,
             feature: "agents",
             policyProfile: policyProfile,
             skillNames: skillNames,
-            requireSkills: requireSkills
+            requireSkills: requireSkills,
+            requestedOutputMode: requestedOutputMode,
+            requiredContract: requiredContract
         )
+    }
+
+    func requestedOutputMode(from inputPayload: [String: String]) -> String {
+        let value = inputPayload["outputFormat"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if value.isEmpty {
+            return "auto"
+        }
+
+        let normalized = value.lowercased()
+        if normalized == "markdown brief" {
+            return "markdown"
+        }
+        if normalized == "bullet" {
+            return "text"
+        }
+
+        return normalized
+    }
+
+    func requiredContract(for definition: AgentDefinition, requestedOutputMode: String) -> String {
+        let mode = requestedOutputMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard mode == "json" else {
+            return "none"
+        }
+
+        return "json"
     }
 
     func shouldRequireAgentSkills() -> Bool {
