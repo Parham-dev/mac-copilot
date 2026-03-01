@@ -7,7 +7,6 @@ export function extractToolExecutionResult(event, toolNameByCallID) {
     const inferredSuccessFromResultType = resultType
         ? !(resultType === "failure" || resultType === "denied" || resultType === "error")
         : null;
-    const success = explicitSuccess ?? inferredSuccessFromResultType ?? true;
     const toolCallID = event?.data?.toolCallId;
     const toolName = event?.data?.toolName
         ?? (typeof toolCallID === "string" ? toolNameByCallID.get(toolCallID) : null)
@@ -42,6 +41,24 @@ export function extractToolExecutionResult(event, toolNameByCallID) {
         ?? (typeof resultContent === "string" && resultContent.length > 0 ? resultContent : null)
         ?? (typeof textResultForLlm === "string" && textResultForLlm.length > 0 ? textResultForLlm : null)
         ?? (typeof errorMessage === "string" && errorMessage.length > 0 ? errorMessage : null);
+    const deniedByHook = typeof textResultForLlm === "string"
+        && /denied by pretooluse hook/i.test(textResultForLlm);
+    const hasMeaningfulResult = typeof detailsRaw === "string" && detailsRaw.trim().length > 0;
+    const success = (() => {
+        if (inferredSuccessFromResultType !== null) {
+            return inferredSuccessFromResultType;
+        }
+        if (explicitSuccess === null) {
+            return true;
+        }
+        if (explicitSuccess === false
+            && hasMeaningfulResult
+            && !deniedByHook
+            && !(typeof errorMessage === "string" && errorMessage.trim().length > 0)) {
+            return true;
+        }
+        return explicitSuccess;
+    })();
     let details = typeof detailsRaw === "string" ? detailsRaw : "";
     details = details
         .replace(/\n+/g, " ")

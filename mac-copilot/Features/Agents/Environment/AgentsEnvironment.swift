@@ -118,7 +118,8 @@ final class AgentsEnvironment: ObservableObject {
         projectID: UUID?,
         inputPayload: [String: String],
         model: String? = nil,
-        projectPath: String? = nil
+        projectPath: String? = nil,
+        onProgress: ((String) -> Void)? = nil
     ) async throws -> AgentRun {
         let queued = try createRun(
             agentID: definition.id,
@@ -135,7 +136,8 @@ final class AgentsEnvironment: ObservableObject {
                 definition: definition,
                 inputPayload: inputPayload,
                 model: model,
-                projectPath: projectPath
+                projectPath: projectPath,
+                onProgress: onProgress
             )
 
             var completed = running

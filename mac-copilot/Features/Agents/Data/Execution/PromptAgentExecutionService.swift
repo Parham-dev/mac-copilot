@@ -12,8 +12,10 @@ final class PromptAgentExecutionService: AgentExecutionServing {
         definition: AgentDefinition,
         inputPayload: [String: String],
         model: String?,
-        projectPath: String?
+        projectPath: String?,
+        onProgress: ((String) -> Void)?
     ) async throws -> AgentExecutionOutput {
+        onProgress?("Preparing request…")
         let executionContext = buildExecutionContext(definition: definition, inputPayload: inputPayload)
         let executionAllowedTools = allowedToolsForExecution(
             definition: definition,
@@ -31,7 +33,19 @@ final class PromptAgentExecutionService: AgentExecutionServing {
             model: model,
             projectPath: projectPath,
             allowedTools: executionAllowedTools,
-            executionContext: executionContext
+            executionContext: executionContext,
+            onStreamEvent: { event in
+                switch event {
+                case .status(let status):
+                    onProgress?(status)
+                case .toolExecution(let tool):
+                    onProgress?("Tool \(tool.success ? "done" : "failed"): \(tool.toolName)")
+                case .completed:
+                    onProgress?("Finalizing response…")
+                case .textDelta:
+                    break
+                }
+            }
         )
 
         let requiredContract = executionContext.requiredContract?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
@@ -70,7 +84,19 @@ final class PromptAgentExecutionService: AgentExecutionServing {
             model: model,
             projectPath: projectPath,
             allowedTools: [],
-            executionContext: executionContext
+            executionContext: executionContext,
+            onStreamEvent: { event in
+                switch event {
+                case .status(let status):
+                    onProgress?(status)
+                case .toolExecution(let tool):
+                    onProgress?("Tool \(tool.success ? "done" : "failed"): \(tool.toolName)")
+                case .completed:
+                    onProgress?("Finalizing response…")
+                case .textDelta:
+                    break
+                }
+            }
         )
 
         return AgentExecutionOutput(

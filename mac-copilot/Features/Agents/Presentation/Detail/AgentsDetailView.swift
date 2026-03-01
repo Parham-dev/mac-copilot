@@ -9,6 +9,7 @@ struct AgentsDetailView: View {
     @State private var errorMessage: String?
     @State private var isRunning = false
     @State private var latestRun: AgentRun?
+    @State private var runActivity: String?
 
     var body: some View {
         if let item = selection as? AgentsFeatureModule.SidebarItem {
@@ -94,6 +95,16 @@ struct AgentsDetailView: View {
 
                     if let latestRun {
                         Text("Latest run: \(latestRun.status.rawValue)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if isRunning, let runActivity, !runActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("AI is working: \(runActivity)")
+                            .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -223,6 +234,7 @@ struct AgentsDetailView: View {
         errorMessage = nil
         isRunning = false
         latestRun = nil
+        runActivity = nil
 
         var initialValues: [String: String] = [:]
         for field in definition.inputSchema.fields {
@@ -255,6 +267,7 @@ struct AgentsDetailView: View {
         }
 
         isRunning = true
+        runActivity = "Starting…"
         Task { @MainActor in
             do {
                 let run = try await agentsEnvironment.executeRun(
@@ -262,7 +275,10 @@ struct AgentsDetailView: View {
                     projectID: nil,
                     inputPayload: formValues,
                     model: selectedModel,
-                    projectPath: nil
+                    projectPath: nil,
+                    onProgress: { progress in
+                        runActivity = progress
+                    }
                 )
 
                 latestRun = run
@@ -275,6 +291,7 @@ struct AgentsDetailView: View {
             }
 
             isRunning = false
+            runActivity = nil
         }
     }
 

@@ -129,7 +129,8 @@ extension PromptAgentExecutionService {
         model: String?,
         projectPath: String?,
         allowedTools: [String]?,
-        executionContext: PromptExecutionContext?
+        executionContext: PromptExecutionContext?,
+        onStreamEvent: ((PromptStreamEvent) -> Void)? = nil
     ) async throws -> AgentExecutionOutput {
         let stream = promptRepository.streamPrompt(
             prompt,
@@ -145,6 +146,7 @@ extension PromptAgentExecutionService {
         var toolEvents: [PromptToolExecutionEvent] = []
 
         for try await event in stream {
+            onStreamEvent?(event)
             switch event {
             case .textDelta(let delta):
                 text += delta

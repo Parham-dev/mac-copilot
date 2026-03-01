@@ -13,6 +13,7 @@ protocol AgentExecutionServing {
         definition: AgentDefinition,
         inputPayload: [String: String],
         model: String?,
-        projectPath: String?
+        projectPath: String?,
+        onProgress: ((String) -> Void)?
     ) async throws -> AgentExecutionOutput
 }
