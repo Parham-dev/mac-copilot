@@ -45,7 +45,6 @@ extension PromptAgentExecutionService {
         - Keep output strictly in the requested format; do not add extra wrapper text.
         - Do NOT claim fetch results unless a tool call succeeded.
         - \(outputInstruction)
-        - Optional: if easy, include companion structured JSON in a trailing section titled `structured`.
 
         URL (must be fetched with tool before summarizing):
         \(urlValue.isEmpty ? "<missing>" : urlValue)
@@ -72,6 +71,29 @@ extension PromptAgentExecutionService {
         Input text:
         \(invalidOutput)
         """
+    }
+
+    func splitStructuredCompanion(from text: String) -> (displayText: String, structured: AgentRunResult?) {
+        let pattern = "(?is)\\n?#{2,6}\\s*structured\\s*```json\\s*([\\s\\S]*?)\\s*```"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return (text.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+        }
+
+        let fullRange = NSRange(location: 0, length: (text as NSString).length)
+        guard let match = regex.firstMatch(in: text, options: [], range: fullRange) else {
+            return (text.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+        }
+
+        let nsText = text as NSString
+        let structuredRange = match.range(at: 1)
+        let structuredJSON = structuredRange.location != NSNotFound ? nsText.substring(with: structuredRange) : ""
+        let parsedStructured = AgentRunResultParser.parse(from: structuredJSON)
+
+        let cleaned = nsText.replacingCharacters(in: match.range, with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return (cleaned, parsedStructured)
     }
 
     func isFetchMCPTool(_ toolName: String) -> Bool {

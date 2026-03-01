@@ -235,10 +235,6 @@ final class AgentsEnvironment: ObservableObject {
             } else {
                 completed.status = .completed
                 completed.finalOutput = output.finalText
-
-                if output.structured != nil {
-                    completed.diagnostics.warnings.append("structured_output_available")
-                }
             }
 
             try updateRun(completed)

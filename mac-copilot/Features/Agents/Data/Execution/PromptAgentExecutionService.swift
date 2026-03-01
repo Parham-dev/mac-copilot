@@ -38,11 +38,13 @@ final class PromptAgentExecutionService: AgentExecutionServing {
         let requiresJSONContract = requiredContract == "json"
 
         if !requiresJSONContract {
+            let split = splitStructuredCompanion(from: primary.finalText)
+
             return AgentExecutionOutput(
-                finalText: primary.finalText,
+                finalText: split.displayText,
                 statuses: primary.statuses,
                 toolEvents: primary.toolEvents,
-                structured: AgentRunResultParser.parse(from: primary.finalText)
+                structured: split.structured ?? AgentRunResultParser.parse(from: primary.finalText)
             )
         }
 
