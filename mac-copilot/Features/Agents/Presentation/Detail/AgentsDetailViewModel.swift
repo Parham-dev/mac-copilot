@@ -10,7 +10,7 @@ final class AgentsDetailViewModel: ObservableObject {
         let name: String
         let type: String
         let url: URL
-        let content: String
+        let sizeBytes: Int64
     }
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -122,15 +122,9 @@ final class AgentsDetailViewModel: ObservableObject {
             return
         }
 
-        for field in definition.inputSchema.fields where field.required {
-            let value = (submissionPayload[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if field.type == .url, value.isEmpty, hasUploadedFiles {
-                continue
-            }
-            if value.isEmpty {
-                errorMessage = "Please fill required field: \(field.label)"
-                return
-            }
+        if let validationError = validationError(definition: definition, submissionPayload: submissionPayload) {
+            errorMessage = validationError
+            return
         }
 
         isRunning = true
@@ -316,15 +310,19 @@ final class AgentsDetailViewModel: ObservableObject {
             }
 
             do {
-                let data = try Data(contentsOf: url)
-                let content = String(decoding: data, as: UTF8.self)
+                let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                guard values.isRegularFile ?? true else {
+                    failedFiles.append(url.lastPathComponent)
+                    continue
+                }
+
                 let type = fileType(for: url)
                 let file = UploadedFile(
                     id: UUID(),
                     name: url.lastPathComponent,
                     type: type,
                     url: url,
-                    content: content
+                    sizeBytes: Int64(values.fileSize ?? 0)
                 )
                 newlyAdded.append(file)
             } catch {
@@ -388,26 +386,89 @@ final class AgentsDetailViewModel: ObservableObject {
             return !trimmed.isEmpty
         }
 
-        if !uploadedFiles.isEmpty {
-            payload["uploadedFiles"] = uploadedFiles.map(\ .name).joined(separator: ", ")
+        appendUploadedFileReferences(to: &payload)
+        appendContentSummariserSourceMetadata(to: &payload, definition: definition)
 
-            let combined = uploadedFiles
-                .map { file in
-                    """
-                    ### File: \(file.name)
-                    Type: \(file.type)
-                    \(file.content)
-                    """
-                }
-                .joined(separator: "\n\n")
+        return payload
+    }
+
+    private func validationError(definition: AgentDefinition, submissionPayload: [String: String]) -> String? {
+        if definition.id == "content-summariser" {
+            let hasSourceText = !(submissionPayload["url"] ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+            let hasUploadedFiles = !(submissionPayload["uploadedFilesManifest"] ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
 
-            if !combined.isEmpty {
-                payload["uploadedFilesContext"] = combined
+            if !hasSourceText && !hasUploadedFiles {
+                return "Provide at least one source: URL, text content, or uploaded files."
             }
         }
 
-        return payload
+        for field in definition.inputSchema.fields where field.required {
+            let value = (submissionPayload[field.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if value.isEmpty {
+                return "Please fill required field: \(field.label)"
+            }
+        }
+
+        return nil
+    }
+
+    private func appendUploadedFileReferences(to payload: inout [String: String]) {
+        guard !uploadedFiles.isEmpty else { return }
+
+        payload["uploadedFiles"] = uploadedFiles.map(\ .name).joined(separator: ", ")
+        payload["uploadedFilePaths"] = uploadedFiles.map { $0.url.path }.joined(separator: ", ")
+        payload["uploadedFilesManifest"] = uploadedFiles
+            .map { file in
+                let escapedPath = file.url.path.replacingOccurrences(of: "|", with: "%7C")
+                return "\(file.name)|\(file.type)|\(file.sizeBytes)|\(escapedPath)"
+            }
+            .joined(separator: "\n")
+    }
+
+    private func appendContentSummariserSourceMetadata(to payload: inout [String: String], definition: AgentDefinition) {
+        guard definition.id == "content-summariser" else { return }
+
+        let sourceInputValue = (payload["url"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceInputKind = isLikelyURL(sourceInputValue) ? "url" : "text"
+        let hasSourceInput = !sourceInputValue.isEmpty
+        let hasFiles = !uploadedFiles.isEmpty
+
+        let sourceKinds: [String] = [
+            hasSourceInput ? sourceInputKind : "",
+            hasFiles ? "files" : ""
+        ].filter { !$0.isEmpty }
+
+        let sourceKind = sourceKinds.count > 1
+            ? "mixed"
+            : (sourceKinds.first ?? "unknown")
+
+        payload["sourceKind"] = sourceKind
+        payload["sourceCount"] = "\(sourceKinds.count)"
+
+        switch sourceKind {
+        case "url":
+            payload["sourceSummary"] = sourceInputValue
+        case "files":
+            payload["sourceSummary"] = "\(uploadedFiles.count) file(s)"
+        case "text":
+            payload["sourceSummary"] = "text content"
+        case "mixed":
+            payload["sourceSummary"] = sourceKinds.joined(separator: " + ")
+        default:
+            payload["sourceSummary"] = "no source provided"
+        }
+
+        if hasSourceInput {
+            payload["sourceInput"] = sourceInputValue
+        }
+
+        if hasFiles {
+            payload["sourceFileCount"] = "\(uploadedFiles.count)"
+        }
     }
 
     private func applyAdvancedDefaultsIfNeeded(definition: AgentDefinition) {
@@ -427,6 +488,20 @@ final class AgentsDetailViewModel: ObservableObject {
     private func fileType(for url: URL) -> String {
         let ext = url.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return ext.isEmpty ? "file" : ext
+    }
+
+    private func isLikelyURL(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        if let components = URLComponents(string: trimmed),
+           let scheme = components.scheme?.lowercased(),
+           ["http", "https"].contains(scheme),
+           components.host?.isEmpty == false {
+            return true
+        }
+
+        return trimmed.lowercased().hasPrefix("www.")
     }
 
 }

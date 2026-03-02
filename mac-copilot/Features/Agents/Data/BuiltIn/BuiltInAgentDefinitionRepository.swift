@@ -30,7 +30,7 @@ private extension BuiltInAgentDefinitionRepository {
                 description: "Summarise URLs, files, or pasted text into structured, decision-ready output.",
                 allowedToolsDefault: ["fetch", "web_fetch", "fetch_webpage"],
                 inputSchema: AgentInputSchema(fields: [
-                    AgentInputField(id: "url", label: "URL", type: .url, required: true),
+                    AgentInputField(id: "url", label: "URL", type: .url, required: false),
                     AgentInputField(id: "goal", label: "Goal", type: .select, required: false, options: ["summary", "key takeaways", "action items", "compare"]),
                     AgentInputField(id: "audience", label: "Audience", type: .select, required: false, options: ["general", "founder", "engineer", "marketer"]),
                     AgentInputField(id: "tone", label: "Tone", type: .select, required: false, options: ["neutral", "concise", "executive"]),
@@ -46,6 +46,11 @@ private extension BuiltInAgentDefinitionRepository {
                 ]),
                 requiredConnections: [],
                     optionalSkills: [
+                        AgentSkillRef(
+                            name: "content-summariser",
+                            description: "Runtime guidance for mixed-source content summarisation.",
+                            location: "skills/agents/content-summariser"
+                        ),
                         AgentSkillRef(
                             name: "agent-json-contract",
                             description: "Schema-safe JSON output contract and repair behavior.",

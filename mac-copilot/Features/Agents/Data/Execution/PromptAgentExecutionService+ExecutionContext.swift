@@ -5,7 +5,7 @@ extension PromptAgentExecutionService {
         definition: AgentDefinition,
         inputPayload: [String: String]
     ) -> PromptExecutionContext {
-        let requestedURL = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let requestedURL = urlValueRequiringFetch(from: inputPayload)
         let strictFetchMCP = shouldRequireFetchMCP(for: definition, requestedURL: requestedURL)
 
         let policyProfile: String
@@ -78,5 +78,35 @@ extension PromptAgentExecutionService {
         }
 
         return true
+    }
+
+    func urlValueRequiringFetch(from inputPayload: [String: String]) -> String {
+        let sourceKind = inputPayload["sourceKind"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+
+        let urlValue = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !urlValue.isEmpty else { return "" }
+
+        if sourceKind == "url" || sourceKind == "mixed" {
+            return urlValue
+        }
+
+        if sourceKind == "text" || sourceKind == "files" {
+            return ""
+        }
+
+        if let components = URLComponents(string: urlValue),
+           let scheme = components.scheme?.lowercased(),
+           ["http", "https"].contains(scheme),
+           components.host?.isEmpty == false {
+            return urlValue
+        }
+
+        if urlValue.lowercased().hasPrefix("www.") {
+            return urlValue
+        }
+
+        return ""
     }
 }

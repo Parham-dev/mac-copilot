@@ -44,11 +44,16 @@ function discoverScopedSkillDirectories(baseDirectories, agentID) {
     const candidates = [];
     for (const baseDirectory of baseDirectories) {
         const shared = resolve(baseDirectory, "shared");
+        const agents = resolve(baseDirectory, "agents");
         const scoped = resolve(baseDirectory, "agents", agentID);
+        const scopedManifest = resolve(scoped, "SKILL.md");
         if (existsSync(shared)) {
             candidates.push(shared);
         }
-        if (existsSync(scoped)) {
+        if (existsSync(scopedManifest) && existsSync(agents)) {
+            candidates.push(agents);
+        }
+        else if (existsSync(scoped)) {
             candidates.push(scoped);
         }
     }

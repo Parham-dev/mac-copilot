@@ -42,14 +42,14 @@ struct AgentRunPrimaryFieldsSectionView: View {
     }
 
     private func label(for field: AgentInputField) -> String {
-        let base = field.type == .url ? "Source (URL or Files)" : field.label
+        let base = field.type == .url ? "Source (URL, Text, or Files)" : field.label
         return field.required ? "\(base) *" : base
     }
 
     private func placeholder(for field: AgentInputField) -> String {
         switch field.type {
         case .url:
-            return "https://example.com"
+            return "https://example.com or paste text"
         case .text, .select:
             return field.id
         }
@@ -67,7 +67,7 @@ struct AgentRunPrimaryFieldsSectionView: View {
             VStack(alignment: .leading, spacing: 8) {
                 GrowingTextInputView(
                     text: bindingForFieldID("url"),
-                    placeholder: "https://example.com",
+                    placeholder: "https://example.com or paste text",
                     minLines: 1,
                     maxLines: 3,
                     isEditable: true,

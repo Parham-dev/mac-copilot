@@ -136,14 +136,20 @@ final class AgentsEnvironment: ObservableObject {
             inputPayload: inputPayload
         )
 
+        let runWorkspace = prepareRunWorkspace(agentID: definition.id, runID: queued.id)
+        var executionInputPayload = inputPayload
+        executionInputPayload["agentWorkspaceRoot"] = runWorkspace.rootPath
+        executionInputPayload["agentRunDirectory"] = runWorkspace.runDirectoryPath
+
         var running = queued
         running.status = .running
+        running.inputPayload = executionInputPayload
         try updateRun(running)
 
         do {
             let output = try await executionService.execute(
                 definition: definition,
-                inputPayload: inputPayload,
+                inputPayload: executionInputPayload,
                 model: model,
                 projectPath: projectPath,
                 onProgress: onProgress
@@ -152,7 +158,7 @@ final class AgentsEnvironment: ObservableObject {
             var completed = running
             completed.streamedOutput = output.finalText
             completed.completedAt = .now
-            let requestedURL = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let requestedURL = urlValueRequiringFetch(from: executionInputPayload)
             let requiresFetchMCP = shouldRequireFetchMCP(for: definition, requestedURL: requestedURL)
             let fetchMCPToolEvents = output.toolEvents.filter { isFetchMCPTool($0.toolName) }
             let hasSuccessfulFetchMCP = output.toolEvents.contains { event in
@@ -221,7 +227,7 @@ final class AgentsEnvironment: ObservableObject {
                 return completed
             }
 
-            let requestedOutputMode = normalizedOutputMode(inputPayload["outputFormat"])
+            let requestedOutputMode = normalizedOutputMode(executionInputPayload["outputFormat"])
             let requiresJSONContract = requestedOutputMode == "json"
 
             if requiresJSONContract {
@@ -273,6 +279,64 @@ final class AgentsEnvironment: ObservableObject {
 }
 
 private extension AgentsEnvironment {
+    func prepareRunWorkspace(agentID: String, runID: UUID) -> (rootPath: String, runDirectoryPath: String) {
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+
+        let rootDirectory = appSupport
+            .appendingPathComponent("CopilotForge", isDirectory: true)
+            .appendingPathComponent("agents", isDirectory: true)
+            .appendingPathComponent(agentID, isDirectory: true)
+
+        let runDirectory = rootDirectory
+            .appendingPathComponent("runs", isDirectory: true)
+            .appendingPathComponent(runID.uuidString, isDirectory: true)
+
+        do {
+            try fileManager.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+        } catch {
+            NSLog(
+                "[CopilotForge][AgentsEnvironment] failed to create run workspace agentID=%@ runID=%@ error=%@",
+                agentID,
+                runID.uuidString,
+                error.localizedDescription
+            )
+        }
+
+        return (rootDirectory.path, runDirectory.path)
+    }
+
+    func urlValueRequiringFetch(from inputPayload: [String: String]) -> String {
+        let sourceKind = inputPayload["sourceKind"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        let urlValue = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !urlValue.isEmpty else { return "" }
+
+        if sourceKind == "url" || sourceKind == "mixed" {
+            return urlValue
+        }
+
+        if sourceKind == "text" || sourceKind == "files" {
+            return ""
+        }
+
+        if let components = URLComponents(string: urlValue),
+           let scheme = components.scheme?.lowercased(),
+           ["http", "https"].contains(scheme),
+           components.host?.isEmpty == false {
+            return urlValue
+        }
+
+        if urlValue.lowercased().hasPrefix("www.") {
+            return urlValue
+        }
+
+        return ""
+    }
+
     func normalizedOutputMode(_ rawValue: String?) -> String {
         let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         if value.isEmpty {
