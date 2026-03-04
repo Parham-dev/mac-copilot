@@ -106,9 +106,10 @@ export function registerPromptRoute(app: Express) {
         normalizedExecutionContext,
         requestId,
         (event) => {
-        const payload = typeof event === "object" && event !== null
+        const basePayload = typeof event === "object" && event !== null
           ? event
           : { type: "text", text: String(event ?? "") };
+        const payload = compactUsagePayload(basePayload as Record<string, unknown>);
 
         const maybeText = typeof (payload as any)?.text === "string" ? String((payload as any).text) : "";
         if (promptTraceEnabled && maybeText.length > 0 && protocolMarkerPattern.test(maybeText)) {
@@ -119,11 +120,11 @@ export function registerPromptRoute(app: Express) {
           }));
         }
 
-        const text = JSON.stringify(payload);
+        const text = safeJSONStringify(payload);
         if (payload.type === "usage") {
           usageEventCount += 1;
-          lastUsageSnapshot = payload;
-          telemetry.onUsage(payload);
+          lastUsageSnapshot = payload as Record<string, unknown>;
+          telemetry.onUsage(payload as Record<string, unknown>);
         }
         if (payload.type === "tool_start" && typeof payload.toolName === "string") {
           toolStartCount += 1;
@@ -182,9 +183,130 @@ export function registerPromptRoute(app: Express) {
         chunkCount,
         totalChars,
       }));
-      res.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
+      res.write(`data: ${safeJSONStringify({ error: String(error) })}\n\n`);
     }
 
     res.end();
   });
+}
+
+function compactUsagePayload(payload: Record<string, unknown>) {
+  if (payload.type !== "usage") {
+    return payload;
+  }
+
+  const rawUsage = payload.raw && typeof payload.raw === "object"
+    ? payload.raw as Record<string, unknown>
+    : null;
+
+  const normalized = {
+    type: "usage",
+    inputTokens: readNumeric(payload.inputTokens) ?? readNumeric(rawUsage?.inputTokens),
+    outputTokens: readNumeric(payload.outputTokens) ?? readNumeric(rawUsage?.outputTokens),
+    totalTokens: readNumeric(payload.totalTokens) ?? readNumeric(rawUsage?.totalTokens),
+    cacheReadTokens: readNumeric(rawUsage?.cacheReadTokens),
+    cacheWriteTokens: readNumeric(rawUsage?.cacheWriteTokens),
+    cost: readNumeric(rawUsage?.cost),
+    duration: readNumeric(rawUsage?.duration),
+    model: readString(payload.model) ?? readString(rawUsage?.model),
+    raw: rawUsage ? safeJSONStringify({
+      model: readString(rawUsage.model),
+      inputTokens: readNumeric(rawUsage.inputTokens),
+      outputTokens: readNumeric(rawUsage.outputTokens),
+      totalTokens: readNumeric(rawUsage.totalTokens),
+      cacheReadTokens: readNumeric(rawUsage.cacheReadTokens),
+      cacheWriteTokens: readNumeric(rawUsage.cacheWriteTokens),
+      cost: readNumeric(rawUsage.cost),
+      duration: readNumeric(rawUsage.duration),
+      initiator: readString(rawUsage.initiator),
+      apiCallId: readString(rawUsage.apiCallId),
+      providerCallId: readString(rawUsage.providerCallId),
+    }) : undefined,
+  } as Record<string, unknown>;
+
+  return normalized;
+}
+
+function readNumeric(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function readString(value: unknown) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  return undefined;
+}
+
+function safeJSONStringify(value: unknown) {
+  return JSON.stringify(sanitizeJSONValue(value));
+}
+
+function sanitizeJSONValue(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (typeof value === "string") {
+    return sanitizeJSONString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeJSONValue(entry, seen));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  if (seen.has(value as object)) {
+    return "[Circular]";
+  }
+  seen.add(value as object);
+
+  const output: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    output[key] = sanitizeJSONValue(entry, seen);
+  }
+
+  return output;
+}
+
+function sanitizeJSONString(input: string) {
+  if (!input) {
+    return input;
+  }
+
+  let output = "";
+  for (let index = 0; index < input.length; index += 1) {
+    const current = input.charCodeAt(index);
+
+    if (current >= 0xD800 && current <= 0xDBFF) {
+      const nextIndex = index + 1;
+      if (nextIndex < input.length) {
+        const next = input.charCodeAt(nextIndex);
+        if (next >= 0xDC00 && next <= 0xDFFF) {
+          output += input[index] + input[nextIndex];
+          index += 1;
+          continue;
+        }
+      }
+
+      output += "\uFFFD";
+      continue;
+    }
+
+    if (current >= 0xDC00 && current <= 0xDFFF) {
+      output += "\uFFFD";
+      continue;
+    }
+
+    output += input[index];
+  }
+
+  return output;
 }

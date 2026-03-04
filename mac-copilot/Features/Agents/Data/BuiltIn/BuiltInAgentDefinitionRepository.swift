@@ -63,6 +63,45 @@ private extension BuiltInAgentDefinitionRepository {
                         )
                     ],
                 customInstructions: nil
+            ),
+            AgentDefinition(
+                id: "project-health",
+                name: "Project Health",
+                description: "Analyze a local project path and produce a phase-0 health report with a composite score, key risks, and prioritized fixes.",
+                allowedToolsDefault: ["shell", "bash", "read_file", "list_directory", "search_files", "search_codebase"],
+                inputSchema: AgentInputSchema(fields: [
+                    AgentInputField(id: "projectPath", label: "Project Path", type: .text, required: true),
+                    AgentInputField(id: "runTests", label: "Run Tests", type: .select, required: false, options: ["no", "dry-run", "yes"]),
+                    AgentInputField(id: "depth", label: "Depth", type: .select, required: false, options: ["quick", "standard", "deep"])
+                ]),
+                outputTemplate: AgentOutputTemplate(sectionOrder: [
+                    "Score Card",
+                    "Action Items",
+                    "Quick Stats",
+                    "Git Health",
+                    "Code Hygiene",
+                    "Documentation",
+                    "Limitations"
+                ]),
+                requiredConnections: [],
+                optionalSkills: [
+                    AgentSkillRef(
+                        name: "project-health",
+                        description: "Runtime guidance for project health dashboard scoring and evidence-based findings.",
+                        location: "skills/agents/project-health"
+                    ),
+                    AgentSkillRef(
+                        name: "agent-json-contract",
+                        description: "Schema-safe JSON output contract and repair behavior.",
+                        location: "skills/shared"
+                    ),
+                    AgentSkillRef(
+                        name: "agent-tool-policy",
+                        description: "Tool class policy, observability and fallback guardrails.",
+                        location: "skills/shared"
+                    )
+                ],
+                customInstructions: "Phase-0 scope only: prioritize quick stats, git health, code hygiene, and documentation checks. Return measurable evidence for every score."
             )
         ]
     }

@@ -89,9 +89,10 @@ export function registerPromptRoute(app) {
         });
         try {
             await sendPrompt(promptText, chatID, req.body?.model, projectPath, allowedTools, normalizedExecutionContext, requestId, (event) => {
-                const payload = typeof event === "object" && event !== null
+                const basePayload = typeof event === "object" && event !== null
                     ? event
                     : { type: "text", text: String(event ?? "") };
+                const payload = compactUsagePayload(basePayload);
                 const maybeText = typeof payload?.text === "string" ? String(payload.text) : "";
                 if (promptTraceEnabled && maybeText.length > 0 && protocolMarkerPattern.test(maybeText)) {
                     console.warn("[CopilotForge][PromptTrace] outbound SSE payload contains protocol marker", JSON.stringify({
@@ -100,7 +101,7 @@ export function registerPromptRoute(app) {
                         preview: maybeText.slice(0, 180),
                     }));
                 }
-                const text = JSON.stringify(payload);
+                const text = safeJSONStringify(payload);
                 if (payload.type === "usage") {
                     usageEventCount += 1;
                     lastUsageSnapshot = payload;
@@ -152,8 +153,109 @@ export function registerPromptRoute(app) {
                 chunkCount,
                 totalChars,
             }));
-            res.write(`data: ${JSON.stringify({ error: String(error) })}\n\n`);
+            res.write(`data: ${safeJSONStringify({ error: String(error) })}\n\n`);
         }
         res.end();
     });
+}
+function safeJSONStringify(value) {
+    return JSON.stringify(sanitizeJSONValue(value));
+}
+function sanitizeJSONValue(value, seen = new WeakSet()) {
+    if (typeof value === "string") {
+        return sanitizeJSONString(value);
+    }
+    if (Array.isArray(value)) {
+        return value.map((entry) => sanitizeJSONValue(entry, seen));
+    }
+    if (!value || typeof value !== "object") {
+        return value;
+    }
+    if (seen.has(value)) {
+        return "[Circular]";
+    }
+    seen.add(value);
+    const output = {};
+    for (const [key, entry] of Object.entries(value)) {
+        output[key] = sanitizeJSONValue(entry, seen);
+    }
+    return output;
+}
+function sanitizeJSONString(input) {
+    if (!input) {
+        return input;
+    }
+    let output = "";
+    for (let index = 0; index < input.length; index += 1) {
+        const current = input.charCodeAt(index);
+        if (current >= 0xD800 && current <= 0xDBFF) {
+            const nextIndex = index + 1;
+            if (nextIndex < input.length) {
+                const next = input.charCodeAt(nextIndex);
+                if (next >= 0xDC00 && next <= 0xDFFF) {
+                    output += input[index] + input[nextIndex];
+                    index += 1;
+                    continue;
+                }
+            }
+            output += "\uFFFD";
+            continue;
+        }
+        if (current >= 0xDC00 && current <= 0xDFFF) {
+            output += "\uFFFD";
+            continue;
+        }
+        output += input[index];
+    }
+    return output;
+}
+function compactUsagePayload(payload) {
+    if (payload.type !== "usage") {
+        return payload;
+    }
+    const rawUsage = payload.raw && typeof payload.raw === "object"
+        ? payload.raw
+        : null;
+    const normalized = {
+        type: "usage",
+        inputTokens: readNumeric(payload.inputTokens) ?? readNumeric(rawUsage?.inputTokens),
+        outputTokens: readNumeric(payload.outputTokens) ?? readNumeric(rawUsage?.outputTokens),
+        totalTokens: readNumeric(payload.totalTokens) ?? readNumeric(rawUsage?.totalTokens),
+        cacheReadTokens: readNumeric(rawUsage?.cacheReadTokens),
+        cacheWriteTokens: readNumeric(rawUsage?.cacheWriteTokens),
+        cost: readNumeric(rawUsage?.cost),
+        duration: readNumeric(rawUsage?.duration),
+        model: readString(payload.model) ?? readString(rawUsage?.model),
+        raw: rawUsage ? safeJSONStringify({
+            model: readString(rawUsage.model),
+            inputTokens: readNumeric(rawUsage.inputTokens),
+            outputTokens: readNumeric(rawUsage.outputTokens),
+            totalTokens: readNumeric(rawUsage.totalTokens),
+            cacheReadTokens: readNumeric(rawUsage.cacheReadTokens),
+            cacheWriteTokens: readNumeric(rawUsage.cacheWriteTokens),
+            cost: readNumeric(rawUsage.cost),
+            duration: readNumeric(rawUsage.duration),
+            initiator: readString(rawUsage.initiator),
+            apiCallId: readString(rawUsage.apiCallId),
+            providerCallId: readString(rawUsage.providerCallId),
+        }) : undefined,
+    };
+    return normalized;
+}
+function readNumeric(value) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === "string" && value.trim().length > 0) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
+}
+function readString(value) {
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+    return undefined;
 }

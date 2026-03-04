@@ -62,9 +62,25 @@ final class CopilotPromptStreamClient {
                     var receivedChunks = 0
                     var receivedChars = 0
                     var protocolMarkerChunkCount = 0
+                    var malformedLineCount = 0
 
                     for try await line in stream.lines {
-                        guard let parsed = try PromptSSEDecoder.decode(line: line) else {
+                        let parsed: PromptSSELine?
+                        do {
+                            parsed = try PromptSSEDecoder.decode(line: line)
+                        } catch {
+                            malformedLineCount += 1
+                            NSLog(
+                                "[CopilotForge][Prompt] skipped malformed SSE line (chatID=%@ count=%d error=%@ preview=%@)",
+                                chatID.uuidString,
+                                malformedLineCount,
+                                error.localizedDescription,
+                                String(line.prefix(240))
+                            )
+                            continue
+                        }
+
+                        guard let parsed else {
                             continue
                         }
 
@@ -106,11 +122,12 @@ final class CopilotPromptStreamClient {
 
                     if PromptTrace.isEnabled {
                         NSLog(
-                            "[CopilotForge][PromptTrace] stream summary (chatID=%@ chunks=%d chars=%d protocolChunks=%d)",
+                            "[CopilotForge][PromptTrace] stream summary (chatID=%@ chunks=%d chars=%d protocolChunks=%d malformedLines=%d)",
                             chatID.uuidString,
                             receivedChunks,
                             receivedChars,
-                            protocolMarkerChunkCount
+                            protocolMarkerChunkCount,
+                            malformedLineCount
                         )
                     }
 

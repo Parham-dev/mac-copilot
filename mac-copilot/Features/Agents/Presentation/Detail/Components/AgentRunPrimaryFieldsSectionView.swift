@@ -7,6 +7,7 @@ struct AgentRunPrimaryFieldsSectionView: View {
     let uploadedFiles: [AgentUploadedFileItem]
     let onUploadFiles: () -> Void
     let onRemoveUploadedFile: (UUID) -> Void
+    let onPickProjectPath: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -19,7 +20,9 @@ struct AgentRunPrimaryFieldsSectionView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    if field.type == .url {
+                    if isProjectPathField(field) {
+                        projectPathInput
+                    } else if field.type == .url {
                         urlSourceInput
                     } else {
                         GrowingTextInputView(
@@ -82,6 +85,36 @@ struct AgentRunPrimaryFieldsSectionView: View {
                     Label("Upload Files", systemImage: "paperclip")
                 }
                 .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func isProjectPathField(_ field: AgentInputField) -> Bool {
+        field.id == "projectPath"
+    }
+
+    @ViewBuilder
+    private var projectPathInput: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("No folder selected", text: bindingForFieldID("projectPath"))
+                .textFieldStyle(.roundedBorder)
+                .disabled(true)
+
+            HStack(spacing: 8) {
+                Button {
+                    onPickProjectPath()
+                } label: {
+                    Label("Open Project Folder", systemImage: "folder")
+                }
+                .buttonStyle(.bordered)
+
+                if !bindingForFieldID("projectPath").wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button("Clear") {
+                        bindingForFieldID("projectPath").wrappedValue = ""
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
     }

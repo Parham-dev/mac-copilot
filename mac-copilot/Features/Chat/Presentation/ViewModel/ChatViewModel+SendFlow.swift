@@ -149,6 +149,8 @@ extension ChatViewModel {
                     if !renderedSegments.isEmpty || !assembledAssistantText.isEmpty {
                         hasContent = true
                     }
+                case .usage:
+                    break
                 case .completed:
                     appendStatus("Completed", for: assistantMessage.id)
                 }

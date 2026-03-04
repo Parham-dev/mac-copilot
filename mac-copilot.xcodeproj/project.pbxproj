@@ -259,6 +259,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		D0F060012F4F1F1B00DAB6A7 /* Bundle Sidecar Runtime */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -267,6 +268,7 @@
 			inputPaths = (
 				"$(SRCROOT)/sidecar/dist/index.js",
 				"$(SRCROOT)/sidecar/package.json",
+				"$(SRCROOT)/skills",
 				"$(SRCROOT)/scripts/copy_sidecar_runtime.sh",
 			);
 			name = "Bundle Sidecar Runtime";
@@ -275,6 +277,7 @@
 			outputPaths = (
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/node",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/sidecar/dist/index.js",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/skills/agents/project-health/SKILL.md",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

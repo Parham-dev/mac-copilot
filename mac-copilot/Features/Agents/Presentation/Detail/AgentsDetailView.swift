@@ -86,6 +86,9 @@ struct AgentsDetailView: View {
                             },
                             onRemoveUploadedFile: { fileID in
                                 viewModel.removeUploadedFile(id: fileID)
+                            },
+                            onPickProjectPath: {
+                                viewModel.pickProjectPath()
                             }
                         )
                     }
@@ -244,6 +247,9 @@ struct AgentsDetailView: View {
             },
             onDownload: {
                 viewModel.downloadRunContent(run)
+            },
+            onOpenReport: {
+                viewModel.openRunReport(run)
             }
         )
     }

@@ -16,10 +16,16 @@ final class PromptAgentExecutionService: AgentExecutionServing {
         onProgress: ((String) -> Void)?
     ) async throws -> AgentExecutionOutput {
         onProgress?("Preparing request…")
-        let executionContext = buildExecutionContext(definition: definition, inputPayload: inputPayload)
+        let effectiveInputPayload = enrichInputPayloadIfNeeded(
+            definition: definition,
+            inputPayload: inputPayload,
+            projectPath: projectPath
+        )
+
+        let executionContext = buildExecutionContext(definition: definition, inputPayload: effectiveInputPayload)
         let executionAllowedTools = allowedToolsForExecution(
             definition: definition,
-            inputPayload: inputPayload
+            inputPayload: effectiveInputPayload
         )
         NSLog(
             "[CopilotForge][AgentsExecution] primary stage model=%@ projectPath=%@ allowedTools=%@",
@@ -27,7 +33,7 @@ final class PromptAgentExecutionService: AgentExecutionServing {
             projectPath ?? "<none>",
             executionAllowedTools?.joined(separator: ",") ?? "<none>"
         )
-        let prompt = buildPrompt(definition: definition, inputPayload: inputPayload)
+        let prompt = buildPrompt(definition: definition, inputPayload: effectiveInputPayload)
         let primary = try await consumeStream(
             prompt: prompt,
             model: model,
@@ -40,6 +46,8 @@ final class PromptAgentExecutionService: AgentExecutionServing {
                     onProgress?(status)
                 case .toolExecution(let tool):
                     onProgress?("Tool \(tool.success ? "done" : "failed"): \(tool.toolName)")
+                case .usage:
+                    break
                 case .completed:
                     onProgress?("Finalizing response…")
                 case .textDelta:
@@ -58,6 +66,7 @@ final class PromptAgentExecutionService: AgentExecutionServing {
                 finalText: split.displayText,
                 statuses: primary.statuses,
                 toolEvents: primary.toolEvents,
+                usageEvents: primary.usageEvents,
                 structured: split.structured ?? AgentRunResultParser.parse(from: primary.finalText)
             )
         }
@@ -67,6 +76,7 @@ final class PromptAgentExecutionService: AgentExecutionServing {
                 finalText: primary.finalText,
                 statuses: primary.statuses,
                 toolEvents: primary.toolEvents,
+                usageEvents: primary.usageEvents,
                 structured: parsed
             )
         }
@@ -91,6 +101,8 @@ final class PromptAgentExecutionService: AgentExecutionServing {
                     onProgress?(status)
                 case .toolExecution(let tool):
                     onProgress?("Tool \(tool.success ? "done" : "failed"): \(tool.toolName)")
+                case .usage:
+                    break
                 case .completed:
                     onProgress?("Finalizing response…")
                 case .textDelta:
@@ -103,6 +115,7 @@ final class PromptAgentExecutionService: AgentExecutionServing {
             finalText: repaired.finalText,
             statuses: primary.statuses + ["repair_attempted"] + repaired.statuses,
             toolEvents: primary.toolEvents,
+            usageEvents: primary.usageEvents + repaired.usageEvents,
             structured: AgentRunResultParser.parse(from: repaired.finalText)
         )
     }

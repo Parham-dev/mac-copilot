@@ -4,7 +4,7 @@ import Combine
 @MainActor
 final class AgentsEnvironment: ObservableObject {
     @Published private(set) var definitions: [AgentDefinition]
-    @Published private(set) var runs: [AgentRun] = []
+    @Published var runs: [AgentRun] = []
     @Published private(set) var availableModels: [String] = []
     @Published var selectedModelID: String = ""
     @Published private(set) var isLoadingModels = false
@@ -12,12 +12,13 @@ final class AgentsEnvironment: ObservableObject {
 
     private let fetchDefinitionsUseCase: FetchAgentDefinitionsUseCase
     private let fetchRunsUseCase: FetchAgentRunsUseCase
-    private let createRunUseCase: CreateAgentRunUseCase
-    private let updateRunUseCase: UpdateAgentRunUseCase
-    private let deleteRunUseCase: DeleteAgentRunUseCase
+    let createRunUseCase: CreateAgentRunUseCase
+    let updateRunUseCase: UpdateAgentRunUseCase
+    let deleteRunUseCase: DeleteAgentRunUseCase
     private let executionService: AgentExecutionServing
     private let fetchModelCatalogUseCase: FetchModelCatalogUseCase
     private let modelSelectionStore: ModelSelectionStore
+    private let runReportService: any AgentRunReportServing
 
     init(
         fetchDefinitionsUseCase: FetchAgentDefinitionsUseCase,
@@ -27,7 +28,8 @@ final class AgentsEnvironment: ObservableObject {
         deleteRunUseCase: DeleteAgentRunUseCase,
         executionService: AgentExecutionServing,
         fetchModelCatalogUseCase: FetchModelCatalogUseCase,
-        modelSelectionStore: ModelSelectionStore
+        modelSelectionStore: ModelSelectionStore,
+        runReportService: any AgentRunReportServing
     ) {
         self.fetchDefinitionsUseCase = fetchDefinitionsUseCase
         self.fetchRunsUseCase = fetchRunsUseCase
@@ -37,6 +39,7 @@ final class AgentsEnvironment: ObservableObject {
         self.executionService = executionService
         self.fetchModelCatalogUseCase = fetchModelCatalogUseCase
         self.modelSelectionStore = modelSelectionStore
+        self.runReportService = runReportService
         self.definitions = fetchDefinitionsUseCase.execute()
     }
 
@@ -93,35 +96,6 @@ final class AgentsEnvironment: ObservableObject {
     }
 
     @discardableResult
-    func createRun(agentID: String, projectID: UUID?, inputPayload: [String: String]) throws -> AgentRun {
-        let run = AgentRun(
-            agentID: agentID,
-            projectID: projectID,
-            inputPayload: inputPayload,
-            status: .queued,
-            startedAt: .now
-        )
-
-        let created = try createRunUseCase.execute(run: run)
-        runs.insert(created, at: 0)
-        return created
-    }
-
-    func updateRun(_ run: AgentRun) throws {
-        try updateRunUseCase.execute(run: run)
-
-        if let index = runs.firstIndex(where: { $0.id == run.id }) {
-            runs[index] = run
-        }
-    }
-
-    func deleteRun(id: UUID, projectID: UUID? = nil, agentID: String? = nil) throws {
-        try deleteRunUseCase.execute(runID: id)
-        runs.removeAll { $0.id == id }
-        loadRuns(projectID: projectID, agentID: agentID)
-    }
-
-    @discardableResult
     func executeRun(
         definition: AgentDefinition,
         projectID: UUID?,
@@ -140,6 +114,9 @@ final class AgentsEnvironment: ObservableObject {
         var executionInputPayload = inputPayload
         executionInputPayload["agentWorkspaceRoot"] = runWorkspace.rootPath
         executionInputPayload["agentRunDirectory"] = runWorkspace.runDirectoryPath
+        var executionStatuses: [String] = []
+        var executionToolEvents: [PromptToolExecutionEvent] = []
+        var executionUsageEvents: [PromptUsageEvent] = []
 
         var running = queued
         running.status = .running
@@ -154,6 +131,10 @@ final class AgentsEnvironment: ObservableObject {
                 projectPath: projectPath,
                 onProgress: onProgress
             )
+
+            executionStatuses = output.statuses
+            executionToolEvents = output.toolEvents
+            executionUsageEvents = output.usageEvents
 
             var completed = running
             completed.streamedOutput = output.finalText
@@ -222,7 +203,17 @@ final class AgentsEnvironment: ObservableObject {
                     completed.id.uuidString,
                     requestedURL
                 )
+
                 try updateRun(completed)
+                _ = runReportService.writeReport(
+                    definition: definition,
+                    run: completed,
+                    statuses: executionStatuses,
+                    toolEvents: executionToolEvents,
+                    usageEvents: executionUsageEvents,
+                    runDirectoryPath: runWorkspace.runDirectoryPath,
+                    thrownError: nil
+                )
                 loadRuns(projectID: projectID, agentID: definition.id)
                 return completed
             }
@@ -255,6 +246,15 @@ final class AgentsEnvironment: ObservableObject {
             }
 
             try updateRun(completed)
+            _ = runReportService.writeReport(
+                definition: definition,
+                run: completed,
+                statuses: executionStatuses,
+                toolEvents: executionToolEvents,
+                usageEvents: executionUsageEvents,
+                runDirectoryPath: runWorkspace.runDirectoryPath,
+                thrownError: nil
+            )
             loadRuns(projectID: projectID, agentID: definition.id)
             return completed
         } catch {
@@ -272,88 +272,17 @@ final class AgentsEnvironment: ObservableObject {
             )
 
             try updateRun(failed)
+            _ = runReportService.writeReport(
+                definition: definition,
+                run: failed,
+                statuses: executionStatuses,
+                toolEvents: executionToolEvents,
+                usageEvents: executionUsageEvents,
+                runDirectoryPath: runWorkspace.runDirectoryPath,
+                thrownError: error
+            )
             loadRuns(projectID: projectID, agentID: definition.id)
             throw error
-        }
-    }
-}
-
-private extension AgentsEnvironment {
-    func prepareRunWorkspace(agentID: String, runID: UUID) -> (rootPath: String, runDirectoryPath: String) {
-        let fileManager = FileManager.default
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-
-        let rootDirectory = appSupport
-            .appendingPathComponent("CopilotForge", isDirectory: true)
-            .appendingPathComponent("agents", isDirectory: true)
-            .appendingPathComponent(agentID, isDirectory: true)
-
-        let runDirectory = rootDirectory
-            .appendingPathComponent("runs", isDirectory: true)
-            .appendingPathComponent(runID.uuidString, isDirectory: true)
-
-        do {
-            try fileManager.createDirectory(at: runDirectory, withIntermediateDirectories: true)
-        } catch {
-            NSLog(
-                "[CopilotForge][AgentsEnvironment] failed to create run workspace agentID=%@ runID=%@ error=%@",
-                agentID,
-                runID.uuidString,
-                error.localizedDescription
-            )
-        }
-
-        return (rootDirectory.path, runDirectory.path)
-    }
-
-    func urlValueRequiringFetch(from inputPayload: [String: String]) -> String {
-        let sourceKind = inputPayload["sourceKind"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() ?? ""
-        let urlValue = inputPayload["url"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard !urlValue.isEmpty else { return "" }
-
-        if sourceKind == "url" || sourceKind == "mixed" {
-            return urlValue
-        }
-
-        if sourceKind == "text" || sourceKind == "files" {
-            return ""
-        }
-
-        if let components = URLComponents(string: urlValue),
-           let scheme = components.scheme?.lowercased(),
-           ["http", "https"].contains(scheme),
-           components.host?.isEmpty == false {
-            return urlValue
-        }
-
-        if urlValue.lowercased().hasPrefix("www.") {
-            return urlValue
-        }
-
-        return ""
-    }
-
-    func normalizedOutputMode(_ rawValue: String?) -> String {
-        let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        if value.isEmpty {
-            return "text"
-        }
-
-        switch value {
-        case "markdown", "markdown brief":
-            return "markdown"
-        case "json":
-            return "json"
-        case "table":
-            return "table"
-        case "text", "bullet":
-            return "text"
-        default:
-            return "text"
         }
     }
 }

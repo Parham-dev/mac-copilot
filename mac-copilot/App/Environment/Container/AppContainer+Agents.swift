@@ -2,6 +2,13 @@ import Foundation
 import FactoryKit
 
 extension Container {
+    var agentRunReportService: Factory<any AgentRunReportServing> {
+        self {
+            AgentRunReportService()
+        }
+        .singleton
+    }
+
     var agentExecutionService: Factory<any AgentExecutionServing> {
         self { @MainActor in
             PromptAgentExecutionService(promptRepository: self.promptRepository())
@@ -19,7 +26,8 @@ extension Container {
                 deleteRunUseCase: DeleteAgentRunUseCase(repository: self.agentRunRepository()),
                 executionService: self.agentExecutionService(),
                 fetchModelCatalogUseCase: FetchModelCatalogUseCase(repository: self.modelRepository()),
-                modelSelectionStore: self.modelSelectionStore()
+                modelSelectionStore: self.modelSelectionStore(),
+                runReportService: self.agentRunReportService()
             )
         }
         .singleton

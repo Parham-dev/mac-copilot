@@ -7,6 +7,7 @@ struct AgentResultPanelView: View {
     let resultFont: Font
     let onCopy: (String) -> Void
     let onDownload: () -> Void
+    let onOpenReport: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -19,6 +20,13 @@ struct AgentResultPanelView: View {
                 Text(format.uppercased())
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Button {
+                    onOpenReport()
+                } label: {
+                    Label("Open Report", systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(.bordered)
 
                 if let resultText,
                    !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

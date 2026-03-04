@@ -16,10 +16,23 @@ struct PromptToolExecutionEvent: Equatable {
     }
 }
 
+struct PromptUsageEvent: Equatable {
+    let inputTokens: Int?
+    let outputTokens: Int?
+    let totalTokens: Int?
+    let cacheReadTokens: Int?
+    let cacheWriteTokens: Int?
+    let cost: Double?
+    let durationMs: Double?
+    let model: String?
+    let raw: String?
+}
+
 enum PromptStreamEvent: Equatable {
     case textDelta(String)
     case status(String)
     case toolExecution(PromptToolExecutionEvent)
+    case usage(PromptUsageEvent)
     case completed
 }
 
