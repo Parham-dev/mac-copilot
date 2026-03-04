@@ -165,6 +165,7 @@ struct ContentView: View {
         .padding(.vertical, 8)
         .background(.ultraThinMaterial)
     }
+    // TODO: extacrt warning banner to shared and create a nice warning view in ther based on what we have whih can be resued
 
     private func dismissActiveWarning() {
         if projectsShellBridge.dismissActiveWarning() { return }

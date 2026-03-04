@@ -6,7 +6,7 @@ extension Container {
         self { @MainActor in
             GitHubAuthService(sidecarClient: self.sidecarAuthClient())
         }
-            .singleton
+        .singleton
     }
 
     var sidecarAuthClient: Factory<SidecarAuthClient> {
@@ -18,19 +18,19 @@ extension Container {
 
     var authRepository: Factory<any AuthRepository> {
         self { @MainActor in GitHubAuthRepository(service: self.authService()) }
-            .singleton
+        .singleton
     }
 
     var authViewModel: Factory<AuthViewModel> {
         self { @MainActor in AuthViewModel(repository: self.authRepository()) }
-            .singleton
+        .singleton
     }
 
     var profileRepository: Factory<any ProfileRepository> {
         self { @MainActor in
             GitHubProfileRepository(sidecarAuthClient: self.sidecarAuthClient())
         }
-            .singleton
+        .singleton
     }
 
     var profileViewModel: Factory<ProfileViewModel> {

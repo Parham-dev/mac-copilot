@@ -3,6 +3,8 @@ import Combine
 
 @MainActor
 final class GitHubAuthService: ObservableObject {
+    private static let defaultClientID = "Ov23lisoGOGOPveFYywW"
+
     @Published var isAuthenticated = false
     @Published var isLoading = false
     @Published var statusMessage = "Sign in required"
@@ -224,8 +226,8 @@ final class GitHubAuthService: ObservableObject {
             return clientID
         }
 
-        clientID = ""
-        return ""
+        clientID = Self.defaultClientID
+        return Self.defaultClientID
     }
 
     private static func resolveClientID() -> String? {

@@ -36,18 +36,22 @@ final class GitHubAuthRepository: AuthRepository {
 
     func restoreSessionIfNeeded() async {
         await service.restoreSessionIfNeeded()
+        publishState()
     }
 
     func startDeviceFlow() async {
         await service.startDeviceFlow()
+        publishState()
     }
 
     func pollForAuthorization() async {
         await service.pollForAuthorization()
+        publishState()
     }
 
     func signOut() {
         service.signOut()
+        publishState()
     }
 
     func currentAccessToken() -> String? {
