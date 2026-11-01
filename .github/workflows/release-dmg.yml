@@ -1,9 +1,7 @@
 name: Release DMG
 
+# On demand only (2026-11-01): local gates run on every push; GitHub runs at release time.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       skip_notarize:
